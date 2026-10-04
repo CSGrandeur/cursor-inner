@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400">
+  <defs>
+    <radialGradient id="glow" cx="0.74" cy="0.55" r="0.5">
+      <stop offset="0" stop-color="#ff5a2b" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#ff5a2b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="400" rx="24" fill="#0e0e0d"/>
+  <rect width="1280" height="400" rx="24" fill="url(#glow)"/>
+  <g transform="translate(88 64) scale(4)">
+    <rect width="32" height="32" rx="7.5" fill="#151514" stroke="#2f2f2c" stroke-width="0.25"/>
+    <path d="M15.6 5.25A7.5 7.5 0 0 0 15.6 20.25Z" fill="#f4f1ea"/><path d="M16.4 11.75A7.5 7.5 0 0 1 16.4 26.75Z" fill="#ff5a2b"/>
+  </g>
+  <text x="86" y="268" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="60" font-weight="700" letter-spacing="-1.5" fill="#f4f1ea">cursor-inner</text>
+  <text x="88" y="312" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="23" fill="#a19d94">Bring your own models into Cursor.</text>
+  <text x="88" y="346" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="19" fill="#6a675f">在 Cursor 里接入自己的模型，官方模型照常使用</text>
+  <rect x="720" y="56" width="472" height="288" rx="18" fill="#161615" stroke="#2a2a27" stroke-width="1.5"/>
+  <text x="746" y="88" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" letter-spacing="2" fill="#6a675f">MODELS</text>
+  <text x="798" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="19" font-weight="500" fill="#f4f1ea">Claude Opus</text><rect x="1076" y="111" width="74" height="28" rx="14" fill="none" stroke="#2a2a27" stroke-width="1.5"/><text x="1113.0" y="130" text-anchor="middle" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#a19d94">Cursor</text><text x="798" y="190" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="19" font-weight="500" fill="#f4f1ea">GPT-5</text><rect x="1076" y="169" width="74" height="28" rx="14" fill="none" stroke="#2a2a27" stroke-width="1.5"/><text x="1113.0" y="188" text-anchor="middle" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#a19d94">Cursor</text><rect x="744" y="218" width="424" height="48" rx="10" fill="#3a1d13"/><path d="M766 241 l6 6 l11 -12" fill="none" stroke="#ff5a2b" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><text x="798" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="19" font-weight="600" fill="#f4f1ea">DeepSeek V4 Flash</text><rect x="1038" y="227" width="112" height="28" rx="14" fill="#ff5a2b" stroke="#ff5a2b" stroke-width="1.5"/><text x="1094.0" y="246" text-anchor="middle" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#ffffff">cursor-inner</text><text x="798" y="306" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="19" font-weight="500" fill="#f4f1ea">Qwen3 Coder</text><rect x="1038" y="285" width="112" height="28" rx="14" fill="none" stroke="#ff5a2b" stroke-width="1.5"/><text x="1094.0" y="304" text-anchor="middle" font-family="ui-monospace, 'Cascadia Mono', 'JetBrains Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#ff5a2b">cursor-inner</text>
+</svg>

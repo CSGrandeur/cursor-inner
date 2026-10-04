@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The custom model table no longer pushes the Delete button past the panel edge in the English settings page.
+
 ## [0.1.0] - 2026-10-04
 
 First public release.
