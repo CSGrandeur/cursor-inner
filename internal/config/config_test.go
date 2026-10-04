@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestLoadWritesDefaultAndRoundTrips(t *testing.T) {
 	dir := t.TempDir()
@@ -56,6 +60,22 @@ func TestLastTestRoundTrip(t *testing.T) {
 	}
 	got := s2.Get().Models[0].LastTest
 	if got == nil || !got.OK || got.OutputTokens != 42 || got.TokensPerSecond != 38.6 || got.FirstValidResponseMS == nil || *got.FirstValidResponseMS != 80 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestLoadsPlainStringTestError(t *testing.T) {
+	dir := t.TempDir()
+	raw := `{"takeover":true,"proxy":{"enabled":true},"models":[{"id":"a","last_test":{"ok":false,"error":"接口返回 401"}}]}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.Get().Models[0].LastTest.Error
+	if got.Zh != "接口返回 401" || got.En != "接口返回 401" {
 		t.Fatalf("%+v", got)
 	}
 }

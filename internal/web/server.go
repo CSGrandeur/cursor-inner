@@ -3,9 +3,10 @@ package web
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
+
+	"cursor-inner/internal/i18n"
 
 	"cursor-inner/assets"
 	"cursor-inner/internal/config"
@@ -127,6 +128,13 @@ func Handler(backend Backend) http.Handler {
 	mux.HandleFunc("POST /api/models/{id}/test", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, backend.TestSaved(r.PathValue("id")))
 	})
+	mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.Quit(); err != nil {
+			writeErr(w, http.StatusConflict, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	return mux
 }
 
@@ -146,7 +154,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func writeErr(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, map[string]string{"error": err.Error()})
+	writeJSON(w, status, map[string]i18n.Text{"error": i18n.Of(err)})
 }
 
 func readJSON(r *http.Request, dst any) error {
@@ -154,7 +162,7 @@ func readJSON(r *http.Request, dst any) error {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return errors.New("请求内容无法解析")
+		return i18n.E("请求内容无法解析", "Cannot parse the request")
 	}
 	return nil
 }

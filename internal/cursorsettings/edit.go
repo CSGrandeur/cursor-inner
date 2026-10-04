@@ -2,9 +2,13 @@ package cursorsettings
 
 import (
 	"bytes"
-	"errors"
+	"encoding/json"
 	"strings"
 
+	"cursor-inner/internal/i18n"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/pretty"
 	"github.com/tidwall/sjson"
 )
 
@@ -42,13 +46,31 @@ func Apply(doc []byte, proxyURL string) ([]byte, error) {
 			return nil, err
 		}
 	}
-	if !strings.HasSuffix(text, "\n") {
-		text += "\n"
-	}
-	return []byte(text), nil
+	return format(text), nil
 }
 
-func Clear(doc []byte) ([]byte, error) {
+// Snapshot 记下接管前用户自己设置的受管键原值。上次接管残留的本机代理不算用户设置。
+func Snapshot(doc []byte) (map[string]json.RawMessage, error) {
+	text, err := normalize(doc)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]json.RawMessage{}
+	leftover := isLoopbackProxy(gjson.Get(text, path("http.proxy")).String())
+	for _, key := range managed {
+		value := gjson.Get(text, path(key))
+		if !value.Exists() {
+			continue
+		}
+		if leftover && (key == "http.proxy" || key == "http.proxySupport" || key == "http.proxyKerberosServicePrincipal") {
+			continue
+		}
+		out[key] = json.RawMessage(value.Raw)
+	}
+	return out, nil
+}
+
+func Clear(doc []byte, original map[string]json.RawMessage) ([]byte, error) {
 	text, err := normalize(doc)
 	if err != nil {
 		return nil, err
@@ -59,10 +81,25 @@ func Clear(doc []byte) ([]byte, error) {
 			return nil, err
 		}
 	}
-	if !strings.HasSuffix(text, "\n") {
-		text += "\n"
+	for _, key := range managed {
+		raw, ok := original[key]
+		if !ok {
+			continue
+		}
+		text, err = sjson.SetRaw(text, path(key), string(raw))
+		if err != nil {
+			return nil, err
+		}
 	}
-	return []byte(text), nil
+	return format(text), nil
+}
+
+func format(text string) []byte {
+	return pretty.PrettyOptions([]byte(text), &pretty.Options{Indent: "    ", SortKeys: false})
+}
+
+func isLoopbackProxy(proxy string) bool {
+	return strings.HasPrefix(proxy, "http://127.0.0.1:") || strings.HasPrefix(proxy, "http://localhost:")
 }
 
 func path(key string) string {
@@ -79,7 +116,7 @@ func normalize(doc []byte) (string, error) {
 		text = stripJSONC(text)
 	}
 	if !jsonValid(text) {
-		return "", errors.New("Cursor settings.json 无法解析")
+		return "", i18n.E("Cursor settings.json 无法解析", "Cannot parse Cursor's settings.json")
 	}
 	return text, nil
 }

@@ -9,10 +9,13 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/i18n"
+
+	"github.com/elazarl/goproxy"
 
 	"cursor-inner/internal/agent"
 	"cursor-inner/internal/catalog"
@@ -20,7 +23,6 @@ import (
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/protox"
 	"cursor-inner/internal/provider"
-	"github.com/elazarl/goproxy"
 )
 
 type Server struct {
@@ -28,7 +30,7 @@ type Server struct {
 	ln      net.Listener
 	httpSrv *http.Server
 	url     string
-	warning string
+	warning i18n.Text
 	proxy   func() config.Proxy
 	entries func() []catalog.Entry
 	lookup  func(string) (config.Model, bool)
@@ -52,7 +54,7 @@ func (s *Server) Start(ca tls.Certificate) (string, error) {
 		return s.url, nil
 	}
 	if ca.Leaf == nil && len(ca.Certificate) > 0 {
-		return "", errors.New("接管证书缺少解析结果")
+		return "", i18n.E("接管证书缺少解析结果", "Takeover certificate is missing its parsed form")
 	}
 	goproxy.GoproxyCa = ca
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -109,7 +111,7 @@ func (s *Server) Running() bool {
 	return s.running
 }
 
-func (s *Server) Warning() string {
+func (s *Server) Warning() i18n.Text {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.warning
@@ -182,36 +184,36 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, available bool)
 		extra = catalog.Available(entries)
 	}
 	if len(entries) == 0 {
-		s.note("没有自定义模型可追加")
+		s.note(i18n.T("没有自定义模型可追加", "No custom models to add"))
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	resp, err := s.do(ctx, r, body, true)
 	if err != nil {
-		s.note("官方目录没有取到，没有改写列表")
+		s.note(i18n.T("官方目录没有取到，没有改写列表", "Could not fetch the official catalog; model list left unchanged"))
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
 	upstream, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.note("官方目录原样返回，没有追加自定义模型")
+		s.note(i18n.T("官方目录原样返回，没有追加自定义模型", "Official catalog returned as-is; custom models not added"))
 		writeUpstream(w, resp, upstream)
 		return
 	}
 	if enc := resp.Header.Get("Content-Encoding"); enc != "" && !strings.EqualFold(enc, "identity") {
-		s.note("官方目录带 HTTP 压缩，没有追加自定义模型")
+		s.note(i18n.T("官方目录带 HTTP 压缩，没有追加自定义模型", "Official catalog uses HTTP compression; custom models not added"))
 		writeUpstream(w, resp, upstream)
 		return
 	}
 	merged, ok := protox.MergePlain(upstream, extra)
 	if !ok {
-		s.note("官方目录帧无法追加自定义模型")
+		s.note(i18n.T("官方目录帧无法追加自定义模型", "Could not append custom models to the official catalog frame"))
 		writeUpstream(w, resp, upstream)
 		return
 	}
 	if len(entries) > 0 {
-		s.note("已向 Cursor 模型列表追加 " + strconv.Itoa(len(entries)) + " 个自定义模型")
+		s.note(i18n.Tf("已向 Cursor 模型列表追加 %d 个自定义模型", "Added %d custom models to Cursor's model list", len(entries)))
 		log.Printf("%s 追加 %d 个自定义模型", r.URL.Path, len(entries))
 	}
 	resp.Header.Del("Content-Encoding")
@@ -360,7 +362,7 @@ func requestHost(r *http.Request) string {
 	return r.URL.Host
 }
 
-func (s *Server) note(text string) {
+func (s *Server) note(text i18n.Text) {
 	s.mu.Lock()
 	s.warning = text
 	s.mu.Unlock()

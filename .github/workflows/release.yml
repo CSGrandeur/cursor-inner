@@ -20,30 +20,42 @@ jobs:
       - name: Test
         run: go test ./...
 
-      - name: Build Windows
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: ./build.sh windows amd64
-
-      - name: Package
+      - name: Build and package
         env:
           VERSION: ${{ github.ref_name }}
         run: |
+          set -eu
+          mkdir -p out
+          docs="LICENSE THIRD_PARTY_NOTICES.md README.md README.en.md"
+
+          ./build.sh windows amd64
           name="cursor-inner-${VERSION}-windows-amd64"
           mkdir -p "out/${name}"
-          cp dist/cursor-inner.exe LICENSE THIRD_PARTY_NOTICES.md README.md README.en.md "out/${name}/"
-          (cd out && zip -qr "${name}.zip" "${name}")
+          cp dist/cursor-inner.exe $docs "out/${name}/"
+          (cd out && zip -qr "${name}.zip" "${name}" && rm -r "${name}")
           cp dist/cursor-inner.exe "out/${name}.exe"
-          (cd out && sha256sum "${name}.exe" "${name}.zip" > SHA256SUMS.txt)
+
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*}; arch=${target#*/}
+            ./build.sh "$os" "$arch"
+            name="cursor-inner-${VERSION}-${os}-${arch}"
+            mkdir -p "out/${name}"
+            cp "dist/cursor-inner-${os}-${arch}" "out/${name}/cursor-inner"
+            cp assets/icon.svg "out/${name}/cursor-inner.svg"
+            cp $docs "out/${name}/"
+            tar -C out -czf "out/${name}.tar.gz" "${name}"
+            rm -r "out/${name}"
+          done
+
+          (cd out && sha256sum * > SHA256SUMS.txt)
+          ls -l out
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         run: |
-          name="cursor-inner-${VERSION}-windows-amd64"
           flags=""
           case "$VERSION" in *-*) flags="--prerelease" ;; esac
-          gh release create "$VERSION" \
-            "out/${name}.exe" "out/${name}.zip" out/SHA256SUMS.txt \
+          gh release create "$VERSION" out/* \
             --title "cursor-inner ${VERSION}" --generate-notes $flags

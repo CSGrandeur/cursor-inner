@@ -5,19 +5,9 @@ package takeover
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
-
-func settingsPath() (string, error) {
-	appdata := os.Getenv("APPDATA")
-	if appdata == "" {
-		return "", errors.New("没有 APPDATA，无法找到 Cursor 配置")
-	}
-	return filepath.Join(appdata, "Cursor", "User", "settings.json"), nil
-}
 
 func TerminateCursor() error {
 	out, err := exec.Command("taskkill", "/F", "/T", "/IM", "Cursor.exe").CombinedOutput()

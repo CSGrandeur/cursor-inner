@@ -9,13 +9,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"cursor-inner/internal/i18n"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
@@ -32,16 +33,16 @@ type Message struct {
 }
 
 type Result struct {
-	OK                   bool    `json:"ok"`
-	Status               int     `json:"status"`
-	DurationMS           int64   `json:"duration_ms"`
-	FirstValidResponseMS *int64  `json:"first_valid_response_ms,omitempty"`
-	OutputTokens         uint64  `json:"output_tokens"`
-	TokensPerSecond      float64 `json:"tokens_per_second"`
-	TokensEstimated      bool    `json:"tokens_estimated"`
-	Output               string  `json:"output"`
-	At                   string  `json:"at,omitempty"`
-	Error                string  `json:"error,omitempty"`
+	OK                   bool      `json:"ok"`
+	Status               int       `json:"status"`
+	DurationMS           int64     `json:"duration_ms"`
+	FirstValidResponseMS *int64    `json:"first_valid_response_ms,omitempty"`
+	OutputTokens         uint64    `json:"output_tokens"`
+	TokensPerSecond      float64   `json:"tokens_per_second"`
+	TokensEstimated      bool      `json:"tokens_estimated"`
+	Output               string    `json:"output"`
+	At                   string    `json:"at,omitempty"`
+	Error                i18n.Text `json:"error,omitzero"`
 }
 
 func (r Result) LastTest() config.LastTest {
@@ -65,10 +66,10 @@ func Prepare(m config.Model) (config.Model, error) {
 	m.APIKey = strings.TrimSpace(m.APIKey)
 	m.Model = strings.TrimSpace(m.Model)
 	if m.DisplayName == "" || m.BaseURL == "" || m.APIKey == "" || m.Model == "" {
-		return m, errors.New("显示名、接口地址、密钥和模型名都要填")
+		return m, i18n.E("显示名、接口地址、密钥和模型名都要填", "Display name, endpoint URL, API key and model name are all required")
 	}
 	if m.Type != "openai-chat" && m.Type != "anthropic" {
-		return m, errors.New("接口类型只支持 openai-chat 和 anthropic")
+		return m, i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
 	}
 	if _, err := RequestURL(m); err != nil {
 		return m, err
@@ -86,7 +87,7 @@ func RequestURL(m config.Model) (string, error) {
 	base := strings.TrimRight(strings.TrimSpace(m.BaseURL), "/")
 	u, err := url.Parse(base)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", errors.New("接口地址需要以 http 或 https 开头")
+		return "", i18n.E("接口地址需要以 http 或 https 开头", "Endpoint URL must start with http or https")
 	}
 	path := strings.TrimRight(u.EscapedPath(), "/")
 	switch m.Type {
@@ -109,7 +110,7 @@ func RequestURL(m config.Model) (string, error) {
 			return base + "/v1/messages", nil
 		}
 	default:
-		return "", errors.New("接口类型只支持 openai-chat 和 anthropic")
+		return "", i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
 	}
 }
 
@@ -130,7 +131,7 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 	}
 	resp, err := do(ctx, m, dial, []Message{{Role: "user", Content: testPrompt}}, true, 2048, false)
 	if err != nil {
-		result.Error = err.Error()
+		result.Error = i18n.Of(err)
 		return finish()
 	}
 	defer resp.Body.Close()
@@ -138,13 +139,13 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 	rawHead := make([]byte, 1)
 	n, err := resp.Body.Read(rawHead)
 	if n == 0 && err != nil {
-		result.Error = err.Error()
+		result.Error = i18n.Of(err)
 		return finish()
 	}
 	rest := io.MultiReader(bytes.NewReader(rawHead[:n]), resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(rest, 4096))
-		result.Error = fmt.Sprintf("接口返回 %d：%s", resp.StatusCode, excerpt(body))
+		result.Error = i18n.Tf("接口返回 %d：%s", "Endpoint returned %d: %s", resp.StatusCode, excerpt(body))
 		return finish()
 	}
 	var output strings.Builder
@@ -159,16 +160,16 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 	if n > 0 && rawHead[0] == '{' {
 		body, err := io.ReadAll(io.LimitReader(rest, 8<<20))
 		if err != nil {
-			result.Error = err.Error()
+			result.Error = i18n.Of(err)
 			return finish()
 		}
 		text, err := staticText(body, m.Type)
 		if err != nil {
-			result.Error = err.Error()
+			result.Error = i18n.Of(err)
 			return finish()
 		}
 		if text == "" {
-			result.Error = "接口没有返回文本"
+			result.Error = i18n.T("接口没有返回文本", "Endpoint returned no text")
 			return finish()
 		}
 		record(text)
@@ -188,13 +189,13 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 			}
 		}
 		if err := sc.Err(); err != nil {
-			result.Error = err.Error()
+			result.Error = i18n.Of(err)
 			return finish()
 		}
 	}
 	result.Output = strings.TrimSpace(output.String())
 	if result.FirstValidResponseMS == nil || result.Output == "" {
-		result.Error = "没有收到有效输出"
+		result.Error = i18n.T("没有收到有效输出", "No valid output received")
 		return finish()
 	}
 	if usage > 0 {
@@ -206,7 +207,7 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 
 func Stream(ctx context.Context, m config.Model, dial dialer.Func, messages []Message, onDelta func(string) error) error {
 	if len(messages) == 0 {
-		return errors.New("没有用户消息")
+		return i18n.E("没有用户消息", "No user message")
 	}
 	resp, err := do(ctx, m, dial, messages, true, 4096, true)
 	if err != nil {
@@ -221,7 +222,7 @@ func Stream(ctx context.Context, m config.Model, dial dialer.Func, messages []Me
 	rest := io.MultiReader(bytes.NewReader(rawHead[:n]), resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(rest, 4096))
-		return fmt.Errorf("接口返回 %d：%s", resp.StatusCode, excerpt(body))
+		return i18n.Ef("接口返回 %d：%s", "Endpoint returned %d: %s", resp.StatusCode, excerpt(body))
 	}
 	if n > 0 && rawHead[0] == '{' {
 		body, err := io.ReadAll(io.LimitReader(rest, 8<<20))
@@ -233,7 +234,7 @@ func Stream(ctx context.Context, m config.Model, dial dialer.Func, messages []Me
 			return err
 		}
 		if text == "" {
-			return errors.New("接口没有返回文本")
+			return i18n.E("接口没有返回文本", "Endpoint returned no text")
 		}
 		return onDelta(text)
 	}
@@ -254,7 +255,7 @@ func Stream(ctx context.Context, m config.Model, dial dialer.Func, messages []Me
 		return err
 	}
 	if !wrote {
-		return errors.New("接口没有返回文本")
+		return i18n.E("接口没有返回文本", "Endpoint returned no text")
 	}
 	return nil
 }
@@ -341,7 +342,7 @@ func requestBody(m config.Model, messages []Message, stream bool, maxTokens int,
 		}
 		return json.Marshal(body)
 	default:
-		return nil, errors.New("接口类型只支持 openai-chat 和 anthropic")
+		return nil, i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
 	}
 }
 

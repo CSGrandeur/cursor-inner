@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-func acquireSingleton() (func(), bool, error) {
+func acquireSingleton(string) (func(), bool, error) {
 	name, err := windows.UTF16PtrFromString(`Local\cursor-inner`)
 	if err != nil {
 		return nil, false, err

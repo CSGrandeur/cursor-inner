@@ -1,7 +1,9 @@
 package autostart
 
-import "strings"
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTaskXMLCarriesWin11Flags(t *testing.T) {
 	xml := TaskXML(`C:\Program Files\cursor-inner.exe`, `DESKTOP-01\alice`)

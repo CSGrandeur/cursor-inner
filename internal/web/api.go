@@ -1,8 +1,11 @@
 package web
 
-import "cursor-inner/internal/autostart"
-import "cursor-inner/internal/config"
-import "cursor-inner/internal/provider"
+import (
+	"cursor-inner/internal/autostart"
+	"cursor-inner/internal/config"
+	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/provider"
+)
 
 type ModelView struct {
 	ID          string           `json:"id"`
@@ -21,9 +24,9 @@ type View struct {
 	TakeoverActive bool            `json:"takeover_active"`
 	MitmURL        string          `json:"mitm_url"`
 	CA             string          `json:"ca"`
-	CADetail       string          `json:"ca_detail"`
-	LastError      string          `json:"last_error"`
-	CatalogWarning string          `json:"catalog_warning"`
+	CADetail       i18n.Text       `json:"ca_detail"`
+	LastError      i18n.Text       `json:"last_error"`
+	CatalogWarning i18n.Text       `json:"catalog_warning"`
 	Proxy          ProxyView       `json:"proxy"`
 	Autostart      autostart.State `json:"autostart"`
 	Models         []ModelView     `json:"models"`
@@ -45,4 +48,5 @@ type Backend interface {
 	SetModelProxy(id string, use bool) error
 	TestDraft(model config.Model) provider.Result
 	TestSaved(id string) provider.Result
+	Quit() error
 }

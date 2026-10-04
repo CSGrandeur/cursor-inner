@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/i18n"
 
 	"cursor-inner/internal/autostart"
 	"cursor-inner/internal/config"
@@ -26,8 +27,26 @@ type App struct {
 	exe      string
 	mu       sync.Mutex
 	listen   string
-	bootErr  string
+	bootErr  i18n.Text
+	quit     func()
 	shutdown sync.Once
+}
+
+func (a *App) OnQuit(fn func()) {
+	a.mu.Lock()
+	a.quit = fn
+	a.mu.Unlock()
+}
+
+func (a *App) Quit() error {
+	a.mu.Lock()
+	fn := a.quit
+	a.mu.Unlock()
+	if fn == nil {
+		return i18n.E("程序还在启动，稍后再试", "Still starting up, try again in a moment")
+	}
+	fn()
+	return nil
 }
 
 func New(store *config.Store, life *takeover.Service, boot starter, exe string) *App {
@@ -44,9 +63,9 @@ func (a *App) SyncAutostart() (autostart.State, error) {
 	state, err := a.boot.Apply(a.store.Get().Autostart, a.exe)
 	a.mu.Lock()
 	if err != nil {
-		a.bootErr = err.Error()
+		a.bootErr = i18n.Of(err)
 	} else {
-		a.bootErr = ""
+		a.bootErr = i18n.Text{}
 	}
 	a.mu.Unlock()
 	return state, err
@@ -97,11 +116,11 @@ func (a *App) State() (web.View, error) {
 	view.Proxy.Enabled = cfg.Proxy.Enabled
 	view.Proxy.Address = cfg.Proxy.Address
 	view.Proxy.Effective = on && perr == nil
-	if perr != nil && view.LastError == "" {
-		view.LastError = perr.Error()
+	if perr != nil && view.LastError.IsZero() {
+		view.LastError = i18n.Of(perr)
 	}
 	a.mu.Lock()
-	if view.LastError == "" {
+	if view.LastError.IsZero() {
 		view.LastError = a.bootErr
 	}
 	a.mu.Unlock()
@@ -150,12 +169,12 @@ func (a *App) SetProxy(enabled bool, address string) error {
 func (a *App) SetAutostart(enabled bool) error {
 	if _, err := a.boot.Apply(enabled, a.exe); err != nil {
 		a.mu.Lock()
-		a.bootErr = err.Error()
+		a.bootErr = i18n.Of(err)
 		a.mu.Unlock()
 		return err
 	}
 	a.mu.Lock()
-	a.bootErr = ""
+	a.bootErr = i18n.Text{}
 	a.mu.Unlock()
 	return a.store.Update(func(f *config.File) error {
 		f.Autostart = enabled
@@ -171,7 +190,7 @@ func (a *App) AddModel(model config.Model) error {
 	return a.store.Update(func(f *config.File) error {
 		for _, existing := range f.Models {
 			if existing.ID == prepared.ID {
-				return errors.New("已经添加过这个模型")
+				return i18n.E("已经添加过这个模型", "This model has already been added")
 			}
 		}
 		f.Models = append(f.Models, prepared)
@@ -191,7 +210,7 @@ func (a *App) DeleteModel(id string) error {
 			next = append(next, model)
 		}
 		if !found {
-			return errors.New("没有这个模型")
+			return i18n.E("没有这个模型", "No such model")
 		}
 		f.Models = next
 		return nil
@@ -206,7 +225,7 @@ func (a *App) SetModelProxy(id string, use bool) error {
 				return nil
 			}
 		}
-		return errors.New("没有这个模型")
+		return i18n.E("没有这个模型", "No such model")
 	})
 }
 
@@ -228,13 +247,13 @@ func (a *App) TestSaved(id string) provider.Result {
 			return result
 		}
 	}
-	return provider.Result{Error: "没有这个模型"}
+	return provider.Result{Error: i18n.T("没有这个模型", "No such model")}
 }
 
 func (a *App) TestDraft(model config.Model) provider.Result {
 	prepared, err := provider.Prepare(model)
 	if err != nil {
-		return provider.Result{Error: err.Error()}
+		return provider.Result{Error: i18n.Of(err)}
 	}
 	return a.probe(prepared)
 }
@@ -242,7 +261,7 @@ func (a *App) TestDraft(model config.Model) provider.Result {
 func (a *App) probe(model config.Model) provider.Result {
 	d, err := dialer.ForModel(a.store.Get().Proxy, model.UseProxy)
 	if err != nil {
-		return provider.Result{Error: err.Error()}
+		return provider.Result{Error: i18n.Of(err)}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()

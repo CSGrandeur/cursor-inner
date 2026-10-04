@@ -8,11 +8,12 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"math/big"
 	"os"
 	"path/filepath"
 	"time"
+
+	"cursor-inner/internal/i18n"
 
 	"cursor-inner/internal/fsutil"
 )
@@ -87,7 +88,7 @@ func LoadLeaf(dir string) (*x509.Certificate, error) {
 	}
 	block, _ := pem.Decode(raw)
 	if block == nil {
-		return nil, errors.New("证书文件无法解析")
+		return nil, i18n.E("证书文件无法解析", "Cannot parse the certificate file")
 	}
 	return x509.ParseCertificate(block.Bytes)
 }

@@ -35,12 +35,12 @@ func main() {
 		return
 	}
 
-	release, already, err := acquireSingleton()
+	dir := config.DefaultDir()
+	release, already, err := acquireSingleton(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	dir := config.DefaultDir()
 	if already {
 		url := ""
 		if raw, err := os.ReadFile(filepath.Join(dir, "listen.url")); err == nil {
@@ -124,12 +124,22 @@ func main() {
 	}
 	defer shutdown()
 	watchConsole(shutdown)
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sig
+	quit := func() {
 		shutdown()
 		os.Exit(0)
+	}
+	application.OnQuit(func() {
+		log.Printf("从配置页退出")
+		go func() {
+			time.Sleep(300 * time.Millisecond)
+			quit()
+		}()
+	})
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	go func() {
+		<-sig
+		quit()
 	}()
 
 	if store.Get().Autostart {
@@ -150,7 +160,7 @@ func main() {
 			if snap.URL != "" {
 				log.Printf("接管代理 %s", snap.URL)
 			}
-			if snap.Detail != "" {
+			if !snap.Detail.IsZero() {
 				log.Print(snap.Detail)
 			}
 			log.Printf("已结束 Cursor，重新打开后生效")

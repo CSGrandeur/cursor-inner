@@ -46,10 +46,7 @@ func startWatchdog() error {
 }
 
 func notifyAlreadyRunning(url string) {
-	text := "cursor-inner 已经在运行，不会再开一份。"
-	if url != "" {
-		text += "\n\n配置页：\n" + url
-	}
+	text := alreadyRunningText(url)
 	user32 := windows.NewLazySystemDLL("user32.dll")
 	proc := user32.NewProc("MessageBoxW")
 	caption, _ := windows.UTF16PtrFromString("cursor-inner")

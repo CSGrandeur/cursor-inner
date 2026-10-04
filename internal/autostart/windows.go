@@ -13,6 +13,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"cursor-inner/internal/i18n"
+
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -31,7 +33,7 @@ func (w *Windows) Apply(enabled bool, exe string) (State, error) {
 		if err := upsertTask(exe, currentUser()); err != nil {
 			if err2 := upsertTask(exe, ""); err2 != nil {
 				if ferr := applyFallback(exe); ferr != nil {
-					return State{}, fmt.Errorf("登录任务：%v；启动项：%w", err2, ferr)
+					return State{}, i18n.Ef("登录任务：%v；启动项：%v", "Logon task: %v; Run key: %v", err2, ferr)
 				}
 				return Describe(exe, w.snapshot()), nil
 			}

@@ -1,6 +1,10 @@
 package autostart
 
-import "strings"
+import (
+	"strings"
+
+	"cursor-inner/internal/i18n"
+)
 
 const (
 	TaskName  = `cursor-inner`
@@ -81,20 +85,22 @@ func quoteExe(exe string) string {
 	return `"` + strings.ReplaceAll(exe, `"`, "") + `"`
 }
 
+var offDetail = i18n.T("开机不会自动打开。", "Does not start at login.")
+
 type State struct {
-	Enabled bool   `json:"enabled"`
-	Mode    string `json:"mode"`
-	Detail  string `json:"detail"`
+	Enabled bool      `json:"enabled"`
+	Mode    string    `json:"mode"`
+	Detail  i18n.Text `json:"detail"`
 }
 
 func Describe(exe string, snap Snapshot) State {
 	if snap.TaskPresent && snap.TaskEnabled && sameExe(snap.TaskCommand, exe) {
-		return State{Enabled: true, Mode: "logon-task", Detail: "已写入当前用户的登录任务，登录约 15 秒后启动。"}
+		return State{Enabled: true, Mode: "logon-task", Detail: i18n.T("已写入当前用户的登录任务，登录约 15 秒后启动。", "Registered as a logon task for the current user; starts about 15 seconds after login.")}
 	}
 	if snap.RunCommand != "" && snap.Approved != 3 && sameExe(unquote(snap.RunCommand), exe) {
-		return State{Enabled: true, Mode: "run-key", Detail: "登录任务未能写入，已改用当前用户的启动项。"}
+		return State{Enabled: true, Mode: "run-key", Detail: i18n.T("登录任务未能写入，已改用当前用户的启动项。", "Could not register a logon task; using the current user's Run key instead.")}
 	}
-	return State{Enabled: false, Mode: "off", Detail: "开机不会自动打开。"}
+	return State{Enabled: false, Mode: "off", Detail: offDetail}
 }
 
 func sameExe(a, b string) bool {

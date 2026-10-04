@@ -80,6 +80,9 @@
     transition: color .15s, border-color .15s;
   }
   .addr:hover { color: var(--text); border-color: var(--faint); }
+  .top-right { display: flex; align-items: center; gap: 8px; }
+  .gone { min-height: 70vh; display: grid; place-content: center; gap: 8px; text-align: center; color: var(--muted); }
+  .gone h2 { color: var(--text); font-size: 15px; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.on { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
 
@@ -236,67 +239,71 @@
 <main>
   <header class="top">
     <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
-    <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
+    <div class="top-right">
+      <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
+      <button id="lang" type="button" class="sm" aria-label="Language">EN</button>
+      <button id="quit" type="button" class="sm" data-i18n="quit" data-i18n-title="quitTitle" title="退出 cursor-inner，并还原 Cursor 的代理设置">退出</button>
+    </div>
   </header>
 
   <section class="panel">
     <div class="row">
-      <h2>接管</h2>
+      <h2 data-i18n="takeover">接管</h2>
       <div>
-        <p class="desc">打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。</p>
+        <p class="desc" data-i18n="takeoverDesc">打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。</p>
         <p class="meta" id="takeover-meta"></p>
       </div>
-      <label class="switch"><input id="takeover" type="checkbox" aria-label="接管"><span></span></label>
+      <label class="switch"><input id="takeover" type="checkbox" data-i18n-aria="takeover" aria-label="接管"><span></span></label>
     </div>
     <div class="row">
-      <h2>代理</h2>
+      <h2 data-i18n="proxy">代理</h2>
       <div>
-        <p class="desc">官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。</p>
+        <p class="desc" data-i18n="proxyDesc">官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。</p>
         <p class="meta" id="proxy-meta"></p>
       </div>
       <div class="controls">
         <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false">
-        <button id="proxy-save" type="button">保存</button>
-        <label class="switch"><input id="proxy-on" type="checkbox" aria-label="代理"><span></span></label>
+        <button id="proxy-save" type="button" data-i18n="save">保存</button>
+        <label class="switch"><input id="proxy-on" type="checkbox" data-i18n-aria="proxy" aria-label="代理"><span></span></label>
       </div>
     </div>
     <div class="row">
-      <h2>开机启动</h2>
+      <h2 data-i18n="autostart">开机启动</h2>
       <div>
-        <p class="desc">登录 Windows 约 15 秒后启动。反复开关始终只保留一条启动项。</p>
+        <p class="desc" data-i18n="autostartDesc">登录系统后自动启动。反复开关始终只保留一条启动项。</p>
         <p class="meta" id="boot-meta"></p>
       </div>
-      <label class="switch"><input id="autostart" type="checkbox" aria-label="开机启动"><span></span></label>
+      <label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label>
     </div>
   </section>
 
   <section class="panel">
     <div class="panel-head">
-      <h2>自定义模型</h2>
+      <h2 data-i18n="models">自定义模型</h2>
       <span class="count" id="model-count">0</span>
-      <span class="hint">测试会流式请求 1 到 120 的数字，记录速度、首字和输出</span>
+      <span class="hint" data-i18n="modelsHint">测试会流式请求 1 到 120 的数字，记录速度、首字和输出</span>
     </div>
     <table id="model-table">
       <thead>
-        <tr><th>模型</th><th>接口</th><th>上次测试</th><th></th></tr>
+        <tr><th data-i18n="colModel">模型</th><th data-i18n="colEndpoint">接口</th><th data-i18n="colLastTest">上次测试</th><th></th></tr>
       </thead>
       <tbody id="models"></tbody>
     </table>
-    <p class="empty" id="empty">还没有自定义模型，在下面添加第一个。</p>
+    <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
 
     <form id="model-form" class="add">
-      <h3>添加模型</h3>
+      <h3 data-i18n="addModel">添加模型</h3>
       <div class="grid">
-        <label class="field">显示名<input name="display_name" type="text" required></label>
-        <label class="field">类型
+        <label class="field"><span data-i18n="displayName">显示名</span><input name="display_name" type="text" required></label>
+        <label class="field"><span data-i18n="type">类型</span>
           <select name="type">
             <option value="openai-chat">OpenAI Chat</option>
             <option value="anthropic">Anthropic</option>
           </select>
         </label>
-        <label class="field">模型名<input name="model" type="text" required spellcheck="false" class="mono"></label>
-        <label class="field">接口地址<input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
-        <label class="field">密钥
+        <label class="field"><span data-i18n="modelName">模型名</span><input name="model" type="text" required spellcheck="false" class="mono"></label>
+        <label class="field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
+        <label class="field"><span data-i18n="apiKey">密钥</span>
           <span class="secret">
             <input id="api-key" name="api_key" type="password" required autocomplete="off" class="mono">
             <button id="reveal-key" type="button" aria-label="显示密钥" title="显示密钥">
@@ -314,15 +321,86 @@
         </label>
       </div>
       <div class="actions">
-        <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span>走代理</label>
-        <button id="draft-test" type="button">测试</button>
-        <button class="primary" type="submit">添加</button>
+        <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
+        <button id="draft-test" type="button" data-i18n="test">测试</button>
+        <button class="primary" type="submit" data-i18n="add">添加</button>
       </div>
     </form>
   </section>
 </main>
 <div class="toast" id="banner" role="status"></div>
 <script>
+const MESSAGES = {
+  zh: {
+    quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
+    takeover: "接管", takeoverDesc: "打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。",
+    proxy: "代理", proxyDesc: "官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。",
+    save: "保存", autostart: "开机启动", autostartDesc: "登录系统后自动启动。反复开关始终只保留一条启动项。",
+    models: "自定义模型", modelsHint: "测试会流式请求 1 到 120 的数字，记录速度、首字和输出",
+    colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试",
+    empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型",
+    displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥",
+    useProxy: "走代理", test: "测试", testing: "测试中…", add: "添加", del: "删除",
+    showKey: "显示密钥", hideKey: "隐藏密钥",
+    notTakenOver: "这次启动没有接管。", mitm: "接管代理 {url}",
+    proxyOn: "生效中：Cursor 的联网经过这个代理。", proxyOff: "当前直连。",
+    liveOn: "接管中", liveOff: "未接管",
+    untested: "未测试", failed: "失败", testFailed: "测试失败", testFailedWith: "测试失败：{error}", unknownError: "未知错误",
+    testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 返回：{output}",
+    estimated: "（估算）", requestFailed: "请求失败 {status}",
+    quitConfirm: "退出 cursor-inner？\n\nCursor 的代理设置会被还原，正在运行的 Cursor 会被关闭。",
+    goneTitle: "cursor-inner 已退出", goneBody: "Cursor 的代理设置已还原，可以关闭这个页面。",
+    switchLang: "EN"
+  },
+  en: {
+    quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
+    takeover: "Takeover", takeoverDesc: "Closes any running Cursor on start. Official models still come from Cursor; custom models are added to the end of the list.",
+    proxy: "Proxy", proxyDesc: "Official models and the rest of Cursor's traffic go through this proxy. A bare host:port is treated as socks5; leave it empty for a direct connection.",
+    save: "Save", autostart: "Start at login", autostartDesc: "Starts automatically after you log in. Toggling it repeatedly always leaves exactly one entry.",
+    models: "Custom models", modelsHint: "Tests stream the numbers 1 to 120 and record speed, first token and output",
+    colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test",
+    empty: "No custom models yet. Add the first one below.", addModel: "Add model",
+    displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key",
+    useProxy: "Use proxy", test: "Test", testing: "Testing…", add: "Add", del: "Delete",
+    showKey: "Show key", hideKey: "Hide key",
+    notTakenOver: "Takeover is not active in this session.", mitm: "Takeover proxy {url}",
+    proxyOn: "Active: Cursor's traffic goes through this proxy.", proxyOff: "Direct connection.",
+    liveOn: "Takeover active", liveOff: "Not taken over",
+    untested: "Not tested", failed: "Failed", testFailed: "Test failed", testFailedWith: "Test failed: {error}", unknownError: "unknown error",
+    testDetail: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated} · reply: {output}",
+    estimated: " (estimated)", requestFailed: "Request failed {status}",
+    quitConfirm: "Quit cursor-inner?\n\nCursor's proxy settings will be restored and any running Cursor will be closed.",
+    goneTitle: "cursor-inner has quit", goneBody: "Cursor's proxy settings have been restored. You can close this page.",
+    switchLang: "中文"
+  }
+};
+const LANG_KEY = "cursor-inner-lang";
+const storedLang = localStorage.getItem(LANG_KEY);
+let lang = MESSAGES[storedLang] ? storedLang : ((navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en");
+let lastState = null;
+
+function t(key, vars) {
+  let text = MESSAGES[lang][key] ?? MESSAGES.zh[key] ?? key;
+  for (const [name, value] of Object.entries(vars || {})) text = text.replaceAll("{" + name + "}", value);
+  return text;
+}
+
+function tr(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  return value[lang] || value.zh || "";
+}
+
+function applyLang() {
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = t(node.dataset.i18nTitle); });
+  document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
+  document.querySelector("#lang").textContent = t("switchLang");
+  syncReveal();
+  if (lastState) render(lastState);
+}
+
 const banner = document.querySelector("#banner");
 const form = document.querySelector("#model-form");
 let toastTimer = 0;
@@ -341,34 +419,40 @@ function formatSpeed(value) {
 }
 
 function testDetail(result) {
-  if (!result) return "未测试";
-  if (!result.ok) return "测试失败：" + (result.error || "未知错误");
-  const first = result.first_valid_response_ms == null ? "--" : result.first_valid_response_ms;
-  return "速度 " + formatSpeed(result.tokens_per_second) + " tokens/s · 首字 " + first + " ms · 总耗时 " + result.duration_ms + " ms · 输出 " + result.output_tokens + " tokens" + (result.tokens_estimated ? "（估算）" : "") + " · 返回：" + (result.output || "--");
+  if (!result) return t("untested");
+  if (!result.ok) return t("testFailedWith", {error: tr(result.error) || t("unknownError")});
+  return t("testDetail", {
+    speed: formatSpeed(result.tokens_per_second),
+    first: result.first_valid_response_ms == null ? "--" : result.first_valid_response_ms,
+    duration: result.duration_ms,
+    tokens: result.output_tokens,
+    estimated: result.tokens_estimated ? t("estimated") : "",
+    output: result.output || "--"
+  });
 }
 
 function testBadge(result) {
-  const el = document.createElement("span");
+  const node = document.createElement("span");
   if (!result) {
-    el.className = "speed idle";
-    el.textContent = "未测试";
-    return el;
+    node.className = "speed idle";
+    node.textContent = t("untested");
+    return node;
   }
-  el.className = "speed" + (result.ok ? "" : " bad");
-  el.textContent = result.ok ? formatSpeed(result.tokens_per_second) + " tok/s" : "失败";
-  el.title = testDetail(result);
-  return el;
+  node.className = "speed" + (result.ok ? "" : " bad");
+  node.textContent = result.ok ? formatSpeed(result.tokens_per_second) + " tok/s" : t("failed");
+  node.title = testDetail(result);
+  return node;
 }
 
 function showTest(result) {
   if (result.ok) toast(testDetail(result), "ok");
-  else showError(result.error || "测试失败");
+  else showError(tr(result.error) || t("testFailed"));
 }
 
 async function send(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
+  if (!res.ok) throw new Error(tr(data.error) || t("requestFailed", {status: res.status}));
   return data;
 }
 
@@ -399,29 +483,29 @@ function busy(button, label, run) {
 }
 
 function render(state) {
+  lastState = state;
   const listen = document.querySelector("#listen");
   document.querySelector("#listen-text").textContent = state.listen_url || "";
   listen.href = state.listen_url || "/";
   document.querySelector("#live-dot").className = "dot" + (state.takeover_active ? " on" : "");
-  listen.title = state.takeover_active ? "接管中" : "未接管";
+  listen.title = state.takeover_active ? t("liveOn") : t("liveOff");
 
   document.querySelector("#takeover").checked = !!state.takeover_active;
   const meta = document.querySelector("#takeover-meta");
-  meta.className = "meta" + (state.last_error ? " warn" : "");
+  const lastError = tr(state.last_error);
+  meta.className = "meta" + (lastError ? " warn" : "");
   const bits = [];
-  if (state.takeover && !state.takeover_active) bits.push("这次启动没有接管。");
-  if (state.takeover_active && state.mitm_url) bits.push("接管代理 " + state.mitm_url);
-  if (state.ca_detail) bits.push(state.ca_detail);
-  if (state.catalog_warning) bits.push(state.catalog_warning);
-  if (state.last_error) bits.push(state.last_error);
+  if (state.takeover && !state.takeover_active) bits.push(t("notTakenOver"));
+  if (state.takeover_active && state.mitm_url) bits.push(t("mitm", {url: state.mitm_url}));
+  for (const text of [tr(state.ca_detail), tr(state.catalog_warning), lastError]) if (text) bits.push(text);
   meta.textContent = bits.join("\n");
 
   document.querySelector("#proxy-on").checked = !!state.proxy.enabled;
   const address = document.querySelector("#proxy-address");
   if (document.activeElement !== address) address.value = state.proxy.address || "";
-  document.querySelector("#proxy-meta").textContent = state.proxy.effective ? "生效中：Cursor 的联网经过这个代理。" : "当前直连。";
+  document.querySelector("#proxy-meta").textContent = state.proxy.effective ? t("proxyOn") : t("proxyOff");
   document.querySelector("#autostart").checked = !!state.autostart.enabled;
-  document.querySelector("#boot-meta").textContent = state.autostart.detail || "";
+  document.querySelector("#boot-meta").textContent = tr(state.autostart.detail);
 
   const box = document.querySelector("#models");
   box.replaceChildren();
@@ -430,7 +514,7 @@ function render(state) {
   document.querySelector("#model-table").hidden = none;
   document.querySelector("#model-count").textContent = state.models.length;
   for (const model of state.models) {
-    const tr = el("tr");
+    const tr_ = el("tr");
     const who = el("td");
     who.append(el("div", "name", model.display_name), el("div", "sub mono", model.model));
     const api = el("td");
@@ -455,21 +539,21 @@ function render(state) {
       body: JSON.stringify({use_proxy: checkbox.checked})
     })));
     sw.append(checkbox, el("span"));
-    proxy.append(sw, document.createTextNode("走代理"));
-    const test = el("button", "sm", "测试");
+    proxy.append(sw, document.createTextNode(t("useProxy")));
+    const test = el("button", "sm", t("test"));
     test.type = "button";
-    test.addEventListener("click", () => busy(test, "测试中…", () => act(async () => {
+    test.addEventListener("click", () => busy(test, t("testing"), () => act(async () => {
       const result = await send("/api/models/" + model.id + "/test", {method: "POST"});
       showTest(result);
       return send("/api/state");
     })));
-    const del = el("button", "sm danger", "删除");
+    const del = el("button", "sm danger", t("del"));
     del.type = "button";
     del.addEventListener("click", () => act(() => send("/api/models/" + model.id, {method: "DELETE"})));
     inner.append(proxy, test, del);
     ops.append(inner);
-    tr.append(who, api, last, ops);
-    box.append(tr);
+    tr_.append(who, api, last, ops);
+    box.append(tr_);
   }
 }
 
@@ -491,6 +575,11 @@ async function load() {
   }
 }
 
+document.querySelector("#lang").addEventListener("click", () => {
+  lang = lang === "zh" ? "en" : "zh";
+  localStorage.setItem(LANG_KEY, lang);
+  applyLang();
+});
 document.querySelector("#takeover").addEventListener("change", (event) => {
   act(() => send("/api/takeover", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: event.target.checked})}));
 });
@@ -512,20 +601,39 @@ form.addEventListener("submit", (event) => {
   });
 });
 const draftTest = document.querySelector("#draft-test");
-draftTest.addEventListener("click", () => busy(draftTest, "测试中…", () => act(async () => {
+draftTest.addEventListener("click", () => busy(draftTest, t("testing"), () => act(async () => {
   const result = await send("/api/models/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
   showTest(result);
   return null;
 })));
+document.querySelector("#quit").addEventListener("click", async () => {
+  if (!confirm(t("quitConfirm"))) return;
+  try {
+    await send("/api/quit", {method: "POST"});
+    const gone = el("div", "gone");
+    gone.append(el("h2", "", t("goneTitle")), el("p", "", t("goneBody")));
+    document.querySelector("main").replaceChildren(gone);
+    banner.classList.remove("show");
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+function syncReveal() {
+  const shown = document.querySelector("#api-key").type === "text";
+  const button = document.querySelector("#reveal-key");
+  button.title = shown ? t("hideKey") : t("showKey");
+  button.setAttribute("aria-label", button.title);
+}
 document.querySelector("#reveal-key").addEventListener("click", () => {
   const input = document.querySelector("#api-key");
   const show = input.type === "password";
   input.type = show ? "text" : "password";
   document.querySelector("#eye-on").hidden = !show;
   document.querySelector("#eye-off").hidden = show;
-  document.querySelector("#reveal-key").title = show ? "隐藏密钥" : "显示密钥";
-  document.querySelector("#reveal-key").setAttribute("aria-label", show ? "隐藏密钥" : "显示密钥");
+  syncReveal();
 });
+applyLang();
 load();
 </script>
 </body>

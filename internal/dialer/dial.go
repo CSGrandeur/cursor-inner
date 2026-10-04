@@ -2,15 +2,16 @@ package dialer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
 	"time"
 
-	"cursor-inner/internal/config"
+	"cursor-inner/internal/i18n"
+
 	"golang.org/x/net/proxy"
+
+	"cursor-inner/internal/config"
 )
 
 type Func func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -23,19 +24,19 @@ func Direct() Func {
 func Normalize(address string) (string, error) {
 	address = strings.TrimSpace(address)
 	if address == "" {
-		return "", errors.New("代理地址为空")
+		return "", i18n.E("代理地址为空", "Proxy address is empty")
 	}
 	if !strings.Contains(address, "://") {
 		address = "socks5://" + address
 	}
 	u, err := url.Parse(address)
 	if err != nil || u.Host == "" || u.Hostname() == "" {
-		return "", errors.New("代理地址无法解析")
+		return "", i18n.E("代理地址无法解析", "Proxy address cannot be parsed")
 	}
 	switch strings.ToLower(u.Scheme) {
 	case "socks5", "socks5h", "http", "https":
 	default:
-		return "", errors.New("代理只支持 socks5、socks5h、http、https")
+		return "", i18n.E("代理只支持 socks5、socks5h、http、https", "Only socks5, socks5h, http and https proxies are supported")
 	}
 	if u.Scheme == "socks5h" {
 		u.Scheme = "socks5"
@@ -67,7 +68,7 @@ func RejectSelf(spec, mitmURL string) error {
 		return err
 	}
 	if proxyURL.Port() != "" && proxyURL.Port() == local.Port() && loopback(proxyURL.Hostname()) && loopback(local.Hostname()) {
-		return errors.New("代理地址不能指向本工具的接管端口")
+		return i18n.E("代理地址不能指向本工具的接管端口", "The proxy cannot point at cursor-inner's own takeover port")
 	}
 	return nil
 }
@@ -92,7 +93,7 @@ func FromProxy(p config.Proxy) (Func, error) {
 	base := &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second}
 	d, err := proxy.FromURL(u, base)
 	if err != nil {
-		return nil, fmt.Errorf("代理不可用: %w", err)
+		return nil, i18n.Wrap("代理不可用：", "Proxy unavailable: ", err)
 	}
 	if cd, ok := d.(proxy.ContextDialer); ok {
 		return cd.DialContext, nil
@@ -111,7 +112,7 @@ func ForModel(global config.Proxy, useProxy bool) (Func, error) {
 		return nil, err
 	}
 	if !on {
-		return nil, errors.New("这个模型要求走代理，但代理开关关闭或地址为空")
+		return nil, i18n.E("这个模型要求走代理，但代理开关关闭或地址为空", "This model is set to use the proxy, but the proxy is off or has no address")
 	}
 	return FromProxy(global)
 }

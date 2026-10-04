@@ -5,9 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
+
+	"cursor-inner/internal/i18n"
 
 	"cursor-inner/internal/fsutil"
 )
@@ -29,15 +30,15 @@ type Model struct {
 }
 
 type LastTest struct {
-	OK                   bool    `json:"ok"`
-	At                   string  `json:"at,omitempty"`
-	DurationMS           int64   `json:"duration_ms"`
-	FirstValidResponseMS *int64  `json:"first_valid_response_ms,omitempty"`
-	OutputTokens         uint64  `json:"output_tokens"`
-	TokensPerSecond      float64 `json:"tokens_per_second"`
-	TokensEstimated      bool    `json:"tokens_estimated"`
-	Output               string  `json:"output,omitempty"`
-	Error                string  `json:"error,omitempty"`
+	OK                   bool      `json:"ok"`
+	At                   string    `json:"at,omitempty"`
+	DurationMS           int64     `json:"duration_ms"`
+	FirstValidResponseMS *int64    `json:"first_valid_response_ms,omitempty"`
+	OutputTokens         uint64    `json:"output_tokens"`
+	TokensPerSecond      float64   `json:"tokens_per_second"`
+	TokensEstimated      bool      `json:"tokens_estimated"`
+	Output               string    `json:"output,omitempty"`
+	Error                i18n.Text `json:"error,omitzero"`
 }
 
 type File struct {
@@ -57,11 +58,8 @@ func Default() File {
 }
 
 func DefaultDir() string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(os.Getenv("APPDATA"), "cursor-inner")
-	}
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
+	base, err := os.UserConfigDir()
+	if err != nil {
 		home, _ := os.UserHomeDir()
 		base = filepath.Join(home, ".config")
 	}
@@ -146,7 +144,7 @@ func (m Model) KeyHint() string {
 		return ""
 	}
 	if len(key) <= 4 {
-		return "已填写"
+		return "····"
 	}
 	return "····" + key[len(key)-4:]
 }
