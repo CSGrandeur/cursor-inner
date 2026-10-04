@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -74,6 +75,27 @@ func (c *Console) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// OnEnter 在用户按回车时调用 fn。标准输入不是终端时不做任何事。
+func (c *Console) OnEnter(fn func()) {
+	in := os.Stdin
+	if !term.IsTerminal(int(in.Fd())) {
+		return
+	}
+	disableEcho(in)
+	go func() {
+		buf := make([]byte, 256)
+		for {
+			n, err := in.Read(buf)
+			if err != nil {
+				return
+			}
+			if bytes.ContainsAny(buf[:n], "\r\n") {
+				fn()
+			}
+		}
+	}()
 }
 
 func (c *Console) Close() {

@@ -109,10 +109,12 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 
 ## 命令行窗口
 
-配置页地址固定在窗口顶部，不会被日志刷走。在支持超链接的终端里（Windows Terminal、iTerm2、GNOME Terminal 等）按住 Ctrl 或 Cmd 单击地址即可打开。
+配置页地址固定在窗口顶部，不会被日志刷走。在窗口里按回车即可打开配置页；在支持超链接的终端里（Windows Terminal、iTerm2、GNOME Terminal 等），也可以按住 Ctrl 或 Cmd 单击地址。
+
+在 Windows 上从资源管理器、开始菜单或开机启动打开时，cursor-inner 使用经典控制台窗口，任务栏显示它自己的图标；在已有的终端里输入命令启动时，仍在原终端里运行。
 
 ```text
- ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   Ctrl+单击打开配置页
+ ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
 ──────────────────────────────────────────────────────────────────────
 20:31:07  接管代理 http://127.0.0.1:61022
@@ -230,3 +232,5 @@ cursor-inner 是独立的第三方项目，与 Anysphere, Inc.（Cursor 的开�
 ## 许可证
 
 [MIT](LICENSE) © 2026 CSGrandeur
+
+版本变化见 [CHANGELOG.md](CHANGELOG.md)，安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。

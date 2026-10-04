@@ -109,10 +109,12 @@ Files downloaded in a browser carry a download mark. On Windows, when SmartScree
 
 ## Console window
 
-The settings page URL stays pinned at the top of the console window and is never scrolled away by logs. In terminals that support hyperlinks (Windows Terminal, iTerm2, GNOME Terminal and others), Ctrl+click or Cmd+click the URL to open it.
+The settings page URL stays pinned at the top of the console window and is never scrolled away by logs. Press Enter in the window to open the settings page; in terminals that support hyperlinks (Windows Terminal, iTerm2, GNOME Terminal and others) you can also Ctrl+click or Cmd+click the URL.
+
+On Windows, when started from Explorer, the Start menu or at login, cursor-inner uses a classic console window so the taskbar shows its own icon. When started by typing a command in an existing terminal, it keeps running in that terminal.
 
 ```text
- ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   Ctrl+单击打开配置页
+ ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
 ──────────────────────────────────────────────────────────────────────
 20:31:07  接管代理 http://127.0.0.1:61022
@@ -230,3 +232,5 @@ This tool uses a local proxy to modify the model list received by the Cursor cli
 ## License
 
 [MIT](LICENSE) © 2026 CSGrandeur
+
+See [CHANGELOG.md](CHANGELOG.md) for release history. Report security issues privately as described in [SECURITY.md](SECURITY.md).

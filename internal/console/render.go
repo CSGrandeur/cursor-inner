@@ -32,7 +32,7 @@ func renderHeader(url, version string, st Status, cols int) string {
 		{text: " " + version, style: faint},
 		{text: "   "},
 		{text: url, style: under + cream, link: url},
-		{text: "   Ctrl+单击打开配置页", style: faint},
+		{text: "   按回车打开配置页", style: faint},
 	}
 	takeover := segment{text: "未接管", style: muted}
 	switch {

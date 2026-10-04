@@ -50,7 +50,17 @@ func main() {
 		notifyAlreadyRunning(url)
 		os.Exit(0)
 	}
+	if needsClassicConsole() {
+		release()
+		if startClassicConsole() == nil {
+			return
+		}
+		if release, already, err = acquireSingleton(dir); err != nil || already {
+			os.Exit(1)
+		}
+	}
 	defer release()
+	brandConsoleWindow()
 
 	var logFile io.Writer
 	if err := os.MkdirAll(dir, 0o755); err == nil {
@@ -113,6 +123,10 @@ func main() {
 	server := &http.Server{Handler: web.Handler(application), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = server.Serve(ln) }()
 	_ = openBrowser(url)
+	term.OnEnter(func() {
+		log.Printf("打开配置页 %s", url)
+		_ = openBrowser(url)
+	})
 
 	shutdown := func() {
 		application.Shutdown()
