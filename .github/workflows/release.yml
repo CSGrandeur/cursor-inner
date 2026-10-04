@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build Windows
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: ./build.sh windows amd64
+
+      - name: Package
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          name="cursor-inner-${VERSION}-windows-amd64"
+          mkdir -p "out/${name}"
+          cp dist/cursor-inner.exe LICENSE THIRD_PARTY_NOTICES.md README.md README.en.md "out/${name}/"
+          (cd out && zip -qr "${name}.zip" "${name}")
+          cp dist/cursor-inner.exe "out/${name}.exe"
+          (cd out && sha256sum "${name}.exe" "${name}.zip" > SHA256SUMS.txt)
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          name="cursor-inner-${VERSION}-windows-amd64"
+          flags=""
+          case "$VERSION" in *-*) flags="--prerelease" ;; esac
+          gh release create "$VERSION" \
+            "out/${name}.exe" "out/${name}.zip" out/SHA256SUMS.txt \
+            --title "cursor-inner ${VERSION}" --generate-notes $flags

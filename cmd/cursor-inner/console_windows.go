@@ -1,0 +1,82 @@
+//go:build windows
+
+package main
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var (
+	kernel32                  = windows.NewLazySystemDLL("kernel32.dll")
+	procSetConsoleCtrlHandler = kernel32.NewProc("SetConsoleCtrlHandler")
+	consoleCallback           uintptr
+	consoleShutdown           func()
+)
+
+func executable() string {
+	path, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	return path
+}
+
+func openBrowser(url string) error {
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+}
+
+func startWatchdog() error {
+	exe := executable()
+	cmd := exec.Command(exe, "--watch", strconv.Itoa(os.Getpid()))
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW,
+		HideWindow:    true,
+	}
+	return cmd.Start()
+}
+
+func notifyAlreadyRunning(url string) {
+	text := "cursor-inner 已经在运行，不会再开一份。"
+	if url != "" {
+		text += "\n\n配置页：\n" + url
+	}
+	user32 := windows.NewLazySystemDLL("user32.dll")
+	proc := user32.NewProc("MessageBoxW")
+	caption, _ := windows.UTF16PtrFromString("cursor-inner")
+	body, _ := windows.UTF16PtrFromString(text)
+	const mbOK = 0x00000000
+	const mbIcon = 0x00000040
+	const mbTop = 0x00040000
+	const mbFront = 0x00010000
+	_, _, _ = proc.Call(0, uintptr(unsafe.Pointer(body)), uintptr(unsafe.Pointer(caption)), mbOK|mbIcon|mbTop|mbFront)
+	if url != "" {
+		_ = openBrowser(url)
+	}
+}
+
+func watchConsole(shutdown func()) {
+	consoleShutdown = shutdown
+	consoleCallback = syscall.NewCallback(onConsoleCtrl)
+	_, _, _ = procSetConsoleCtrlHandler.Call(consoleCallback, 1)
+}
+
+func onConsoleCtrl(ctrl uintptr) uintptr {
+	switch uint32(ctrl) {
+	case windows.CTRL_C_EVENT, windows.CTRL_BREAK_EVENT, windows.CTRL_CLOSE_EVENT, windows.CTRL_LOGOFF_EVENT, windows.CTRL_SHUTDOWN_EVENT:
+		if consoleShutdown != nil {
+			consoleShutdown()
+		}
+		os.Exit(0)
+	}
+	return 0
+}

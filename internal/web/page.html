@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cursor-inner</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e0e0d;
+    --panel: #151514;
+    --raise: #1b1b19;
+    --field: #10100f;
+    --line: rgba(244, 241, 234, .07);
+    --line-strong: rgba(244, 241, 234, .14);
+    --text: #f4f1ea;
+    --muted: #a19d94;
+    --faint: #6a675f;
+    --signal: #ff5a2b;
+    --signal-soft: rgba(255, 90, 43, .14);
+    --good: #8bc79a;
+    --good-soft: rgba(139, 199, 154, .12);
+    --bad: #ff7a5c;
+    --bad-soft: rgba(255, 122, 92, .12);
+    --primary-bg: #f4f1ea;
+    --primary-text: #151514;
+    --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px rgba(0, 0, 0, .35);
+    --sans: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f3f2ee;
+      --panel: #ffffff;
+      --raise: #f7f6f3;
+      --field: #fbfaf8;
+      --line: rgba(21, 21, 20, .07);
+      --line-strong: rgba(21, 21, 20, .15);
+      --text: #151514;
+      --muted: #67645e;
+      --faint: #9a968e;
+      --signal: #e94a1c;
+      --signal-soft: rgba(233, 74, 28, .10);
+      --good: #2f7a45;
+      --good-soft: rgba(47, 122, 69, .09);
+      --bad: #c2401f;
+      --bad-soft: rgba(194, 64, 31, .08);
+      --primary-bg: #151514;
+      --primary-text: #f4f1ea;
+      --shadow: 0 1px 2px rgba(21, 21, 20, .04), 0 8px 24px rgba(21, 21, 20, .06);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    color: var(--text);
+    font: 13px/1.5 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 0 28px 72px; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+
+  .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    height: 64px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand img { width: 24px; height: 24px; display: block; }
+  .brand span { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .addr {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 28px; padding: 0 12px;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    color: var(--muted); text-decoration: none;
+    font-family: var(--mono); font-size: 12px;
+    transition: color .15s, border-color .15s;
+  }
+  .addr:hover { color: var(--text); border-color: var(--faint); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
+  .dot.on { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    margin-top: 16px;
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 16px 20px 12px;
+  }
+  h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; }
+  .count {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    padding: 1px 7px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line);
+  }
+  .hint { margin-left: auto; color: var(--faint); font-size: 12px; }
+
+  .row {
+    display: grid; grid-template-columns: 108px minmax(0, 1fr) auto;
+    gap: 6px 24px; align-items: center;
+    padding: 16px 20px;
+  }
+  .row + .row { border-top: 1px solid var(--line); }
+  .desc { margin: 0; color: var(--muted); }
+  .meta { margin: 4px 0 0; color: var(--faint); font-size: 12px; white-space: pre-line; }
+  .meta:empty { display: none; }
+  .meta.warn { color: var(--bad); }
+  .meta .ok { color: var(--good); }
+  .controls { display: flex; align-items: center; gap: 8px; }
+
+  .switch { position: relative; width: 34px; height: 20px; flex: none; }
+  .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .switch span {
+    position: absolute; inset: 0; border-radius: 999px;
+    background: var(--raise); border: 1px solid var(--line-strong);
+    transition: background .18s, border-color .18s;
+  }
+  .switch span::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--muted);
+    transition: transform .18s cubic-bezier(.3, .7, .4, 1), background .18s;
+  }
+  .switch input:checked + span { background: var(--signal); border-color: var(--signal); }
+  .switch input:checked + span::after { transform: translateX(14px); background: #fff; }
+  .switch input:focus-visible + span { outline: 2px solid var(--signal); outline-offset: 2px; }
+  .switch.sm { width: 28px; height: 16px; }
+  .switch.sm span::after { width: 10px; height: 10px; }
+  .switch.sm input:checked + span::after { transform: translateX(12px); }
+
+  input[type="text"], input[type="password"], select {
+    width: 100%; height: 32px; padding: 0 10px;
+    color: var(--text); background: var(--field);
+    border: 1px solid var(--line-strong); border-radius: 7px;
+    font: inherit; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input::placeholder { color: var(--faint); }
+  input:focus, select:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+  #proxy-address { width: 230px; font-family: var(--mono); font-size: 12px; }
+
+  button {
+    appearance: none; height: 32px; padding: 0 14px;
+    border: 1px solid var(--line-strong); border-radius: 7px;
+    background: transparent; color: var(--text);
+    font: inherit; font-weight: 500; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s, opacity .15s;
+  }
+  button:hover { background: var(--raise); border-color: var(--faint); }
+  button.primary { background: var(--primary-bg); color: var(--primary-text); border-color: transparent; }
+  button.primary:hover { opacity: .88; background: var(--primary-bg); }
+  button.sm { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+  button.danger:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  button:disabled { opacity: .45; cursor: default; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-weight: 500; font-size: 11px; color: var(--faint);
+    letter-spacing: .04em; padding: 0 20px 8px;
+  }
+  td { padding: 12px 20px; border-top: 1px solid var(--line); vertical-align: middle; }
+  tbody tr { transition: background .12s; }
+  tbody tr:hover { background: var(--raise); }
+  .name { font-weight: 500; white-space: nowrap; }
+  .sub { color: var(--faint); margin-top: 2px; white-space: nowrap; }
+  .api { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); }
+  .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+  .tag {
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); flex: none;
+  }
+  .speed {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12px; white-space: nowrap;
+    padding: 2px 8px; border-radius: 999px; cursor: help;
+    color: var(--good); background: var(--good-soft);
+  }
+  .speed::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .speed.bad { color: var(--bad); background: var(--bad-soft); }
+  .speed.idle { color: var(--faint); background: transparent; cursor: default; padding-left: 0; }
+  .speed.idle::before { display: none; }
+  td.ops { text-align: right; white-space: nowrap; }
+  .ops-inner { display: inline-flex; align-items: center; gap: 6px; }
+  .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-right: 6px; cursor: pointer; }
+  .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
+
+  .add { border-top: 1px solid var(--line); padding: 16px 20px 18px; background: var(--raise); }
+  .add h3 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .grid { display: grid; grid-template-columns: 1.1fr 140px 1fr 1.5fr 1.3fr; gap: 10px; align-items: end; }
+  label.field { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+  .secret { position: relative; display: block; }
+  .secret input { padding-right: 34px; }
+  .secret button {
+    position: absolute; right: 1px; top: 1px; bottom: 1px; width: 32px; height: auto; padding: 0;
+    border: 0; border-radius: 6px; background: transparent; color: var(--faint);
+    display: grid; place-items: center;
+  }
+  .secret button:hover { color: var(--text); background: transparent; }
+  .secret svg { display: block; }
+  .secret svg[hidden] { display: none !important; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .actions .mini { margin-right: auto; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; z-index: 10;
+    transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+    max-width: min(760px, calc(100vw - 48px));
+    padding: 10px 16px; border-radius: 10px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line-strong); box-shadow: var(--shadow);
+    font-size: 12px; white-space: pre-wrap; cursor: pointer;
+    transition: opacity .2s, transform .2s;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .toast.ok { border-color: var(--good); }
+  .toast.err { border-color: var(--bad); color: var(--bad); }
+
+  @media (max-width: 860px) {
+    main { padding: 0 16px 72px; }
+    .row { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    #proxy-address { width: 100%; }
+    .controls { width: 100%; }
+    .hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
+    <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
+  </header>
+
+  <section class="panel">
+    <div class="row">
+      <h2>接管</h2>
+      <div>
+        <p class="desc">打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。</p>
+        <p class="meta" id="takeover-meta"></p>
+      </div>
+      <label class="switch"><input id="takeover" type="checkbox" aria-label="接管"><span></span></label>
+    </div>
+    <div class="row">
+      <h2>代理</h2>
+      <div>
+        <p class="desc">官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。</p>
+        <p class="meta" id="proxy-meta"></p>
+      </div>
+      <div class="controls">
+        <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false">
+        <button id="proxy-save" type="button">保存</button>
+        <label class="switch"><input id="proxy-on" type="checkbox" aria-label="代理"><span></span></label>
+      </div>
+    </div>
+    <div class="row">
+      <h2>开机启动</h2>
+      <div>
+        <p class="desc">登录 Windows 约 15 秒后启动。反复开关始终只保留一条启动项。</p>
+        <p class="meta" id="boot-meta"></p>
+      </div>
+      <label class="switch"><input id="autostart" type="checkbox" aria-label="开机启动"><span></span></label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>自定义模型</h2>
+      <span class="count" id="model-count">0</span>
+      <span class="hint">测试会流式请求 1 到 120 的数字，记录速度、首字和输出</span>
+    </div>
+    <table id="model-table">
+      <thead>
+        <tr><th>模型</th><th>接口</th><th>上次测试</th><th></th></tr>
+      </thead>
+      <tbody id="models"></tbody>
+    </table>
+    <p class="empty" id="empty">还没有自定义模型，在下面添加第一个。</p>
+
+    <form id="model-form" class="add">
+      <h3>添加模型</h3>
+      <div class="grid">
+        <label class="field">显示名<input name="display_name" type="text" required></label>
+        <label class="field">类型
+          <select name="type">
+            <option value="openai-chat">OpenAI Chat</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+        </label>
+        <label class="field">模型名<input name="model" type="text" required spellcheck="false" class="mono"></label>
+        <label class="field">接口地址<input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
+        <label class="field">密钥
+          <span class="secret">
+            <input id="api-key" name="api_key" type="password" required autocomplete="off" class="mono">
+            <button id="reveal-key" type="button" aria-label="显示密钥" title="显示密钥">
+              <svg id="eye-off" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                <circle cx="8" cy="8" r="1.6"/>
+                <path d="M3 13 13 3"/>
+              </svg>
+              <svg id="eye-on" hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                <circle cx="8" cy="8" r="1.6"/>
+              </svg>
+            </button>
+          </span>
+        </label>
+      </div>
+      <div class="actions">
+        <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span>走代理</label>
+        <button id="draft-test" type="button">测试</button>
+        <button class="primary" type="submit">添加</button>
+      </div>
+    </form>
+  </section>
+</main>
+<div class="toast" id="banner" role="status"></div>
+<script>
+const banner = document.querySelector("#banner");
+const form = document.querySelector("#model-form");
+let toastTimer = 0;
+
+function toast(text, kind) {
+  clearTimeout(toastTimer);
+  banner.textContent = text || "";
+  banner.className = "toast" + (text ? " show " + kind : "");
+  if (text && kind === "ok") toastTimer = setTimeout(() => banner.classList.remove("show"), 6000);
+}
+function showError(text) { toast(text, "err"); }
+banner.addEventListener("click", () => banner.classList.remove("show"));
+
+function formatSpeed(value) {
+  return Number.isFinite(value) ? value.toFixed(1) : "0.0";
+}
+
+function testDetail(result) {
+  if (!result) return "未测试";
+  if (!result.ok) return "测试失败：" + (result.error || "未知错误");
+  const first = result.first_valid_response_ms == null ? "--" : result.first_valid_response_ms;
+  return "速度 " + formatSpeed(result.tokens_per_second) + " tokens/s · 首字 " + first + " ms · 总耗时 " + result.duration_ms + " ms · 输出 " + result.output_tokens + " tokens" + (result.tokens_estimated ? "（估算）" : "") + " · 返回：" + (result.output || "--");
+}
+
+function testBadge(result) {
+  const el = document.createElement("span");
+  if (!result) {
+    el.className = "speed idle";
+    el.textContent = "未测试";
+    return el;
+  }
+  el.className = "speed" + (result.ok ? "" : " bad");
+  el.textContent = result.ok ? formatSpeed(result.tokens_per_second) + " tok/s" : "失败";
+  el.title = testDetail(result);
+  return el;
+}
+
+function showTest(result) {
+  if (result.ok) toast(testDetail(result), "ok");
+  else showError(result.error || "测试失败");
+}
+
+async function send(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ("请求失败 " + res.status));
+  return data;
+}
+
+function formModel() {
+  const fd = new FormData(form);
+  return {
+    display_name: fd.get("display_name") || "",
+    type: fd.get("type"),
+    base_url: fd.get("base_url") || "",
+    api_key: fd.get("api_key") || "",
+    model: fd.get("model") || "",
+    use_proxy: form.use_proxy.checked
+  };
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function busy(button, label, run) {
+  const old = button.textContent;
+  button.disabled = true;
+  button.textContent = label;
+  return run().finally(() => { button.disabled = false; button.textContent = old; });
+}
+
+function render(state) {
+  const listen = document.querySelector("#listen");
+  document.querySelector("#listen-text").textContent = state.listen_url || "";
+  listen.href = state.listen_url || "/";
+  document.querySelector("#live-dot").className = "dot" + (state.takeover_active ? " on" : "");
+  listen.title = state.takeover_active ? "接管中" : "未接管";
+
+  document.querySelector("#takeover").checked = !!state.takeover_active;
+  const meta = document.querySelector("#takeover-meta");
+  meta.className = "meta" + (state.last_error ? " warn" : "");
+  const bits = [];
+  if (state.takeover && !state.takeover_active) bits.push("这次启动没有接管。");
+  if (state.takeover_active && state.mitm_url) bits.push("接管代理 " + state.mitm_url);
+  if (state.ca_detail) bits.push(state.ca_detail);
+  if (state.catalog_warning) bits.push(state.catalog_warning);
+  if (state.last_error) bits.push(state.last_error);
+  meta.textContent = bits.join("\n");
+
+  document.querySelector("#proxy-on").checked = !!state.proxy.enabled;
+  const address = document.querySelector("#proxy-address");
+  if (document.activeElement !== address) address.value = state.proxy.address || "";
+  document.querySelector("#proxy-meta").textContent = state.proxy.effective ? "生效中：Cursor 的联网经过这个代理。" : "当前直连。";
+  document.querySelector("#autostart").checked = !!state.autostart.enabled;
+  document.querySelector("#boot-meta").textContent = state.autostart.detail || "";
+
+  const box = document.querySelector("#models");
+  box.replaceChildren();
+  const none = state.models.length === 0;
+  document.querySelector("#empty").hidden = !none;
+  document.querySelector("#model-table").hidden = none;
+  document.querySelector("#model-count").textContent = state.models.length;
+  for (const model of state.models) {
+    const tr = el("tr");
+    const who = el("td");
+    who.append(el("div", "name", model.display_name), el("div", "sub mono", model.model));
+    const api = el("td");
+    const apiInner = el("div", "api");
+    const url = el("span", "url mono", model.base_url);
+    url.title = model.base_url;
+    apiInner.append(el("span", "tag", model.type), url);
+    if (model.key_hint) apiInner.append(el("span", "mono", model.key_hint));
+    api.append(apiInner);
+    const last = el("td");
+    last.append(testBadge(model.last_test));
+
+    const ops = el("td", "ops");
+    const inner = el("div", "ops-inner");
+    const proxy = el("label", "mini");
+    const sw = el("span", "switch sm");
+    const checkbox = el("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = model.use_proxy;
+    checkbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({use_proxy: checkbox.checked})
+    })));
+    sw.append(checkbox, el("span"));
+    proxy.append(sw, document.createTextNode("走代理"));
+    const test = el("button", "sm", "测试");
+    test.type = "button";
+    test.addEventListener("click", () => busy(test, "测试中…", () => act(async () => {
+      const result = await send("/api/models/" + model.id + "/test", {method: "POST"});
+      showTest(result);
+      return send("/api/state");
+    })));
+    const del = el("button", "sm danger", "删除");
+    del.type = "button";
+    del.addEventListener("click", () => act(() => send("/api/models/" + model.id, {method: "DELETE"})));
+    inner.append(proxy, test, del);
+    ops.append(inner);
+    tr.append(who, api, last, ops);
+    box.append(tr);
+  }
+}
+
+async function act(fn) {
+  try {
+    const state = await fn();
+    if (state) render(state);
+  } catch (err) {
+    showError(err.message);
+    load();
+  }
+}
+
+async function load() {
+  try {
+    render(await send("/api/state"));
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+document.querySelector("#takeover").addEventListener("change", (event) => {
+  act(() => send("/api/takeover", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: event.target.checked})}));
+});
+document.querySelector("#autostart").addEventListener("change", (event) => {
+  act(() => send("/api/autostart", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: event.target.checked})}));
+});
+document.querySelector("#proxy-save").addEventListener("click", () => {
+  act(() => send("/api/proxy", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+    enabled: document.querySelector("#proxy-on").checked,
+    address: document.querySelector("#proxy-address").value
+  })}));
+});
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  act(async () => {
+    const state = await send("/api/models", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
+    form.reset();
+    return state;
+  });
+});
+const draftTest = document.querySelector("#draft-test");
+draftTest.addEventListener("click", () => busy(draftTest, "测试中…", () => act(async () => {
+  const result = await send("/api/models/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
+  showTest(result);
+  return null;
+})));
+document.querySelector("#reveal-key").addEventListener("click", () => {
+  const input = document.querySelector("#api-key");
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  document.querySelector("#eye-on").hidden = !show;
+  document.querySelector("#eye-off").hidden = show;
+  document.querySelector("#reveal-key").title = show ? "隐藏密钥" : "显示密钥";
+  document.querySelector("#reveal-key").setAttribute("aria-label", show ? "隐藏密钥" : "显示密钥");
+});
+load();
+</script>
+</body>
+</html>
