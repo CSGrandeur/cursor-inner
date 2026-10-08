@@ -12,13 +12,19 @@ import (
 	"golang.org/x/term"
 )
 
-const headerRows = 3
+const headerRows = 4
 
 type Status struct {
-	Takeover bool
-	Skipped  bool
-	Proxy    string
-	Models   int
+	Takeover  bool
+	Skipped   bool
+	Proxy     string
+	Models    int
+	CatalogOK bool
+	CatalogN  int
+	CatalogAt time.Time
+	Local     int
+	Official  int
+	LastError string
 }
 
 type Console struct {
@@ -33,6 +39,7 @@ type Console struct {
 	rows    int
 	drawn   string
 	closed  bool
+	hidden  bool
 }
 
 func New(out *os.File, file io.Writer) *Console {
@@ -57,6 +64,20 @@ func (c *Console) Start(url, version string, status func() Status) {
 	go c.watch()
 }
 
+// Event 在控制台写一行给人看的事件，不写进日志文件。
+func (c *Console) Event(text string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed || c.hidden || text == "" {
+		return
+	}
+	if c.vt {
+		fmt.Fprintf(c.out, "\r\n%s", styleLine(text))
+		return
+	}
+	fmt.Fprintln(c.out, text)
+}
+
 func (c *Console) Write(p []byte) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -65,7 +86,7 @@ func (c *Console) Write(p []byte) (int, error) {
 		if c.file != nil {
 			fmt.Fprintf(c.file, "%s %s\n", now.Format("2006-01-02 15:04:05"), line)
 		}
-		if c.closed {
+		if c.closed || c.hidden {
 			continue
 		}
 		if c.vt {
@@ -105,9 +126,39 @@ func (c *Console) Close() {
 		return
 	}
 	c.closed = true
-	if c.vt {
-		fmt.Fprintf(c.out, "\x1b[r\x1b[%d;1H\r\n\x1b[?25h", c.rows)
+	if c.hidden || !c.vt {
+		return
 	}
+	fmt.Fprintf(c.out, "\x1b[r\x1b[%d;1H\r\n\x1b[?25h", c.rows)
+}
+
+// Detach 停止往控制台画。窗口被收起、标准输出失效之后调用。
+func (c *Console) Detach() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.hidden = true
+	c.mu.Unlock()
+}
+
+// Attach 换到新的控制台输出并重新画顶栏。
+func (c *Console) Attach(out *os.File) {
+	if c == nil || out == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.out = out
+	c.hidden = false
+	c.closed = false
+	c.vt = term.IsTerminal(int(out.Fd())) && enableVT(out)
+	if !c.vt || c.url == "" {
+		return
+	}
+	c.cols, c.rows = c.size()
+	fmt.Fprint(c.out, "\x1b[?25l\x1b[2J")
+	c.layoutLocked()
 }
 
 func (c *Console) watch() {
@@ -118,6 +169,10 @@ func (c *Console) watch() {
 		if c.closed {
 			c.mu.Unlock()
 			return
+		}
+		if c.hidden {
+			c.mu.Unlock()
+			continue
 		}
 		cols, rows := c.size()
 		if cols != c.cols || rows != c.rows {

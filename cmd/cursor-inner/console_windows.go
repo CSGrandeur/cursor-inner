@@ -35,9 +35,9 @@ func openBrowser(url string) error {
 	return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }
 
-func startWatchdog() error {
+func startWatchdog(dir string) error {
 	exe := executable()
-	cmd := exec.Command(exe, "--watch", strconv.Itoa(os.Getpid()))
+	cmd := exec.Command(exe, "--watch", strconv.Itoa(os.Getpid()), "--data-dir", dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW,
 		HideWindow:    true,
@@ -68,6 +68,9 @@ func watchConsole(shutdown func()) {
 }
 
 func onConsoleCtrl(ctrl uintptr) uintptr {
+	if consoleCloseAction(uint32(ctrl), trayReady.Load()) == closeHide && hideConsoleToTray() {
+		return 1
+	}
 	switch uint32(ctrl) {
 	case windows.CTRL_C_EVENT, windows.CTRL_BREAK_EVENT, windows.CTRL_CLOSE_EVENT, windows.CTRL_LOGOFF_EVENT, windows.CTRL_SHUTDOWN_EVENT:
 		if consoleShutdown != nil {

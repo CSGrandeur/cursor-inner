@@ -5,12 +5,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -22,15 +20,7 @@ import (
 	"cursor-inner/internal/dialer"
 )
 
-const (
-	systemPrompt = "你是 Cursor 里的编程助手。用用户使用的语言回复。"
-	testPrompt   = "Output the numbers 1 through 120 separated by a single space. No commas, no newlines, no explanation."
-)
-
-type Message struct {
-	Role    string
-	Content string
-}
+const testPrompt = "Output the numbers 1 through 120 separated by a single space. No commas, no newlines, no explanation."
 
 type Result struct {
 	OK                   bool      `json:"ok"`
@@ -129,7 +119,7 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 		}
 		return result
 	}
-	resp, err := do(ctx, m, dial, []Message{{Role: "user", Content: testPrompt}}, true, 2048, false)
+	resp, err := do(ctx, m, dial, chatRequest{Messages: []Message{{Role: "user", Content: testPrompt}}, MaxTokens: 2048})
 	if err != nil {
 		result.Error = i18n.Of(err)
 		return finish()
@@ -203,147 +193,6 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 	}
 	result.OK = true
 	return finish()
-}
-
-func Stream(ctx context.Context, m config.Model, dial dialer.Func, messages []Message, onDelta func(string) error) error {
-	if len(messages) == 0 {
-		return i18n.E("没有用户消息", "No user message")
-	}
-	resp, err := do(ctx, m, dial, messages, true, 4096, true)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	rawHead := make([]byte, 1)
-	n, err := resp.Body.Read(rawHead)
-	if n == 0 && err != nil {
-		return err
-	}
-	rest := io.MultiReader(bytes.NewReader(rawHead[:n]), resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(rest, 4096))
-		return i18n.Ef("接口返回 %d：%s", "Endpoint returned %d: %s", resp.StatusCode, excerpt(body))
-	}
-	if n > 0 && rawHead[0] == '{' {
-		body, err := io.ReadAll(io.LimitReader(rest, 8<<20))
-		if err != nil {
-			return err
-		}
-		text, err := staticText(body, m.Type)
-		if err != nil {
-			return err
-		}
-		if text == "" {
-			return i18n.E("接口没有返回文本", "Endpoint returned no text")
-		}
-		return onDelta(text)
-	}
-	sc := bufio.NewScanner(rest)
-	sc.Buffer(make([]byte, 0, 64*1024), 2<<20)
-	var wrote bool
-	for sc.Scan() {
-		delta, ok := deltaLine(sc.Text(), m.Type)
-		if !ok || delta == "" {
-			continue
-		}
-		if err := onDelta(delta); err != nil {
-			return err
-		}
-		wrote = true
-	}
-	if err := sc.Err(); err != nil {
-		return err
-	}
-	if !wrote {
-		return i18n.E("接口没有返回文本", "Endpoint returned no text")
-	}
-	return nil
-}
-
-func do(ctx context.Context, m config.Model, dial dialer.Func, messages []Message, stream bool, maxTokens int, withSystem bool) (*http.Response, error) {
-	endpoint, err := RequestURL(m)
-	if err != nil {
-		return nil, err
-	}
-	payload, err := requestBody(m, messages, stream, maxTokens, withSystem)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	if m.Type == "anthropic" {
-		req.Header.Set("x-api-key", m.APIKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-	} else {
-		req.Header.Set("Authorization", "Bearer "+m.APIKey)
-	}
-	client := &http.Client{Transport: &http.Transport{
-		DialContext:       dial,
-		Proxy:             nil,
-		ForceAttemptHTTP2: false,
-		TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
-	}}
-	return client.Do(req)
-}
-
-func requestBody(m config.Model, messages []Message, stream bool, maxTokens int, withSystem bool) ([]byte, error) {
-	switch m.Type {
-	case "openai-chat":
-		type msg struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		}
-		body := struct {
-			Model         string `json:"model"`
-			Messages      []msg  `json:"messages"`
-			Stream        bool   `json:"stream"`
-			MaxTokens     int    `json:"max_tokens"`
-			StreamOptions *struct {
-				IncludeUsage bool `json:"include_usage"`
-			} `json:"stream_options,omitempty"`
-		}{Model: m.Model, Stream: stream, MaxTokens: maxTokens}
-		if withSystem {
-			body.Messages = append(body.Messages, msg{Role: "system", Content: systemPrompt})
-		}
-		for _, message := range messages {
-			body.Messages = append(body.Messages, msg{Role: message.Role, Content: message.Content})
-		}
-		if stream {
-			body.StreamOptions = &struct {
-				IncludeUsage bool `json:"include_usage"`
-			}{IncludeUsage: true}
-		}
-		return json.Marshal(body)
-	case "anthropic":
-		type msg struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		}
-		body := struct {
-			Model     string `json:"model"`
-			System    string `json:"system,omitempty"`
-			Messages  []msg  `json:"messages"`
-			Stream    bool   `json:"stream"`
-			MaxTokens int    `json:"max_tokens"`
-		}{Model: m.Model, Stream: stream, MaxTokens: maxTokens}
-		if withSystem {
-			body.System = systemPrompt
-		}
-		for _, message := range messages {
-			role := message.Role
-			if role != "assistant" {
-				role = "user"
-			}
-			body.Messages = append(body.Messages, msg{Role: role, Content: message.Content})
-		}
-		return json.Marshal(body)
-	default:
-		return nil, i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
-	}
 }
 
 func deltaLine(line, kind string) (string, bool) {

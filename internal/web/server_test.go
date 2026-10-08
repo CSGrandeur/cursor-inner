@@ -29,14 +29,32 @@ func (f *fake) State() (View, error) {
 }
 func (f *fake) SetTakeover(enabled bool) error { f.takeover = enabled; return nil }
 func (f *fake) SetProxy(bool, string) error    { return nil }
+func (f *fake) SetImage(baseURL, apiKey, model string) error {
+	f.view.Image = ImageView{BaseURL: baseURL, Model: model, KeyHint: apiKey}
+	return nil
+}
 func (f *fake) SetAutostart(enabled bool) error {
 	f.autostart = enabled
 	f.view.Autostart = autostart.State{Enabled: enabled, Mode: "logon-task", Detail: i18n.T("已写入", "Written")}
 	return nil
 }
-func (f *fake) AddModel(config.Model) error      { return nil }
-func (f *fake) DeleteModel(string) error         { return nil }
-func (f *fake) SetModelProxy(string, bool) error { return nil }
+func (f *fake) AddModel(config.Model) error          { return nil }
+func (f *fake) DeleteModel(string) error             { return nil }
+func (f *fake) SetModelProxy(string, bool) error     { return nil }
+func (f *fake) SetModelReasoning(string, bool) error { return nil }
+func (f *fake) SetModelFast(string, bool) error      { return nil }
+func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
+	if len(f.view.Models) == 0 {
+		f.view.Models = []ModelView{{}}
+	}
+	if contextWindow != nil {
+		f.view.Models[0].ContextWindow = *contextWindow
+	}
+	if maxOutput != nil {
+		f.view.Models[0].MaxOutputTokens = *maxOutput
+	}
+	return nil
+}
 func (f *fake) TestDraft(config.Model) provider.Result {
 	return provider.Result{OK: true, DurationMS: 1, TokensPerSecond: 1}
 }
@@ -57,6 +75,32 @@ func TestQuitEndpoint(t *testing.T) {
 	}
 }
 
+func TestModelLimitsUpdate(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/models/m", strings.NewReader(`{"context_window":4000,"max_output_tokens":128}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || f.view.Models[0].ContextWindow != 4000 || f.view.Models[0].MaxOutputTokens != 128 {
+		t.Fatalf("status %d %+v", res.StatusCode, f.view.Models)
+	}
+	req, _ = http.NewRequest(http.MethodPut, srv.URL+"/api/models/m", strings.NewReader(`{"context_window":-1}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 400 {
+		t.Fatal(res.StatusCode)
+	}
+}
+
 func TestPageAndAutostartToggle(t *testing.T) {
 	f := &fake{view: View{ListenURL: "http://127.0.0.1:9", CA: "missing"}}
 	srv := httptest.NewServer(Handler(f))
@@ -69,7 +113,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))

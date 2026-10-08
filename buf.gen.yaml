@@ -1,0 +1,10 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package
+      value: cursor-inner/internal/cursorpb;cursorpb
+plugins:
+  - local: protoc-gen-go
+    out: internal/cursorpb
+    opt: paths=source_relative

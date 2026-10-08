@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-08
+
+### Added
+
+- Custom models in Agent mode can read, search, edit and delete files, run shell commands, edit notebooks, search or open the web after approval, call MCP tools, ask questions, switch mode, present a plan, start a subagent, and generate images once an image endpoint is saved.
+- Thinking text is sent back on later turns for DeepSeek, Kimi and MiMo. Other OpenAI-compatible endpoints do not receive that field. Anthropic replays a signed thinking block.
+- Conversation checkpoints keep custom-model history across follow-ups, restarts and switching to an official model. Tool cards reopen as the original tool, not as a fake shell command.
+- Settings page: context window, max output tokens, and an optional image endpoint.
+- The console pins catalog status, local and official request counts, and the last error, and writes a line at the start and end of each custom-model turn.
+- On Windows, cursor-inner stays in the notification area. The close button hides the window; quit from the icon menu or the settings page.
+- Inline edit and terminal Cmd+K stay on this machine when a custom model is selected.
+- `/summarize`, automatic compaction near the context-window limit, retries before any text is shown, and repair of common broken tool arguments.
+
+### Changed
+
+- Cursor's agent protocol is handled with generated code from `proto/cursor/agent_v1.proto`.
+
 ### Fixed
 
-- The custom model table no longer pushes the Delete button past the panel edge in the English settings page.
+- Double-clicking the Windows executable no longer flashes and exits. The classic console is started detached from Windows Terminal; if that relaunch dies immediately, cursor-inner stays in the current window.
 
 ## [0.1.0] - 2026-10-04
 
@@ -28,5 +45,6 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CSGrandeur/cursor-inner/releases/tag/v0.1.0

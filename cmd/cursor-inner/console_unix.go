@@ -23,8 +23,8 @@ func executable() string {
 
 func watchConsole(func()) {}
 
-func startWatchdog() error {
-	cmd := exec.Command(executable(), "--watch", strconv.Itoa(os.Getpid()))
+func startWatchdog(dir string) error {
+	cmd := exec.Command(executable(), "--watch", strconv.Itoa(os.Getpid()), "--data-dir", dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return cmd.Start()
 }

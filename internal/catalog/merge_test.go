@@ -1,8 +1,10 @@
 package catalog
 
 import (
-	"cursor-inner/internal/protox"
+	"bytes"
 	"testing"
+
+	"cursor-inner/internal/protox"
 )
 
 func TestAppendKeepsUpstreamName(t *testing.T) {
@@ -35,6 +37,55 @@ func TestAvailableHasPickerVariants(t *testing.T) {
 	}
 	if protox.StringField(model, 24) != "我的模型" {
 		t.Fatal("short name")
+	}
+}
+
+func TestReasoningSwitchChangesPicker(t *testing.T) {
+	off := Available([]Entry{{ID: "deadbeef", DisplayName: "我的模型"}})
+	if bytes.Contains(off, []byte("reasoning=")) {
+		t.Fatal("reasoning suffix while off")
+	}
+	if bytes.Contains(off, []byte("Fast")) {
+		t.Fatal("fast while off")
+	}
+	fast := Available([]Entry{{ID: "deadbeef", DisplayName: "我的模型", Fast: true}})
+	if !bytes.Contains(fast, []byte("Fast")) {
+		t.Fatal("missing fast")
+	}
+	on := Available([]Entry{{ID: "deadbeef", DisplayName: "我的模型", Reasoning: true}})
+	if !bytes.Contains(on, []byte("reasoning=high")) {
+		t.Fatal("missing reasoning suffix")
+	}
+}
+
+func TestConfiguredContextBecomesTheDefault(t *testing.T) {
+	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 4000}})
+	if !bytes.Contains(extra, []byte("context=4k")) || !bytes.Contains(extra, []byte("context=200k")) {
+		t.Fatal("context choices missing")
+	}
+	model := protox.Children(extra, 2)[0]
+	var defaults int
+	for _, item := range protox.Children(model, 30) {
+		fields, err := protox.Fields(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+		marked := false
+		for _, field := range fields {
+			if field.Num == 4 && field.Wire == 0 && field.Val == 1 {
+				marked = true
+			}
+		}
+		if !marked {
+			continue
+		}
+		defaults++
+		if !bytes.Contains(item, []byte("context=4k")) {
+			t.Fatalf("default is %s", protox.StringField(item, 9))
+		}
+	}
+	if defaults != 1 {
+		t.Fatal(defaults)
 	}
 }
 

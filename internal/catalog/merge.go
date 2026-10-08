@@ -2,14 +2,18 @@ package catalog
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"cursor-inner/internal/protox"
 )
 
 type Entry struct {
-	ID          string
-	DisplayName string
+	ID            string
+	DisplayName   string
+	Reasoning     bool
+	Fast          bool
+	ContextWindow int
 }
 
 func Available(models []Entry) []byte {
@@ -53,8 +57,9 @@ func availableModel(model Entry) []byte {
 	msg = protox.AppendBool(msg, 22, true)
 	msg = protox.AppendString(msg, 24, name)
 	msg = protox.AppendBool(msg, 25, true)
-	msg = append(msg, parameterDefinitions()...)
-	msg = append(msg, variants(model.ID, name, tooltip)...)
+	choices, defaultContext := contextChoices(model.ContextWindow)
+	msg = append(msg, parameterDefinitions(model.Reasoning, model.Fast, choices)...)
+	msg = append(msg, variants(model.ID, name, tooltip, model.Reasoning, model.Fast, choices, defaultContext)...)
 	msg = protox.AppendVarint(msg, 38, 1)
 	msg = protox.AppendString(msg, 41, "cursor-inner")
 	vendor := protox.AppendVarint(nil, 1, 6)
@@ -66,11 +71,47 @@ func availableModel(model Entry) []byte {
 	return msg
 }
 
-func parameterDefinitions() []byte {
+func contextChoices(window int) (list [][2]string, defaultID string) {
+	defaultID = "200k"
+	list = append([][2]string{}, contexts...)
+	id, label := formatContext(window)
+	if id == "" {
+		return list, defaultID
+	}
+	for i, item := range list {
+		if item[0] == id {
+			return list, list[i][0]
+		}
+	}
+	return append([][2]string{{id, label}}, list...), id
+}
+
+func formatContext(window int) (id, label string) {
+	if window <= 0 {
+		return "", ""
+	}
+	switch {
+	case window%1000000 == 0:
+		n := window / 1000000
+		return strconv.Itoa(n) + "m", strconv.Itoa(n) + "M"
+	case window%1000 == 0:
+		n := window / 1000
+		return strconv.Itoa(n) + "k", strconv.Itoa(n) + "K"
+	default:
+		text := strconv.Itoa(window)
+		return text, text
+	}
+}
+
+func parameterDefinitions(reasoning, fast bool, choices [][2]string) []byte {
 	var out []byte
-	out = protox.AppendBytes(out, 29, enumParam("context", "Context", "Context size used to trigger conversation compaction.", contexts, false))
-	out = protox.AppendBytes(out, 29, enumParam("reasoning", "Effort", "Effort the model uses to generate its response.", efforts, true))
-	out = protox.AppendBytes(out, 29, fastParam())
+	out = protox.AppendBytes(out, 29, enumParam("context", "Context", "Context size used to trigger conversation compaction.", choices, false))
+	if reasoning {
+		out = protox.AppendBytes(out, 29, enumParam("reasoning", "Effort", "Effort the model uses to generate its response.", efforts, true))
+	}
+	if fast {
+		out = protox.AppendBytes(out, 29, fastParam())
+	}
 	return out
 }
 
@@ -107,24 +148,34 @@ func fastParam() []byte {
 	return def
 }
 
-func variants(id, name string, tooltip []byte) []byte {
+func variants(id, name string, tooltip []byte, reasoning, fastSupport bool, contextList [][2]string, defaultContext string) []byte {
+	choices := [][2]string{{"", ""}}
+	if reasoning {
+		choices = efforts
+	}
+	speeds := []bool{false}
+	if fastSupport {
+		speeds = []bool{false, true}
+	}
 	var out []byte
-	for _, context := range contexts {
-		for _, effort := range efforts {
-			for _, fast := range []bool{false, true} {
-				out = protox.AppendBytes(out, 30, variant(id, name, tooltip, context, effort, fast))
+	for _, context := range contextList {
+		for _, effort := range choices {
+			for _, fast := range speeds {
+				out = protox.AppendBytes(out, 30, variant(id, name, tooltip, context, effort, fast, reasoning, defaultContext))
 			}
 		}
 	}
 	return out
 }
 
-func variant(id, name string, tooltip []byte, context, effort [2]string, fast bool) []byte {
+func variant(id, name string, tooltip []byte, context, effort [2]string, fast, reasoning bool, defaultContext string) []byte {
 	parts := make([]string, 0, 3)
-	if context[0] != "200k" {
+	if context[0] != defaultContext {
 		parts = append(parts, context[1])
 	}
-	parts = append(parts, effort[1])
+	if reasoning && effort[1] != "" {
+		parts = append(parts, effort[1])
+	}
 	if fast {
 		parts = append(parts, "Fast")
 	}
@@ -132,13 +183,18 @@ func variant(id, name string, tooltip []byte, context, effort [2]string, fast bo
 	if len(parts) > 0 {
 		shown = fmt.Sprintf("%s <span style=\"color: var(--cursor-text-tertiary);\">%s</span>", name, strings.Join(parts, " "))
 	}
-	def := context[0] == "200k" && effort[0] == "high" && !fast
-	slug := id + "-" + context[0] + "-" + effort[0]
+	def := context[0] == defaultContext && !fast && (!reasoning || effort[0] == "high")
+	slug := id + "-" + context[0]
+	if reasoning {
+		slug += "-" + effort[0]
+	}
 	if fast {
 		slug += "-fast"
 	}
 	params := protox.AppendBytes(nil, 1, kv("context", context[0]))
-	params = protox.AppendBytes(params, 1, kv("reasoning", effort[0]))
+	if reasoning {
+		params = protox.AppendBytes(params, 1, kv("reasoning", effort[0]))
+	}
 	params = protox.AppendBytes(params, 1, kv("fast", fmt.Sprintf("%t", fast)))
 	msg := params
 	msg = protox.AppendString(msg, 2, shown)
@@ -148,7 +204,11 @@ func variant(id, name string, tooltip []byte, context, effort [2]string, fast bo
 	}
 	msg = protox.AppendBytes(msg, 6, tooltip)
 	msg = protox.AppendString(msg, 8, shown)
-	msg = protox.AppendString(msg, 9, fmt.Sprintf("%s[context=%s,reasoning=%s,fast=%t]", id, context[0], effort[0], fast))
+	suffix := fmt.Sprintf("%s[context=%s,fast=%t]", id, context[0], fast)
+	if reasoning {
+		suffix = fmt.Sprintf("%s[context=%s,reasoning=%s,fast=%t]", id, context[0], effort[0], fast)
+	}
+	msg = protox.AppendString(msg, 9, suffix)
 	msg = protox.AppendString(msg, 11, slug)
 	return msg
 }

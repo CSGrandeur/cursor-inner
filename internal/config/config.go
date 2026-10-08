@@ -19,14 +19,30 @@ type Proxy struct {
 }
 
 type Model struct {
-	ID          string    `json:"id"`
-	DisplayName string    `json:"display_name"`
-	Type        string    `json:"type"`
-	BaseURL     string    `json:"base_url"`
-	APIKey      string    `json:"api_key"`
-	Model       string    `json:"model"`
-	UseProxy    bool      `json:"use_proxy"`
-	LastTest    *LastTest `json:"last_test,omitempty"`
+	ID              string    `json:"id"`
+	DisplayName     string    `json:"display_name"`
+	Type            string    `json:"type"`
+	BaseURL         string    `json:"base_url"`
+	APIKey          string    `json:"api_key"`
+	Model           string    `json:"model"`
+	UseProxy        bool      `json:"use_proxy"`
+	Reasoning       bool      `json:"reasoning,omitempty"`
+	FastSupport     bool      `json:"fast,omitempty"`
+	ContextWindow   int       `json:"context_window,omitempty"`
+	MaxOutputTokens int       `json:"max_output_tokens,omitempty"`
+	LastTest        *LastTest `json:"last_test,omitempty"`
+	Effort          string    `json:"-"`
+	Fast            bool      `json:"-"`
+	ImageBaseURL    string    `json:"-"`
+	ImageAPIKey     string    `json:"-"`
+	ImageModel      string    `json:"-"`
+}
+
+// ImageAPI 是设置页选择的出图接口。留空时模型看不到 GenerateImage。
+type ImageAPI struct {
+	BaseURL string `json:"base_url,omitempty"`
+	APIKey  string `json:"api_key,omitempty"`
+	Model   string `json:"model,omitempty"`
 }
 
 type LastTest struct {
@@ -42,10 +58,11 @@ type LastTest struct {
 }
 
 type File struct {
-	Takeover  bool    `json:"takeover"`
-	Autostart bool    `json:"autostart"`
-	Proxy     Proxy   `json:"proxy"`
-	Models    []Model `json:"models"`
+	Takeover  bool     `json:"takeover"`
+	Autostart bool     `json:"autostart"`
+	Proxy     Proxy    `json:"proxy"`
+	Image     ImageAPI `json:"image,omitempty"`
+	Models    []Model  `json:"models"`
 }
 
 func Default() File {

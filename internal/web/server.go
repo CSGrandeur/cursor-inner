@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -70,6 +71,22 @@ func Handler(backend Backend) http.Handler {
 		}
 		writeState(w, backend)
 	})
+	mux.HandleFunc("PUT /api/image", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			BaseURL string `json:"base_url"`
+			APIKey  string `json:"api_key"`
+			Model   string `json:"model"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetImage(body.BaseURL, body.APIKey, body.Model); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
 	mux.HandleFunc("PUT /api/autostart", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Enabled bool `json:"enabled"`
@@ -113,14 +130,46 @@ func Handler(backend Backend) http.Handler {
 	})
 	mux.HandleFunc("PUT /api/models/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			UseProxy bool `json:"use_proxy"`
+			UseProxy        *bool `json:"use_proxy"`
+			Reasoning       *bool `json:"reasoning"`
+			Fast            *bool `json:"fast"`
+			ContextWindow   *int  `json:"context_window"`
+			MaxOutputTokens *int  `json:"max_output_tokens"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := backend.SetModelProxy(r.PathValue("id"), body.UseProxy); err != nil {
-			writeErr(w, http.StatusNotFound, err)
+		if body.Reasoning != nil {
+			if err := backend.SetModelReasoning(r.PathValue("id"), *body.Reasoning); err != nil {
+				writeErr(w, http.StatusNotFound, err)
+				return
+			}
+		}
+		if body.UseProxy != nil {
+			if err := backend.SetModelProxy(r.PathValue("id"), *body.UseProxy); err != nil {
+				writeErr(w, http.StatusNotFound, err)
+				return
+			}
+		}
+		if body.Fast != nil {
+			if err := backend.SetModelFast(r.PathValue("id"), *body.Fast); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		if (body.ContextWindow != nil && *body.ContextWindow < 0) || (body.MaxOutputTokens != nil && *body.MaxOutputTokens < 0) {
+			writeErr(w, http.StatusBadRequest, i18n.E("token 数不能为负", "Token counts cannot be negative"))
+			return
+		}
+		if body.ContextWindow != nil || body.MaxOutputTokens != nil {
+			if err := backend.SetModelLimits(r.PathValue("id"), body.ContextWindow, body.MaxOutputTokens); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+		}
+		if body.UseProxy == nil && body.Reasoning == nil && body.Fast == nil && body.ContextWindow == nil && body.MaxOutputTokens == nil {
+			writeErr(w, http.StatusBadRequest, errors.New("empty model update"))
 			return
 		}
 		writeState(w, backend)

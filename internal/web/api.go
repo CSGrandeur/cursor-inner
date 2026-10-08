@@ -8,14 +8,18 @@ import (
 )
 
 type ModelView struct {
-	ID          string           `json:"id"`
-	DisplayName string           `json:"display_name"`
-	Type        string           `json:"type"`
-	BaseURL     string           `json:"base_url"`
-	Model       string           `json:"model"`
-	UseProxy    bool             `json:"use_proxy"`
-	KeyHint     string           `json:"key_hint"`
-	LastTest    *config.LastTest `json:"last_test,omitempty"`
+	ID              string           `json:"id"`
+	DisplayName     string           `json:"display_name"`
+	Type            string           `json:"type"`
+	BaseURL         string           `json:"base_url"`
+	Model           string           `json:"model"`
+	UseProxy        bool             `json:"use_proxy"`
+	Reasoning       bool             `json:"reasoning"`
+	Fast            bool             `json:"fast"`
+	ContextWindow   int              `json:"context_window"`
+	MaxOutputTokens int              `json:"max_output_tokens"`
+	KeyHint         string           `json:"key_hint"`
+	LastTest        *config.LastTest `json:"last_test,omitempty"`
 }
 
 type View struct {
@@ -28,8 +32,15 @@ type View struct {
 	LastError      i18n.Text       `json:"last_error"`
 	CatalogWarning i18n.Text       `json:"catalog_warning"`
 	Proxy          ProxyView       `json:"proxy"`
+	Image          ImageView       `json:"image"`
 	Autostart      autostart.State `json:"autostart"`
 	Models         []ModelView     `json:"models"`
+}
+
+type ImageView struct {
+	BaseURL string `json:"base_url"`
+	Model   string `json:"model"`
+	KeyHint string `json:"key_hint"`
 }
 
 type ProxyView struct {
@@ -42,10 +53,14 @@ type Backend interface {
 	State() (View, error)
 	SetTakeover(enabled bool) error
 	SetProxy(enabled bool, address string) error
+	SetImage(baseURL, apiKey, model string) error
 	SetAutostart(enabled bool) error
 	AddModel(model config.Model) error
 	DeleteModel(id string) error
 	SetModelProxy(id string, use bool) error
+	SetModelReasoning(id string, on bool) error
+	SetModelFast(id string, on bool) error
+	SetModelLimits(id string, contextWindow, maxOutput *int) error
 	TestDraft(model config.Model) provider.Result
 	TestSaved(id string) provider.Result
 	Quit() error

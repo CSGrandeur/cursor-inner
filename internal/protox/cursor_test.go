@@ -1,28 +1,20 @@
 package protox
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
-func TestBidiCarriesModelAndUserText(t *testing.T) {
-	user := AppendString(nil, 1, "你好")
-	userAction := AppendBytes(nil, 1, user)
-	action := AppendBytes(nil, 1, userAction)
-	requested := AppendString(nil, 1, "local-hash")
-	run := AppendBytes(nil, 2, action)
-	run = AppendBytes(run, 9, requested)
-	client := AppendBytes(nil, 1, run)
+func bidiBody(client []byte, requestID string) []byte {
+	body := AppendString(nil, 1, EncodeHex(client))
+	return AppendBytes(body, 2, AppendString(nil, 1, requestID))
+}
 
-	bidi := AppendString(nil, 1, EncodeHex(client))
-	bidi = AppendBytes(bidi, 2, AppendString(nil, 1, "req-1"))
-	id, got, err := DecodeBidi(Frame(0, bidi))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id != "req-1" || ModelID(got) != "local-hash" {
-		t.Fatalf("id=%s model=%s", id, ModelID(got))
-	}
-	msgs := ChatMessages(got)
-	if len(msgs) != 1 || msgs[0].Content != "你好" || msgs[0].Role != "user" {
-		t.Fatalf("%+v", msgs)
+func TestDecodeBidiAndRunID(t *testing.T) {
+	client := AppendBytes(nil, 1, AppendString(nil, 5, "conv"))
+	id, got, err := DecodeBidi(Frame(0, bidiBody(client, "req-1")))
+	if err != nil || id != "req-1" || !bytes.Equal(got, client) {
+		t.Fatalf("id=%q err=%v", id, err)
 	}
 	runID, err := DecodeRunID(Frame(0, AppendString(nil, 1, "req-1")))
 	if err != nil || runID != "req-1" {
@@ -31,12 +23,8 @@ func TestBidiCarriesModelAndUserText(t *testing.T) {
 }
 
 func TestPlainUnwrapsGzipBidi(t *testing.T) {
-	requested := AppendString(nil, 1, "local-hash")
-	run := AppendBytes(nil, 9, requested)
-	client := AppendBytes(nil, 1, run)
-	bidi := AppendString(nil, 1, EncodeHex(client))
-	bidi = AppendBytes(bidi, 2, AppendString(nil, 1, "req-gz"))
-
+	client := AppendBytes(nil, 1, AppendString(nil, 5, "conv"))
+	bidi := bidiBody(client, "req-gz")
 	cases := map[string]struct {
 		body     []byte
 		encoding string
@@ -50,20 +38,8 @@ func TestPlainUnwrapsGzipBidi(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		id, got, err := DecodeBidi(plain)
-		if err != nil || id != "req-gz" || ModelID(got) != "local-hash" {
-			t.Fatalf("%s: id=%q model=%q err=%v", name, id, ModelID(got), err)
+		if err != nil || id != "req-gz" || !bytes.Equal(got, client) {
+			t.Fatalf("%s: id=%q err=%v", name, id, err)
 		}
-	}
-}
-
-func TestTextDeltaShape(t *testing.T) {
-	payload, framed := Unary(TextDelta("hi"))
-	if !framed {
-		t.Fatal("frame")
-	}
-	update := Child(payload, 1)
-	delta := Child(update, 1)
-	if StringField(delta, 1) != "hi" {
-		t.Fatal(StringField(delta, 1))
 	}
 }

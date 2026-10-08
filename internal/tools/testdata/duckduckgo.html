@@ -1,0 +1,638 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!--[if IE 6]><html class="ie6" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 7]><html class="lt-ie8 lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if IE 8]><html class="lt-ie9" xmlns="http://www.w3.org/1999/xhtml"><![endif]-->
+<!--[if gt IE 8]><!--><html xmlns="http://www.w3.org/1999/xhtml"><!--<![endif]-->
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=1" />
+  <meta name="referrer" content="origin" />
+  <meta name="HandheldFriendly" content="true" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Go 1.25 release notes at DuckDuckGo</title>
+  <link title="DuckDuckGo (HTML)" type="application/opensearchdescription+xml" rel="search" href="//duckduckgo.com/opensearch_html_v2.xml" />
+  <link href="//duckduckgo.com/favicon.ico" rel="shortcut icon" />
+  <link rel="icon" href="//duckduckgo.com/favicon.ico" type="image/x-icon" />
+  <link id="icon60" rel="apple-touch-icon" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_60x60.png?v=2"/>
+  <link id="icon76" rel="apple-touch-icon" sizes="76x76" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_76x76.png?v=2"/>
+  <link id="icon120" rel="apple-touch-icon" sizes="120x120" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_120x120.png?v=2"/>
+  <link id="icon152" rel="apple-touch-icon" sizes="152x152" href="//duckduckgo.com/assets/icons/meta/DDG-iOS-icon_152x152.png?v=2"/>
+  <link rel="image_src" href="//duckduckgo.com/assets/icons/meta/DDG-icon_256x256.png">
+  <link rel="stylesheet" media="handheld, all" href="//duckduckgo.com/dist/h.12e359033b8c1146e5f7.css" type="text/css"/>
+</head>
+
+<body class="body--html">
+  <a name="top" id="top"></a>
+
+  <form action="/html/" method="post">
+    <input type="text" name="state_hidden" id="state_hidden" />
+  </form>
+
+  <div>
+    <div class="site-wrapper-border"></div>
+
+    <div id="header" class="header cw header--html">
+      <a title="DuckDuckGo" href="/html/" class="header__logo-wrap"></a>
+
+      <form name="x" class="header__form" action="/html/" method="post">
+        <div class="search search--header">
+          <input name="q" autocomplete="off" class="search__input" id="search_form_input_homepage" type="text" value="Go 1.25 release notes" />
+          <input name="b" id="search_button_homepage" class="search__button search__button--html" value="" title="Search" alt="Search" type="submit" />
+        </div>
+
+        
+        
+        
+        
+
+        <div class="frm__select">
+          <select name="kl">
+            
+              <option value="" >All Regions</option>
+            
+              <option value="ar-es" >Argentina</option>
+            
+              <option value="au-en" >Australia</option>
+            
+              <option value="at-de" >Austria</option>
+            
+              <option value="be-fr" >Belgium (fr)</option>
+            
+              <option value="be-nl" >Belgium (nl)</option>
+            
+              <option value="br-pt" >Brazil</option>
+            
+              <option value="bg-bg" >Bulgaria</option>
+            
+              <option value="ca-en" >Canada (en)</option>
+            
+              <option value="ca-fr" >Canada (fr)</option>
+            
+              <option value="ct-ca" >Catalonia</option>
+            
+              <option value="cl-es" >Chile</option>
+            
+              <option value="cn-zh" >China</option>
+            
+              <option value="co-es" >Colombia</option>
+            
+              <option value="hr-hr" >Croatia</option>
+            
+              <option value="cz-cs" >Czech Republic</option>
+            
+              <option value="dk-da" >Denmark</option>
+            
+              <option value="ee-et" >Estonia</option>
+            
+              <option value="fi-fi" >Finland</option>
+            
+              <option value="fr-fr" >France</option>
+            
+              <option value="de-de" >Germany</option>
+            
+              <option value="gr-el" >Greece</option>
+            
+              <option value="hk-tzh" >Hong Kong</option>
+            
+              <option value="hu-hu" >Hungary</option>
+            
+              <option value="is-is" >Iceland</option>
+            
+              <option value="in-en" >India (en)</option>
+            
+              <option value="id-en" >Indonesia (en)</option>
+            
+              <option value="ie-en" >Ireland</option>
+            
+              <option value="il-en" >Israel (en)</option>
+            
+              <option value="it-it" >Italy</option>
+            
+              <option value="jp-jp" >Japan</option>
+            
+              <option value="kr-kr" >Korea</option>
+            
+              <option value="lv-lv" >Latvia</option>
+            
+              <option value="lt-lt" >Lithuania</option>
+            
+              <option value="my-en" >Malaysia (en)</option>
+            
+              <option value="mx-es" >Mexico</option>
+            
+              <option value="nl-nl" >Netherlands</option>
+            
+              <option value="nz-en" >New Zealand</option>
+            
+              <option value="no-no" >Norway</option>
+            
+              <option value="pk-en" >Pakistan (en)</option>
+            
+              <option value="pe-es" >Peru</option>
+            
+              <option value="ph-en" >Philippines (en)</option>
+            
+              <option value="pl-pl" >Poland</option>
+            
+              <option value="pt-pt" >Portugal</option>
+            
+              <option value="ro-ro" >Romania</option>
+            
+              <option value="ru-ru" >Russia</option>
+            
+              <option value="xa-ar" >Saudi Arabia</option>
+            
+              <option value="sg-en" >Singapore</option>
+            
+              <option value="sk-sk" >Slovakia</option>
+            
+              <option value="sl-sl" >Slovenia</option>
+            
+              <option value="za-en" >South Africa</option>
+            
+              <option value="es-ca" >Spain (ca)</option>
+            
+              <option value="es-es" >Spain (es)</option>
+            
+              <option value="se-sv" >Sweden</option>
+            
+              <option value="ch-de" >Switzerland (de)</option>
+            
+              <option value="ch-fr" >Switzerland (fr)</option>
+            
+              <option value="tw-tzh" >Taiwan</option>
+            
+              <option value="th-en" >Thailand (en)</option>
+            
+              <option value="tr-tr" >Turkey</option>
+            
+              <option value="us-en" >US (English)</option>
+            
+              <option value="us-es" >US (Spanish)</option>
+            
+              <option value="ua-uk" >Ukraine</option>
+            
+              <option value="uk-en" >United Kingdom</option>
+            
+              <option value="vn-en" >Vietnam (en)</option>
+            
+          </select>
+        </div>
+
+        <div class="frm__select frm__select--last">
+          <select class="" name="df">
+            
+              <option value="" selected>Any Time</option>
+            
+              <option value="d" >Past Day</option>
+            
+              <option value="w" >Past Week</option>
+            
+              <option value="m" >Past Month</option>
+            
+              <option value="y" >Past Year</option>
+            
+          </select>
+        </div>
+      </form>
+    </div>
+
+    
+
+    
+      <!-- Web results are present -->
+      <div>
+        <div class="serp__results">
+          <div id="links" class="results">
+            
+
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fdoc%2Fgo1.25&amp;rut=ae25468ee2775fd9851ff5cda2e28b9c2064423392513d23b7166486418a39bc">Go 1.25 Release Notes - The Go Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fdoc%2Fgo1.25&amp;rut=ae25468ee2775fd9851ff5cda2e28b9c2064423392513d23b7166486418a39bc">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/go.dev.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fdoc%2Fgo1.25&amp;rut=ae25468ee2775fd9851ff5cda2e28b9c2064423392513d23b7166486418a39bc">
+                            go.dev/doc/go1.25
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fdoc%2Fgo1.25&amp;rut=ae25468ee2775fd9851ff5cda2e28b9c2064423392513d23b7166486418a39bc"><b>Go</b> <b>1.25</b> <b>Release</b> <b>Notes</b> ... Introduction to Go <b>1.25</b> The latest Go <b>release</b>, version <b>1.25</b>, arrives in August 2025, six months after Go 1.24. Most of its changes are in the implementation of the toolchain, runtime, and libraries. As always, the <b>release</b> maintains the Go 1 promise of compatibility.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fblog%2Fgo1.25&amp;rut=57f40b88751d1ac219c6997644175211856012e5c09c761182cd9b235d188af3">Go 1.25 is released - The Go Programming Language</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fblog%2Fgo1.25&amp;rut=57f40b88751d1ac219c6997644175211856012e5c09c761182cd9b235d188af3">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/go.dev.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fblog%2Fgo1.25&amp;rut=57f40b88751d1ac219c6997644175211856012e5c09c761182cd9b235d188af3">
+                            go.dev/blog/go1.25
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-12T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgo.dev%2Fblog%2Fgo1.25&amp;rut=57f40b88751d1ac219c6997644175211856012e5c09c761182cd9b235d188af3">Please refer to the Go <b>1.25</b> <b>Release</b> <b>Notes</b> for the complete list of additions, changes and improvements in Go <b>1.25</b>. Over the next few weeks, follow-up blog posts will cover some of the topics relevant to Go <b>1.25</b> in more detail.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fupdatify.io%2Freleases%2Fgolang%2F22a4c567%2D2112%2D41fd%2Da9af%2D49dfcf55eeee&amp;rut=39171530ce20874fff0a00264eeb72b0a69fac4eefb3f0aec0245f308ac09307">go1.25.0 (released 2025-08-12) — Go lang - Product release notes ...</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fupdatify.io%2Freleases%2Fgolang%2F22a4c567%2D2112%2D41fd%2Da9af%2D49dfcf55eeee&amp;rut=39171530ce20874fff0a00264eeb72b0a69fac4eefb3f0aec0245f308ac09307">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/updatify.io.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fupdatify.io%2Freleases%2Fgolang%2F22a4c567%2D2112%2D41fd%2Da9af%2D49dfcf55eeee&amp;rut=39171530ce20874fff0a00264eeb72b0a69fac4eefb3f0aec0245f308ac09307">
+                            updatify.io/releases/golang/22a4c567-2112-41fd-a9af-49dfcf55eeee
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fupdatify.io%2Freleases%2Fgolang%2F22a4c567%2D2112%2D41fd%2Da9af%2D49dfcf55eeee&amp;rut=39171530ce20874fff0a00264eeb72b0a69fac4eefb3f0aec0245f308ac09307">Introduction to Go <b>1.25</b> The latest Go <b>release</b>, version <b>1.25</b>, arrives in August 2025, six months after Go 1.24. Most of its changes are in the implementation of the toolchain, runtime, and libraries. As always, the <b>release</b> maintains the Go 1 promise of compatibility. We expect almost all Go programs to continue to compile and run as before.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fversionlog.com%2Fgolang%2F1.25%2F&amp;rut=040b16b91baa7c14652301b4a31442450d888a32c320029dae1751e48ead00f5">Go 1.25 - What&#x27;s New, Support Lifecycle &amp; EOL - VersionLog</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fversionlog.com%2Fgolang%2F1.25%2F&amp;rut=040b16b91baa7c14652301b4a31442450d888a32c320029dae1751e48ead00f5">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/versionlog.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fversionlog.com%2Fgolang%2F1.25%2F&amp;rut=040b16b91baa7c14652301b4a31442450d888a32c320029dae1751e48ead00f5">
+                            versionlog.com/golang/1.25/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2026-10-05T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fversionlog.com%2Fgolang%2F1.25%2F&amp;rut=040b16b91baa7c14652301b4a31442450d888a32c320029dae1751e48ead00f5">Discover what&#x27;s new in Go <b>1.25</b>. Complete <b>release</b> history, support lifecycle, <b>release</b> dates, LTS schedule and End of Life (EOL) status. Go (Golang) is a...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Flwn.net%2FArticles%2F1033646%2F&amp;rut=9837e546eaafa5669f138c8cf6cab2840215addd955ef11520c261bb08063675">Go 1.25 released - lwn.net</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Flwn.net%2FArticles%2F1033646%2F&amp;rut=9837e546eaafa5669f138c8cf6cab2840215addd955ef11520c261bb08063675">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/lwn.net.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Flwn.net%2FArticles%2F1033646%2F&amp;rut=9837e546eaafa5669f138c8cf6cab2840215addd955ef11520c261bb08063675">
+                            lwn.net/Articles/1033646/
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-13T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Flwn.net%2FArticles%2F1033646%2F&amp;rut=9837e546eaafa5669f138c8cf6cab2840215addd955ef11520c261bb08063675">Version <b>1.25</b> of <b>Go</b> has been released. Notable changes include support for generating debug information in the DWARF 5 format, &quot;container awareness&quot; when setting the maximum number of CPUs to be used, and a new testing/synctest package with support for testing concurrent code. See the <b>release</b> <b>notes</b> for a comprehensive list of changes in <b>1.25</b>.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.golangdev.cn%2Fguide%2Frelease.html&amp;rut=28e57f0230dcfa02dc545b5a49a473b5923ad91a801e469c9be6a2e76dabcc9a">Go Release Notes - GoLang Syntax Documentation</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.golangdev.cn%2Fguide%2Frelease.html&amp;rut=28e57f0230dcfa02dc545b5a49a473b5923ad91a801e469c9be6a2e76dabcc9a">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/www.golangdev.cn.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.golangdev.cn%2Fguide%2Frelease.html&amp;rut=28e57f0230dcfa02dc545b5a49a473b5923ad91a801e469c9be6a2e76dabcc9a">
+                            www.golangdev.cn/guide/release.html
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-02-11T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.golangdev.cn%2Fguide%2Frelease.html&amp;rut=28e57f0230dcfa02dc545b5a49a473b5923ad91a801e469c9be6a2e76dabcc9a"><b>1.25</b> First <b>release</b>: 2025-08-12 Last update: go1.25. (2025-08-12) For detailed <b>release</b> <b>notes</b> of <b>go1.25</b> version, go to Go 1.24 <b>Release</b> <b>Notes</b> to view. For all patch versions released during its maintenance period, go to <b>Go1.25</b> - <b>Release</b> Patch to learn. Language Level Removed the concept of core type in generics (core type), see official blog post Goodbye core types Standard Library Added test ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fmicrosoft%2Fgo%2Freleases&amp;rut=b873379e11bdc167ee7bd603978865656ca7c59ef39a8116a180c59943a42961">Releases · microsoft/go - GitHub</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fmicrosoft%2Fgo%2Freleases&amp;rut=b873379e11bdc167ee7bd603978865656ca7c59ef39a8116a180c59943a42961">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/github.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fmicrosoft%2Fgo%2Freleases&amp;rut=b873379e11bdc167ee7bd603978865656ca7c59ef39a8116a180c59943a42961">
+                            github.com/microsoft/go/releases
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fmicrosoft%2Fgo%2Freleases&amp;rut=b873379e11bdc167ee7bd603978865656ca7c59ef39a8116a180c59943a42961">Microsoft build of Go v1.27.-1 Microsoft build of Go 1.27 <b>release</b> <b>notes</b> After the <b>release</b> of 1.27, <b>1.25</b> is no longer supported, per the Go <b>release</b> policy. Systemcrypto See the Go 1.27 changelog in the FIPS documentation for more information. Systemcrypto is no longer a GOEXPERIMENT setting systemcrypto is still enabled by default on supported platforms, as it has been since Go <b>1.25</b> (Linux and ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgroups.google.com%2Fg%2Fgolang%2Dannounce%2Fc%2FBVrdugXW05c&amp;rut=983b4aea1565ff28d3fe12da862587e1728142784e6d8ae26bbdc40c5ff030f5">Go 1.25.0 is released - Google Groups</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgroups.google.com%2Fg%2Fgolang%2Dannounce%2Fc%2FBVrdugXW05c&amp;rut=983b4aea1565ff28d3fe12da862587e1728142784e6d8ae26bbdc40c5ff030f5">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/groups.google.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgroups.google.com%2Fg%2Fgolang%2Dannounce%2Fc%2FBVrdugXW05c&amp;rut=983b4aea1565ff28d3fe12da862587e1728142784e6d8ae26bbdc40c5ff030f5">
+                            groups.google.com/g/golang-announce/c/BVrdugXW05c
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-12T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgroups.google.com%2Fg%2Fgolang%2Dannounce%2Fc%2FBVrdugXW05c&amp;rut=983b4aea1565ff28d3fe12da862587e1728142784e6d8ae26bbdc40c5ff030f5">If you have Go installed already, an easy way to try go1.25. is by using the go command: $ go install golang.org/dl/go1.25.0@latest $ go1.25. download To compile from source using a Git clone, update to the <b>release</b> with git checkout go1.25. and build as usual. Thanks to everyone who contributed to the <b>release</b>! Cheers, David and Dmitri for ...</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdaily.dev%2Fposts%2Fgo%2D1%2D25%2Drelease%2Dnotes%2Ddjqhygdly&amp;rut=5b0f7f0488d753c1ae4a0b6f6afd2d7dce6f67c565ff9812bbbb7de0d6b32746">Go 1.25 Release Notes - daily.dev</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdaily.dev%2Fposts%2Fgo%2D1%2D25%2Drelease%2Dnotes%2Ddjqhygdly&amp;rut=5b0f7f0488d753c1ae4a0b6f6afd2d7dce6f67c565ff9812bbbb7de0d6b32746">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/daily.dev.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdaily.dev%2Fposts%2Fgo%2D1%2D25%2Drelease%2Dnotes%2Ddjqhygdly&amp;rut=5b0f7f0488d753c1ae4a0b6f6afd2d7dce6f67c565ff9812bbbb7de0d6b32746">
+                            daily.dev/posts/go-1-25-release-notes-djqhygdly
+                          </a>
+                          
+                            <span>&nbsp; &nbsp; 2025-08-13T00:00:00.0000000</span>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdaily.dev%2Fposts%2Fgo%2D1%2D25%2Drelease%2Dnotes%2Ddjqhygdly&amp;rut=5b0f7f0488d753c1ae4a0b6f6afd2d7dce6f67c565ff9812bbbb7de0d6b32746"><b>Go</b> <b>1.25</b> <b>Release</b> <b>Notes</b> <b>Go</b> <b>1.25</b> introduces significant improvements including a new experimental garbage collector that reduces GC overhead by 10-40%, container-aware GOMAXPROCS that automatically adjusts based on CPU limits, and a new testing/synctest package for testing concurrent code with virtualized time.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+              
+                <div class="result results_links results_links_deep web-result ">
+                  <div class="links_main links_deep result__body"> <!-- This is the visible part -->
+                    
+                      <h2 class="result__title">
+                        <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fgolang%2Fgo%2Freleases&amp;rut=cb90334316903e8af5b4ec2c90de51c8aae5720e4e8ea776079460be6ceb4270">Releases · golang/go - GitHub</a>
+                      </h2>
+
+                    
+
+                    
+                      <div class="result__extras">
+                        <div class="result__extras__url">
+                          <span class="result__icon">
+                            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fgolang%2Fgo%2Freleases&amp;rut=cb90334316903e8af5b4ec2c90de51c8aae5720e4e8ea776079460be6ceb4270">
+                              <img class="result__icon__img" width="16" height="16" alt="" src="//external-content.duckduckgo.com/ip3/github.com.ico" name="i15" />
+                            </a>
+                          </span>
+                          <a class="result__url" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fgolang%2Fgo%2Freleases&amp;rut=cb90334316903e8af5b4ec2c90de51c8aae5720e4e8ea776079460be6ceb4270">
+                            github.com/golang/go/releases
+                          </a>
+                          
+                        </div>
+                      </div>
+                    
+
+                    
+                      
+                        <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fgithub.com%2Fgolang%2Fgo%2Freleases&amp;rut=cb90334316903e8af5b4ec2c90de51c8aae5720e4e8ea776079460be6ceb4270">You can create a <b>release</b> to package software, along with <b>release</b> <b>notes</b> and links to binary files, for other people to use. Learn more about <b>releases</b> in our docs.</a>
+                      
+                    
+
+                    <div class="clear"></div>
+                  </div>
+                </div>
+              
+            
+
+            
+              
+              
+                <div class="nav-link">
+                  <form action="/html/" method="post">
+                    <input type="submit" class='btn btn--alt' value="Next" />
+                    <input type="hidden" name="q" value="Go 1.25 release notes" />
+                    <input type="hidden" name="s" value="10" />
+                    <input type="hidden" name="nextParams" value="" />
+                    <input type="hidden" name="v" value="l" />
+                    <input type="hidden" name="o" value="json" />
+                    <input type="hidden" name="dc" value="11" />
+                    <input type="hidden" name="api" value="d.js" />
+                    <input type="hidden" name="vqd" value="4-15537435028621007781183164555146262813" />
+
+                    
+                    
+                    
+                      <input name="kl" value="wt-wt" type="hidden" />
+                    
+                    
+                    
+                    
+                  </form>
+                </div>
+              
+            
+
+            <div class="feedback-btn">
+              <a rel="nofollow" href="//duckduckgo.com/feedback.html" target="_new">Feedback</a>
+            </div>
+            <div class="clear"></div>
+          </div>
+        </div>
+      </div> <!-- links wrapper //-->
+    
+  </div>
+
+  <div id="bottom_spacing2"></div>
+
+  
+    <img src="//duckduckgo.com/t/sl_h"/>
+  
+</body>
+</html>

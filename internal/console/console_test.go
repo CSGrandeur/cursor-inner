@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 var ansi = regexp.MustCompile(`\x1b\][^\x1b]*\x1b\\|\x1b\[[0-9;?]*[A-Za-z]|\x1b[78]`)
@@ -19,6 +20,19 @@ func TestHeaderKeepsClickableURLWithinWidth(t *testing.T) {
 	for i, row := range strings.Split(header, "\r\n") {
 		if w := width(ansi.ReplaceAllString(row, "")); w > 40 {
 			t.Fatalf("row %d width %d > 40: %q", i, w, row)
+		}
+	}
+}
+
+func TestHeaderShowsTrafficCounts(t *testing.T) {
+	header := renderHeader("http://127.0.0.1:1", "dev", Status{
+		CatalogOK: true, CatalogN: 3, CatalogAt: time.Date(2026, 10, 6, 4, 4, 0, 0, time.Local),
+		Local: 2, Official: 5,
+	}, 120)
+	plain := ansi.ReplaceAllString(header, "")
+	for _, part := range []string{"模型列表", "✓ 3", "04:04", "本地", "2", "官方", "5", "最近错误", "无"} {
+		if !strings.Contains(plain, part) {
+			t.Fatalf("missing %s in %q", part, plain)
 		}
 	}
 }
@@ -48,5 +62,22 @@ func TestPlainOutputWhenNotTerminal(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "http://127.0.0.1:1") || !strings.Contains(file.String(), "接管代理") {
 		t.Fatalf("out=%q file=%q", raw, file.String())
+	}
+}
+
+func TestDetachSkipsScreenUntilAttach(t *testing.T) {
+	out, err := os.CreateTemp(t.TempDir(), "out")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := New(out, nil)
+	c.Start("http://127.0.0.1:1", "dev", nil)
+	c.Detach()
+	c.Event("hidden-line")
+	c.Attach(out)
+	c.Event("shown-line")
+	raw, _ := os.ReadFile(out.Name())
+	if strings.Contains(string(raw), "hidden-line") || !strings.Contains(string(raw), "shown-line") {
+		t.Fatalf("%q", raw)
 	}
 }

@@ -3,8 +3,8 @@
 package main
 
 import (
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"syscall"
@@ -12,8 +12,6 @@ import (
 
 	"golang.org/x/sys/windows"
 )
-
-const classicEnv = "CURSOR_INNER_CLASSIC"
 
 var (
 	user32                          = windows.NewLazySystemDLL("user32.dll")
@@ -32,7 +30,7 @@ var (
 // needsClassicConsole 判断是否要改用经典控制台重开：控制台只属于本进程（双击、开始菜单、开机启动），
 // 且由 Windows Terminal 托管。Windows Terminal 的任务栏按钮只能显示它自己的图标。
 func needsClassicConsole() bool {
-	if os.Getenv(classicEnv) == "1" {
+	if classicConsole(os.Args[1:]) {
 		return false
 	}
 	hwnd := consoleWindow()
@@ -44,11 +42,54 @@ func needsClassicConsole() bool {
 	return n == 1
 }
 
+// classicConsoleCreationFlags 给 conhost 用：必须没有控制台（DETACHED_PROCESS）。
+// CREATE_NEW_CONSOLE 会让 conhost 带着现成控制台启动，它随即退出且不运行命令，双击看起来像闪退。
+// DETACHED_PROCESS 与 CREATE_NEW_CONSOLE 互斥。脱离作业是为了不随 Windows Terminal 的标签页一起结束。
+func classicConsoleCreationFlags() uint32 {
+	return windows.DETACHED_PROCESS | windows.CREATE_BREAKAWAY_FROM_JOB | windows.CREATE_NEW_PROCESS_GROUP
+}
+
+func fallbackConsoleCreationFlags() uint32 {
+	return windows.CREATE_NEW_CONSOLE | windows.CREATE_BREAKAWAY_FROM_JOB | windows.CREATE_NEW_PROCESS_GROUP
+}
+
 func startClassicConsole() error {
+	exe := executable()
+	extra := os.Args[1:]
 	conhost := filepath.Join(os.Getenv("SystemRoot"), "System32", "conhost.exe")
-	cmd := exec.Command(conhost, append([]string{executable()}, os.Args[1:]...)...)
-	cmd.Env = append(os.Environ(), classicEnv+"=1")
-	return cmd.Start()
+	if err := launchDetached(append([]string{conhost, exe, "--classic-console"}, extra...), classicConsoleCreationFlags()); err == nil {
+		return nil
+	}
+	return launchDetached(append([]string{exe, "--classic-console"}, extra...), fallbackConsoleCreationFlags())
+}
+
+func launchDetached(argv []string, flags uint32) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	cmdline, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(argv))
+	if err != nil {
+		return err
+	}
+	si := windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfo{}))}
+	var pi windows.ProcessInformation
+	if err := windows.CreateProcess(nil, cmdline, nil, nil, false, flags, nil, nil, &si, &pi); err != nil {
+		return err
+	}
+	defer func() {
+		_ = windows.CloseHandle(pi.Thread)
+		_ = windows.CloseHandle(pi.Process)
+	}()
+	st, err := windows.WaitForSingleObject(pi.Process, 400)
+	if err != nil {
+		return err
+	}
+	if st == 0 { // WAIT_OBJECT_0：进程已退出
+		var code uint32
+		_ = windows.GetExitCodeProcess(pi.Process, &code)
+		return fmt.Errorf("%s exited immediately (code %d)", argv[0], code)
+	}
+	return nil
 }
 
 func brandConsoleWindow() {

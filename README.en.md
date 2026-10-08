@@ -53,7 +53,7 @@ cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compat
     </td>
     <td width="33%" valign="top">
       <b>Reliable restore</b><br>
-      On exit, closing the terminal, a crash or a forced kill, the takeover settings are removed and your own <code>http.proxy</code> and related settings are written back.
+      On Windows, the close button hides the window to the notification area and the process keeps running. Quit from the icon's right-click menu or the settings page. A crash or a forced kill still removes the takeover settings and writes your own <code>http.proxy</code> and related settings back.
     </td>
     <td width="33%" valign="top">
       <b>Three platforms</b><br>
@@ -61,6 +61,8 @@ cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compat
     </td>
   </tr>
 </table>
+
+During multi-turn tool calls, thinking is handled per API. DeepSeek, Kimi and MiMo send the original reasoning back on the next turn. OpenAI-compatible APIs that reject that field have it removed. Anthropic replays a signed thinking block. Read-only tools can run in parallel. File writes run in order. Oversized tool output is truncated. A trailing comma in tool arguments is repaired before the call runs. Rate limits, 5xx responses and a stalled stream are retried only before any text has been shown. The system prompt does not include the current time. The time is on each user message. A context-cache hit depends on whether the API returns a cache-hit count. Some OpenAI-compatible APIs return only prompt, completion and total tokens.
 
 ## Installation
 
@@ -122,9 +124,9 @@ Files downloaded in a browser carry a download mark. On Windows, when SmartScree
 ## Usage
 
 1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser.
-2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works.
+2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Image.
 3. Reopen Cursor, start a new chat, and pick the model you added from the model list.
-4. When you are done, close the terminal window or click Quit on the settings page. Cursor's settings are restored automatically.
+4. Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon's right-click menu, or click Quit on the settings page. On macOS and Linux, closing the terminal quits as well. Cursor's settings are restored automatically.
 
 > [!IMPORTANT]
 > With **Auto** selected, Cursor only uses official models. Select a custom model explicitly to use it.
@@ -144,19 +146,34 @@ The local proxy decrypts only connections to `*.cursor.sh`; everything else is t
 
 ## Console window
 
-The settings page URL stays pinned at the top of the console window and is never scrolled away by logs. Press Enter to open the settings page; in terminals that support hyperlinks (Windows Terminal, iTerm2, GNOME Terminal and others) you can also Ctrl+click or Cmd+click the URL.
+The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page; in terminals that support hyperlinks (Windows Terminal, iTerm2, GNOME Terminal and others) you can also Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   按回车打开配置页
-    接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
+ ▌▐ cursor-inner v0.2.0   http://127.0.0.1:52341   press Enter to open settings
+    takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
+    catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
-20:31:07  接管代理 http://127.0.0.1:61022
-20:31:07  已结束 Cursor，重新打开后生效
-20:32:15  BidiAppend 3f2a9c… 模型 a1b2c3d4e5f60718 -> 本地
-20:32:15  RunSSE 3f2a9c… 由本地模型 DeepSeek V4 Flash 回答
+20:31:07  takeover proxy http://127.0.0.1:61022
+20:31:07  Cursor closed; reopen it for the change to take effect
+20:32:15  ▶ example-model  chat 3f2a9c  turn 2
+20:32:41  ✓ example-model  26.0s · tools 3 (Read×2, StrReplace) · in 18.4k / out 1.2k · cache 87%
 ```
 
-On Windows, when started from Explorer, the Start menu or at login, cursor-inner uses a classic console window so the taskbar shows its own icon. When started by typing a command in an existing terminal, it keeps running in that terminal. Start it with `--no-takeover` to open only the settings page, without touching Cursor's settings or closing Cursor; this is meant for debugging.
+On Windows, when started from Explorer, the Start menu or at login, cursor-inner uses a classic console window so the taskbar shows its own icon. When started by typing a command in an existing terminal, it keeps running in that terminal. The window close button hides it to the notification area.
+
+| Flag | Effect |
+| --- | --- |
+| `--no-takeover` | Open only the settings page; do not change Cursor settings or close Cursor |
+| `--debug` | Separate instance with a temporary data directory: proxy and settings page only, no Cursor changes, no browser |
+| `--verbose` | Also show debug lines in the window (they are always written to `inner.log`) |
+| `--data-dir <dir>` | Use the given data directory |
+
+## Known limitations
+
+- Web search merges Bing, DuckDuckGo and Baidu; Baidu sometimes returns only a captcha page, and then only the other two sources remain.
+- With a custom model selected, typing `@` in the input box does not open the file menu. Drag a file into the chat, or use Add to Chat.
+- Some OpenAI-compatible APIs do not return a cache-hit count, so the window cannot show a cache-hit rate or confirm that prompt caching is working.
+- In Cursor 3.23, a message sent while a tool is still running waits until that turn ends.
 
 ## FAQ
 
@@ -170,7 +187,7 @@ Auto lets Cursor's servers choose a model, and they only choose among official m
 <details>
 <summary><b>Can custom models edit files or run commands?</b></summary>
 
-Not yet. Custom models return text only and do not run tool calls. Use an official model when Agent mode needs to edit files or run commands. Tab completion and other features are still served by Cursor.
+Models that support tool calls (OpenAI function calling or Anthropic tool use) can already read, search, edit and delete files, edit notebooks, run commands, update todos, ask questions, switch mode, present a plan, search or open the web after approval, call MCP tools from the current conversation, and start a subagent in Agent mode. GenerateImage is offered only after an image endpoint is saved on the settings page. Workspace search collects term matches, then the current custom model keeps the hits that match the query. Edits show a diff on the tool card and are written after you accept them. Command output updates on the tool card, and a command that reaches its time limit moves to the background. Past about 70% of the context window, earlier tool output is shortened, and if that is not enough the model writes a summary before answering. Ask, Plan, Debug and Multitask include that mode's instructions. An explore subagent only reads and searches; other subagents can edit files. Stop aborts a tool that has not finished. In Cursor 3.23, a message sent while a tool is still running waits until that turn ends. `/summarize` replaces earlier history with a summary. Each turn writes a checkpoint, and a later turn can resume from an earlier one. Inline edit and terminal Cmd+K are answered here when a custom model is selected. Commit messages and chat titles do not carry a model id, so Cursor still generates them. Tab completion and other features are still served by Cursor.
 
 </details>
 
@@ -187,12 +204,13 @@ Not yet. Custom models return text only and do not run tool calls. Use an offici
 | --- | --- |
 | `config.json` | Toggles, proxy address, custom models and their last test results. **API keys are stored in plain text**; the file is readable only by the current user. |
 | `ca/` | Root certificate and private key generated on this machine |
+| `conversations/` | Custom-model checkpoints: one `.state` per Cursor conversation, blobs under `blobs/`, including chat content and tool results |
 | `cursor-settings.backup.json` | Backup of Cursor's original proxy settings during takeover; removed after restore |
-| `inner.log` | Routing log for the current run, rewritten on every start; contains no chat content or keys |
+| `inner.log` | Routing log for the current run, rewritten on every start (the previous file is kept as `inner.log.1` when it exceeds 5MB); contains no chat content or keys |
 | `watch.log` | Record of automatic restores after an abnormal exit |
 | `takeover.on`, `listen.url`, `instance.lock` | Takeover marker, current settings page URL, single-instance lock |
 
-cursor-inner collects no data: no telemetry, analytics or update checks. The settings page and the local proxy listen on `127.0.0.1` only. Chat content travels only between Cursor, your machine and the model endpoints you configure.
+cursor-inner collects no data: no telemetry, analytics or update checks. The settings page and the local proxy listen on `127.0.0.1` only. Chat content travels only between Cursor, your machine and the model endpoints you configure; custom-model history is stored only in the `conversations/` directory above.
 
 </details>
 
@@ -255,28 +273,30 @@ For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/r
 ```text
 cmd/cursor-inner/      Entry point: single instance, flags, dialogs, window icon, exit cleanup
 internal/
-├── agent/             Decides per model id whether a chat runs locally or upstream
+├── agent/             Custom-model runs: request routing, model and tool loop, checkpoints, compaction, system prompt and mode notes
 ├── app/               Operations behind the settings page
 ├── autostart/         Start at login: Windows logon task, macOS LaunchAgent, Linux XDG autostart
 ├── catalog/           Entries appended to Cursor's model catalog
 ├── config/            Reads and writes config.json
 ├── console/           Pinned console header and log output
+├── cursorpb/          Cursor protocol code generated from proto/cursor/agent_v1.proto
 ├── cursorsettings/    Edits and restores Cursor's settings.json
 ├── dialer/            Direct or socks5 / http proxied dialing
+├── fsutil/            Atomic file writes
 ├── i18n/              Bilingual (Chinese / English) text for the settings page
-├── mitm/              Local proxy: decrypts *.cursor.sh and routes requests
+├── logx/              Logs: per-turn console summary and inner.log detail
+├── mitm/              Local proxy: decrypts *.cursor.sh, routes requests, inline edit and terminal Cmd+K
 ├── protox/            Connect frames and protobuf field encoding
-├── provider/          Calls OpenAI Chat / Anthropic endpoints
+├── provider/          Calls OpenAI Chat / Anthropic endpoints, including streamed tool calls
+├── tools/             Converts between model tool calls and Cursor exec requests and results
 ├── takeover/          Takeover and restore, root certificate, closing Cursor, exit watchdog
 └── web/               Settings page and HTTP API
 assets/                Icon
 docs/images/           Images used by the README
+proto/cursor/          Cursor agent protocol definition (from cursor-byok); buf generate produces internal/cursorpb
 install.sh             macOS / Linux installer
 install.ps1            Windows installer
-scripts/
-├── make_icon.py       Generates assets/icon.svg and icon.ico (needs Pillow, ImageMagick)
-├── make_readme_art.py Generates the README banner, diagram and window frames (needs Pillow)
-└── gen_notices.sh     Generates THIRD_PARTY_NOTICES.md from the built binary
+scripts/gen_notices.sh Generates THIRD_PARTY_NOTICES.md from the built binary
 ```
 
 </details>

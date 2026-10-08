@@ -6,9 +6,6 @@ dist/
 # 运行日志
 *.log
 
-# 本地说明
-*.local.md
-
 # Python 缓存
 __pycache__/
 *.pyc

@@ -50,8 +50,25 @@ func renderHeader(url, version string, st Status, cols int) string {
 		{text: "    出站 ", style: faint}, proxy,
 		{text: "    自定义模型 ", style: faint}, {text: strconv.Itoa(st.Models), style: cream},
 	}
+	catalog := segment{text: "—", style: muted}
+	if st.CatalogOK {
+		catalog = segment{text: "✓ " + strconv.Itoa(st.CatalogN), style: good}
+		if !st.CatalogAt.IsZero() {
+			catalog.text += " · " + st.CatalogAt.Format("15:04")
+		}
+	}
+	last := st.LastError
+	if last == "" {
+		last = "无"
+	}
+	third := []segment{
+		{text: "    模型列表 ", style: faint}, catalog,
+		{text: "    本地 ", style: faint}, {text: strconv.Itoa(st.Local), style: cream},
+		{text: "    官方 ", style: faint}, {text: strconv.Itoa(st.Official), style: cream},
+		{text: "    最近错误 ", style: faint}, {text: last, style: muted},
+	}
 	rule := faint + strings.Repeat("─", cols) + reset
-	return clear + line(top, cols) + "\r\n" + clear + line(second, cols) + "\r\n" + clear + rule
+	return clear + line(top, cols) + "\r\n" + clear + line(second, cols) + "\r\n" + clear + line(third, cols) + "\r\n" + clear + rule
 }
 
 func line(parts []segment, cols int) string {
@@ -76,9 +93,11 @@ func line(parts []segment, cols int) string {
 
 func styleLine(text string) string {
 	switch {
-	case strings.Contains(text, "失败") || strings.Contains(text, "出错") || strings.Contains(text, "无效"):
+	case strings.Contains(text, "✗") || strings.Contains(text, "失败") || strings.Contains(text, "出错") || strings.Contains(text, "无效"):
 		return bad + text + reset
-	case strings.Contains(text, "-> 本地") || strings.Contains(text, "由本地模型"):
+	case strings.Contains(text, "✓"):
+		return good + text + reset
+	case strings.Contains(text, "▶") || strings.Contains(text, "-> 本地") || strings.Contains(text, "由本地模型"):
 		return signal + text + reset
 	default:
 		return cream + text + reset

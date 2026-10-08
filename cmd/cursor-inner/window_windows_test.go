@@ -45,3 +45,26 @@ func TestConsoleProbesAreSafe(t *testing.T) {
 	hwnd := consoleWindow()
 	t.Logf("console window=%#x class=%q needsClassic=%v", hwnd, windowClass(hwnd), needsClassicConsole())
 }
+
+func TestClassicConsoleCreationFlags(t *testing.T) {
+	f := classicConsoleCreationFlags()
+	if f&windows.CREATE_NEW_CONSOLE != 0 {
+		t.Fatal("CREATE_NEW_CONSOLE gives conhost a console, so it exits without running the exe")
+	}
+	if f&windows.DETACHED_PROCESS == 0 {
+		t.Fatal("need DETACHED_PROCESS so conhost starts without a console and creates its own")
+	}
+	if f&windows.CREATE_BREAKAWAY_FROM_JOB == 0 {
+		t.Fatal("need CREATE_BREAKAWAY_FROM_JOB so the new window survives the Windows Terminal job")
+	}
+	if f&windows.DETACHED_PROCESS != 0 && f&windows.CREATE_NEW_CONSOLE != 0 {
+		t.Fatal("DETACHED_PROCESS and CREATE_NEW_CONSOLE are mutually exclusive")
+	}
+	fb := fallbackConsoleCreationFlags()
+	if fb&windows.CREATE_NEW_CONSOLE == 0 {
+		t.Fatal("fallback must create a new console for the exe itself")
+	}
+	if fb&windows.DETACHED_PROCESS != 0 {
+		t.Fatal("fallback must not detach the exe from its new console")
+	}
+}

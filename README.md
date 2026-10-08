@@ -53,7 +53,7 @@ cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthr
     </td>
     <td width="33%" valign="top">
       <b>可靠还原</b><br>
-      退出、关闭终端、崩溃或被强制结束时，都会撤掉接管设置，并把你原有的 <code>http.proxy</code> 等设置写回。
+      Windows 上点窗口关闭按钮会把窗口收回通知区域，进程继续运行。右键图标选「退出」，或在配置页点「退出」，才会结束并还原设置。崩溃或被强制结束时，也会撤掉接管设置，并把你原有的 <code>http.proxy</code> 等设置写回。
     </td>
     <td width="33%" valign="top">
       <b>三个平台</b><br>
@@ -61,6 +61,8 @@ cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthr
     </td>
   </tr>
 </table>
+
+自定义模型做多轮工具调用时，思考内容按接口处理。DeepSeek、Kimi、MiMo 会把思考原文带回下一轮。不接受该字段的 OpenAI 兼容接口会去掉它。Anthropic 回放带签名的思考块。只读工具可以并行，写文件按顺序执行。过长的工具输出会截断。工具参数末尾多一个逗号时会先修好再执行。限流、5xx 和流中断只在还没有输出文字时重试。系统提示词不写当前时间，时间写在每一轮用户消息里。上下文缓存能否命中，要看接口是否返回缓存命中数。有的 OpenAI 兼容接口只返回输入、输出和总 token。
 
 ## 安装
 
@@ -122,9 +124,9 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 ## 使用
 
 1. 运行 cursor-inner。它会关闭正在运行的 Cursor，并在浏览器里打开配置页。
-2. 添加模型：填写显示名、类型、模型名、接口地址和密钥，点「测试」确认能连通。
+2. 添加模型：填写显示名、类型、模型名、接口地址和密钥，点「测试」确认能连通。上下文窗口和最大输出可以留空；填了之后，压缩历史按这个窗口计算，每次请求的输出不超过这个上限。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容的出图接口。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选择刚添加的模型。
-4. 用完后关闭终端窗口，或在配置页点「退出」。Cursor 的设置会自动还原。
+4. 用完后退出。Windows 上点窗口关闭按钮只会把窗口收回通知区域，右键图标选「退出」才结束；也可以在配置页点「退出」。macOS 和 Linux 上关闭终端窗口同样会退出。Cursor 的设置会自动还原。
 
 > [!IMPORTANT]
 > 选 **Auto** 时 Cursor 只使用官方模型。要使用自定义模型，必须在模型列表里手动选择。
@@ -144,19 +146,34 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 
 ## 命令行窗口
 
-配置页地址固定在窗口顶部，不会被日志刷走。按回车即可打开配置页；在支持超链接的终端里（Windows Terminal、iTerm2、GNOME Terminal 等），也可以按住 Ctrl 或 Cmd 单击地址。
+配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页；在支持超链接的终端里（Windows Terminal、iTerm2、GNOME Terminal 等），也可以按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.1.0   http://127.0.0.1:52341   按回车打开配置页
+ ▌▐ cursor-inner v0.2.0   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
+    模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
 20:31:07  接管代理 http://127.0.0.1:61022
 20:31:07  已结束 Cursor，重新打开后生效
-20:32:15  BidiAppend 3f2a9c… 模型 a1b2c3d4e5f60718 -> 本地
-20:32:15  RunSSE 3f2a9c… 由本地模型 DeepSeek V4 Flash 回答
+20:32:15  ▶ 示例模型  对话 3f2a9c  第 2 轮
+20:32:41  ✓ 示例模型  26.0s · 工具 3 次（Read×2, StrReplace）· 输入 18.4k / 输出 1.2k · 缓存命中 87%
 ```
 
-在 Windows 上从资源管理器、开始菜单或开机启动打开时，cursor-inner 使用经典控制台窗口，任务栏显示它自己的图标；在已有的终端里输入命令启动时，仍在原终端里运行。加 `--no-takeover` 参数启动时，只打开配置页，不修改 Cursor 设置，也不关闭 Cursor，用于调试。
+在 Windows 上从资源管理器、开始菜单或开机启动打开时，cursor-inner 使用经典控制台窗口，任务栏显示它自己的图标；在已有的终端里输入命令启动时，仍在原终端里运行。点窗口关闭按钮会收回通知区域。
+
+| 参数 | 作用 |
+| --- | --- |
+| `--no-takeover` | 只打开配置页，不修改 Cursor 设置，也不关闭 Cursor |
+| `--debug` | 另起一个使用临时数据目录的实例：提供代理和配置页，不改 Cursor 设置，不关闭 Cursor，不打开浏览器 |
+| `--verbose` | 把调试日志也显示在窗口里（默认只写进 `inner.log`） |
+| `--data-dir <目录>` | 使用指定的数据目录 |
+
+## 已知限制
+
+- 网页搜索合并 Bing、DuckDuckGo 和百度的结果；百度有时只返回安全验证页，这时只剩另外两家的结果。
+- 用自定义模型时，在输入框里输入 `@` 不会弹出文件菜单。可以把文件拖进对话，或用「Add to Chat」添加。
+- 有的 OpenAI 兼容接口不返回缓存命中数，窗口里就看不到缓存命中率，也无法确认上下文缓存是否生效。
+- 在 Cursor 3.23 里，工具还在执行时发出的下一条消息，要等这一轮结束才开始。
 
 ## 常见问题
 
@@ -170,7 +187,7 @@ Auto 由 Cursor 官方服务决定用哪个模型，只会在官方模型中选�
 <details>
 <summary><b>自定义模型能读写文件、运行命令吗？</b></summary>
 
-目前不能。自定义模型只返回文本，不执行工具调用。Agent 模式下需要读写文件或运行命令时，请使用官方模型。Tab 补全等其余功能仍由 Cursor 官方服务提供。
+支持工具调用的模型（OpenAI function calling 或 Anthropic tool use）已经可以在 Agent 模式下读文件、搜索、修改和删除文件、编辑笔记本、运行命令、更新待办、提问、切换模式、提交计划、在批准后搜索或打开网页、调用本轮对话里的 MCP 工具，以及启动子代理。设置页填了出图接口之后才会出现 GenerateImage。工作区搜索先按词找出候选，再由当前自定义模型筛选。修改会在对话里显示带 diff 的工具卡片，接受之后才会写入。命令的输出会跟着工具卡片更新；超时后命令转到后台。对话超过上下文窗口大约七成时，会先缩短较早的工具输出，仍然放不下就先写摘要再回答。Ask、Plan、Debug、Multitask 会带上各自的模式说明。explore 子代理只做阅读和搜索，其他子代理可以改文件。点停止会中止还没结束的工具。在 Cursor 3.23 里，工具还在执行时发出的下一条消息要等这一轮结束才开始。`/summarize` 会把更早的历史收成摘要，每一轮结束留下检查点，之后可以回到较早的检查点。选了自定义模型的行内编辑和终端 Cmd+K 也由这里回答。提交说明和聊天标题的请求里没有模型，仍由 Cursor 生成。Tab 补全等其余功能仍由 Cursor 官方服务提供。
 
 </details>
 
@@ -187,12 +204,13 @@ Auto 由 Cursor 官方服务决定用哪个模型，只会在官方模型中选�
 | --- | --- |
 | `config.json` | 各项开关、代理地址、自定义模型和上次测试结果。**API 密钥以明文保存**，文件只有当前用户可读。 |
 | `ca/` | 本机生成的根证书和私钥 |
+| `conversations/` | 自定义模型对话的检查点：每个 Cursor 会话一份状态（`.state`），内容块在 `blobs/`，含对话内容和工具结果 |
 | `cursor-settings.backup.json` | 接管期间 Cursor 原有代理设置的备份，还原后删除 |
-| `inner.log` | 本次运行的分流日志，每次启动时重写，不记录对话内容和密钥 |
+| `inner.log` | 本次运行的分流日志，每次启动时重写（超过 5MB 时上一份改存为 `inner.log.1`），不记录对话内容和密钥 |
 | `watch.log` | 异常退出后自动还原的记录 |
 | `takeover.on`、`listen.url`、`instance.lock` | 接管标记、当前配置页地址、单实例锁 |
 
-cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求。配置页和本机代理只监听 `127.0.0.1`。对话内容只在 Cursor、本机和你配置的模型接口之间传递。
+cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求。配置页和本机代理只监听 `127.0.0.1`。对话内容只在 Cursor、本机和你配置的模型接口之间传递，自定义模型的对话历史只保存在上面的 `conversations/` 目录里。
 
 </details>
 
@@ -255,28 +273,30 @@ VERSION=v0.1.0 ./build.sh linux      # 写入版本号
 ```text
 cmd/cursor-inner/      程序入口：单实例、命令行参数、弹窗、窗口图标、退出清理
 internal/
-├── agent/             按模型 id 决定对话走本地还是官方
+├── agent/             自定义模型的运行：请求路由、模型与工具循环、检查点、压缩、系统提示词与各模式说明
 ├── app/               配置页用到的各项操作
 ├── autostart/         开机启动：Windows 登录任务、macOS LaunchAgent、Linux XDG 自动启动
 ├── catalog/           生成追加到 Cursor 模型目录里的条目
 ├── config/            读写 config.json
 ├── console/           命令行窗口的固定顶栏和日志
+├── cursorpb/          由 proto/cursor/agent_v1.proto 生成的 Cursor 协议代码
 ├── cursorsettings/    修改并还原 Cursor 的 settings.json
 ├── dialer/            直连或经 socks5 / http 代理拨号
+├── fsutil/            原子写文件
 ├── i18n/              配置页用到的中英双语文本
-├── mitm/              本机代理：解密 *.cursor.sh 并分流
+├── logx/              日志：窗口里的每轮摘要、inner.log 明细
+├── mitm/              本机代理：解密 *.cursor.sh、分流、行内编辑与终端 Cmd+K
 ├── protox/            Connect 帧与 protobuf 字段读写
-├── provider/          调用 OpenAI Chat / Anthropic 接口
+├── provider/          调用 OpenAI Chat / Anthropic 接口，含流式工具调用
+├── tools/             模型工具调用与 Cursor 执行请求、执行结果之间的转换
 ├── takeover/          接管与还原、根证书、关闭 Cursor、异常退出后的守护进程
 └── web/               配置页与 HTTP API
 assets/                图标
 docs/images/           README 用图
+proto/cursor/          Cursor agent 协议定义（取自 cursor-byok），用 buf generate 生成 internal/cursorpb
 install.sh             macOS / Linux 安装脚本
 install.ps1            Windows 安装脚本
-scripts/
-├── make_icon.py       生成 assets/icon.svg 和 icon.ico（需要 Pillow、ImageMagick）
-├── make_readme_art.py 生成 README 横幅、原理图和截图外框（需要 Pillow）
-└── gen_notices.sh     根据编译产物生成 THIRD_PARTY_NOTICES.md
+scripts/gen_notices.sh 根据编译产物生成 THIRD_PARTY_NOTICES.md
 ```
 
 </details>

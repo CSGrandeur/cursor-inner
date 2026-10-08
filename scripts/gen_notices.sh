@@ -16,7 +16,7 @@ out=THIRD_PARTY_NOTICES.md
 	echo
 	echo "## cursor-byok"
 	echo
-	echo "cursor-inner 的 Cursor 协议处理（模型目录合并、BidiAppend / RunSSE 分流）参考了 cursor-byok 的设计。"
+	echo "cursor-inner 的 Cursor 协议处理参考了 cursor-byok 的设计；proto/cursor/agent_v1.proto、internal/tools/tools.json 和 internal/agent/prompt.md 取自 cursor-byok。"
 	echo
 	echo "Source: https://github.com/leookun/cursor-byok"
 	echo

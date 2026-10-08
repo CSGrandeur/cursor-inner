@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,6 +117,9 @@ func (a *App) State() (web.View, error) {
 	view.Proxy.Enabled = cfg.Proxy.Enabled
 	view.Proxy.Address = cfg.Proxy.Address
 	view.Proxy.Effective = on && perr == nil
+	view.Image.BaseURL = cfg.Image.BaseURL
+	view.Image.Model = cfg.Image.Model
+	view.Image.KeyHint = config.Model{APIKey: cfg.Image.APIKey}.KeyHint()
 	if perr != nil && view.LastError.IsZero() {
 		view.LastError = i18n.Of(perr)
 	}
@@ -126,14 +130,18 @@ func (a *App) State() (web.View, error) {
 	a.mu.Unlock()
 	for _, model := range cfg.Models {
 		view.Models = append(view.Models, web.ModelView{
-			ID:          model.ID,
-			DisplayName: model.DisplayName,
-			Type:        model.Type,
-			BaseURL:     model.BaseURL,
-			Model:       model.Model,
-			UseProxy:    model.UseProxy,
-			KeyHint:     model.KeyHint(),
-			LastTest:    model.LastTest,
+			ID:              model.ID,
+			DisplayName:     model.DisplayName,
+			Type:            model.Type,
+			BaseURL:         model.BaseURL,
+			Model:           model.Model,
+			UseProxy:        model.UseProxy,
+			Reasoning:       model.Reasoning,
+			Fast:            model.FastSupport,
+			ContextWindow:   model.ContextWindow,
+			MaxOutputTokens: model.MaxOutputTokens,
+			KeyHint:         model.KeyHint(),
+			LastTest:        model.LastTest,
 		})
 	}
 	if view.Models == nil {
@@ -162,6 +170,20 @@ func (a *App) SetProxy(enabled bool, address string) error {
 	}
 	return a.store.Update(func(f *config.File) error {
 		f.Proxy = next
+		return nil
+	})
+}
+
+func (a *App) SetImage(baseURL, apiKey, model string) error {
+	return a.store.Update(func(f *config.File) error {
+		f.Image.BaseURL = strings.TrimSpace(baseURL)
+		f.Image.Model = strings.TrimSpace(model)
+		if key := strings.TrimSpace(apiKey); key != "" {
+			f.Image.APIKey = key
+		}
+		if f.Image.BaseURL == "" {
+			f.Image = config.ImageAPI{}
+		}
 		return nil
 	})
 }
@@ -214,6 +236,54 @@ func (a *App) DeleteModel(id string) error {
 		}
 		f.Models = next
 		return nil
+	})
+}
+
+func (a *App) SetModelLimits(id string, contextWindow, maxOutput *int) error {
+	if (contextWindow != nil && *contextWindow < 0) || (maxOutput != nil && *maxOutput < 0) {
+		return i18n.E("token 数不能为负", "Token counts cannot be negative")
+	}
+	return a.store.Update(func(f *config.File) error {
+		for i := range f.Models {
+			if f.Models[i].ID != id {
+				continue
+			}
+			if contextWindow != nil {
+				f.Models[i].ContextWindow = *contextWindow
+			}
+			if maxOutput != nil {
+				f.Models[i].MaxOutputTokens = *maxOutput
+			}
+			return nil
+		}
+		return i18n.E("没有这个模型", "No such model")
+	})
+}
+
+func (a *App) SetModelFast(id string, on bool) error {
+	return a.store.Update(func(f *config.File) error {
+		for i := range f.Models {
+			if f.Models[i].ID == id {
+				if on && f.Models[i].Type != "openai-chat" {
+					return i18n.E("只有 OpenAI 兼容接口可以打开 Fast", "Fast is only available for OpenAI-compatible endpoints")
+				}
+				f.Models[i].FastSupport = on
+				return nil
+			}
+		}
+		return i18n.E("没有这个模型", "No such model")
+	})
+}
+
+func (a *App) SetModelReasoning(id string, on bool) error {
+	return a.store.Update(func(f *config.File) error {
+		for i := range f.Models {
+			if f.Models[i].ID == id {
+				f.Models[i].Reasoning = on
+				return nil
+			}
+		}
+		return i18n.E("没有这个模型", "No such model")
 	})
 }
 

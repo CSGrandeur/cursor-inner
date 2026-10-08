@@ -53,6 +53,27 @@ func (s *Service) Snapshot() Snapshot {
 	}
 }
 
+// ProxyOnly 只在数据目录里启动本机代理，不改 Cursor 的设置，也不结束 Cursor。
+func (s *Service) ProxyOnly() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cert, err := EnsureCA(s.dir)
+	if err != nil {
+		s.problem = i18n.Of(err)
+		return err
+	}
+	url, err := s.mitm.Start(cert)
+	if err != nil {
+		s.problem = i18n.Of(err)
+		return err
+	}
+	s.active = true
+	s.url = url
+	s.ca = "debug"
+	s.problem = i18n.Text{}
+	return nil
+}
+
 func (s *Service) Enable() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -109,6 +130,11 @@ func (s *Service) Stop() error {
 
 func (s *Service) Restore() error {
 	if !Marked(s.dir) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.mitm.Stop()
+		s.active = false
+		s.url = ""
 		return nil
 	}
 	return s.Stop()

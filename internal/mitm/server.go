@@ -7,11 +7,16 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
+
+	"cursor-inner/internal/cursorpb"
 
 	"cursor-inner/internal/i18n"
 
@@ -26,21 +31,38 @@ import (
 )
 
 type Server struct {
-	mu      sync.Mutex
-	ln      net.Listener
-	httpSrv *http.Server
-	url     string
-	warning i18n.Text
-	proxy   func() config.Proxy
-	entries func() []catalog.Entry
-	lookup  func(string) (config.Model, bool)
-	hub     *agent.Hub
-	client  *http.Client
-	running bool
+	mu        sync.Mutex
+	ln        net.Listener
+	httpSrv   *http.Server
+	url       string
+	warning   i18n.Text
+	proxy     func() config.Proxy
+	entries   func() []catalog.Entry
+	lookup    func(string) (config.Model, bool)
+	hub       *agent.Hub
+	client    *http.Client
+	running   bool
+	selected  string
+	catalogOK bool
+	catalogN  int
+	catalogAt time.Time
+	localN    int
+	officialN int
+	lastError string
 }
 
-func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(string) (config.Model, bool)) *Server {
-	s := &Server{proxy: proxy, entries: entries, lookup: lookup, hub: agent.New(lookup)}
+// Traffic 是顶栏要显示的计数。
+type Traffic struct {
+	CatalogOK bool
+	CatalogN  int
+	CatalogAt time.Time
+	Local     int
+	Official  int
+	LastError string
+}
+
+func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(string) (config.Model, bool), history *agent.History) *Server {
+	s := &Server{proxy: proxy, entries: entries, lookup: lookup, hub: agent.New(lookup, history)}
 	s.client = &http.Client{Transport: upstreamTransport(s.dialContext), CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
@@ -171,6 +193,8 @@ func (s *Server) serveCursor(w http.ResponseWriter, r *http.Request) {
 		s.bidi(w, r)
 	case "/agent.v1.AgentService/RunSSE":
 		s.runSSE(w, r)
+	case "/aiserver.v1.CmdKService/StreamCmdK", "/aiserver.v1.CmdKService/StreamTerminalCmdK", "/aiserver.v1.AiService/SlashEdit":
+		s.inline(w, r)
 	default:
 		s.forward(w, r)
 	}
@@ -214,7 +238,8 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, available bool)
 	}
 	if len(entries) > 0 {
 		s.note(i18n.Tf("已向 Cursor 模型列表追加 %d 个自定义模型", "Added %d custom models to Cursor's model list", len(entries)))
-		log.Printf("%s 追加 %d 个自定义模型", r.URL.Path, len(entries))
+		s.markCatalog(len(entries))
+		slog.Debug("追加自定义模型", "path", r.URL.Path, "count", len(entries))
 	}
 	resp.Header.Del("Content-Encoding")
 	resp.Header.Del("Connect-Content-Encoding")
@@ -229,9 +254,9 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 		route, err = s.hub.Bidi(plain)
 	}
 	if err != nil {
-		log.Printf("BidiAppend 解析失败，转发官方：%v", err)
+		slog.Debug("BidiAppend 解析失败，转发官方", "error", err)
 	} else if route.ModelID != "" {
-		log.Printf("BidiAppend %s 模型 %s -> %s", route.RequestID, route.ModelID, where(route.Local))
+		slog.Debug("BidiAppend", "request", route.RequestID, "model", route.ModelID, "where", where(route.Local))
 	}
 	if err != nil || !route.Local {
 		withBody(r, body)
@@ -250,54 +275,137 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 		id, err = protox.DecodeRunID(plain)
 	}
 	if err != nil {
-		log.Printf("RunSSE 解析失败，转发官方：%v", err)
+		slog.Debug("RunSSE 解析失败，转发官方", "error", err)
 		withBody(r, body)
 		s.forward(w, r)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	decision, err := s.hub.Wait(ctx, id)
+	session, err := s.hub.Wait(ctx, id)
 	cancel()
 	if err != nil {
-		log.Printf("RunSSE %s 等不到 BidiAppend，转发官方：%v", id, err)
+		slog.Debug("RunSSE 等不到 BidiAppend，转发官方", "request", id, "error", err)
 	}
-	if err != nil || !decision.Local {
+	if err != nil || session == nil {
 		withBody(r, body)
 		s.forward(w, r)
 		return
 	}
-	log.Printf("RunSSE %s 由本地模型 %s 回答", id, decision.Model.DisplayName)
+	slog.Debug("RunSSE 由本地模型回答", "request", id, "model", session.Model.DisplayName)
+	s.countLocal()
 	defer s.hub.Done(id)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("connect-protocol-version", "1")
 	w.WriteHeader(http.StatusOK)
 	flush(w)
-	d, err := dialer.ForModel(s.proxy(), decision.Model.UseProxy)
-	if err != nil {
-		_, _ = w.Write(protox.EndError(err.Error()))
-		flush(w)
-		return
+	d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
+	session.Web = s.dialContext
+	if err == nil {
+		err = session.Run(r.Context(), d, func(m *cursorpb.AgentServerMessage) error {
+			raw, err := proto.Marshal(m)
+			if err != nil {
+				return err
+			}
+			if _, err := w.Write(protox.Frame(0, raw)); err != nil {
+				return err
+			}
+			flush(w)
+			return nil
+		})
 	}
-	err = provider.Stream(r.Context(), decision.Model, d, decision.Messages, func(text string) error {
-		if _, err := w.Write(protox.TextDelta(text)); err != nil {
-			return err
+	if err != nil {
+		if d == nil {
+			name := session.Model.DisplayName
+			if name == "" {
+				name = session.Model.ID
+			}
+			slog.Error("✗ "+name, "reason", provider.Explain(err), "error", err)
 		}
-		flush(w)
-		return nil
-	})
-	if err != nil {
-		log.Printf("RunSSE %s 本地模型出错：%v", id, err)
+		slog.Debug("本地模型出错", "request", id, "error", err)
+		s.setLastError(provider.Explain(err))
 		_, _ = w.Write(protox.EndError(err.Error()))
 		flush(w)
 		return
 	}
-	_, _ = w.Write(protox.TurnEnded())
 	_, _ = w.Write(protox.EndStream())
 	flush(w)
 }
 
+func displayName(entries []catalog.Entry, id string) string {
+	for _, entry := range entries {
+		if entry.ID == id && entry.DisplayName != "" {
+			return entry.DisplayName
+		}
+	}
+	return ""
+}
+
+func leakedModel(body []byte, entries []catalog.Entry) string {
+	for _, entry := range entries {
+		if len(entry.ID) >= 8 && bytes.Contains(body, []byte(entry.ID)) {
+			return entry.ID
+		}
+	}
+	return ""
+}
+
+// leakScanLimit 是外发检查读取的请求体上限；更长的请求体只检查开头，其余部分原样流式转发。
+const leakScanLimit = 1 << 20
+
+func (s *Server) warnCustomModel(path string, body []byte, encoding string) {
+	if plain, err := protox.Plain(body, encoding); err == nil {
+		body = plain
+	}
+	id := leakedModel(body, s.entries())
+	s.rememberModel(path, id)
+	if id == "" {
+		return
+	}
+	if quietLeak(path) {
+		slog.Debug("转发给官方的请求带有自定义模型", "path", path, "model", id)
+		return
+	}
+	slog.Warn("转发给官方的请求带有自定义模型", "path", path, "model", id, "name", displayName(s.entries(), id))
+}
+
+func (s *Server) rememberModel(path, id string) {
+	if id == "" && !strings.Contains(path, "GetDefaultModelNudgeData") {
+		return
+	}
+	s.mu.Lock()
+	s.selected = id
+	s.mu.Unlock()
+}
+
+func (s *Server) selectedModel() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.selected
+}
+
+func quietLeak(path string) bool {
+	for _, part := range []string{
+		"NameTab",
+		"GetUsageLimitStatusAndActiveGrants",
+		"AnalyticsService/",
+		"GetDefaultModelNudgeData",
+		"GetNewChatNudge",
+	} {
+		if strings.Contains(path, part) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
+	s.countOfficial()
+	if r.Body != nil {
+		head, _ := io.ReadAll(io.LimitReader(r.Body, leakScanLimit))
+		s.warnCustomModel(r.URL.Path, head, r.Header.Get("Content-Encoding"))
+		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(head), r.Body))
+	}
 	resp, err := s.do(r.Context(), r, nil, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -360,6 +468,50 @@ func requestHost(r *http.Request) string {
 		return r.Host
 	}
 	return r.URL.Host
+}
+
+func (s *Server) markCatalog(n int) {
+	s.mu.Lock()
+	s.catalogOK = true
+	s.catalogN = n
+	s.catalogAt = time.Now()
+	s.mu.Unlock()
+}
+
+func (s *Server) countLocal() {
+	s.mu.Lock()
+	s.localN++
+	s.mu.Unlock()
+}
+
+func (s *Server) countOfficial() {
+	s.mu.Lock()
+	s.officialN++
+	s.mu.Unlock()
+}
+
+func (s *Server) setLastError(text string) {
+	text = strings.TrimSpace(text)
+	if len(text) > 80 {
+		text = text[:80]
+	}
+	s.mu.Lock()
+	s.lastError = text
+	s.mu.Unlock()
+}
+
+// Traffic 返回顶栏计数的一份副本。
+func (s *Server) Traffic() Traffic {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return Traffic{
+		CatalogOK: s.catalogOK,
+		CatalogN:  s.catalogN,
+		CatalogAt: s.catalogAt,
+		Local:     s.localN,
+		Official:  s.officialN,
+		LastError: s.lastError,
+	}
 }
 
 func (s *Server) note(text i18n.Text) {

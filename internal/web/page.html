@@ -117,6 +117,7 @@
   .meta.warn { color: var(--bad); }
   .meta .ok { color: var(--good); }
   .controls { display: flex; align-items: center; gap: 8px; }
+  .controls.wrap { flex-wrap: wrap; justify-content: flex-end; }
 
   .switch { position: relative; width: 34px; height: 20px; flex: none; }
   .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -148,6 +149,8 @@
   input::placeholder { color: var(--faint); }
   input:focus, select:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
   #proxy-address { width: 230px; font-family: var(--mono); font-size: 12px; }
+  #image-url { width: 240px; font-family: var(--mono); font-size: 12px; }
+  #image-model, #image-key { width: 140px; }
 
   button {
     appearance: none; height: 32px; padding: 0 14px;
@@ -192,7 +195,11 @@
   td.ops { text-align: right; white-space: nowrap; }
   .ops-inner { display: inline-flex; align-items: center; gap: 6px; }
   .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-right: 6px; cursor: pointer; }
+  input.token { width: 7.2em; height: 26px; padding: 0 8px; }
   .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
+  .credit { margin: 22px 2px 0; color: var(--faint); font-size: 12px; }
+  .credit a { color: inherit; text-decoration: none; }
+  .credit a:hover { color: var(--muted); }
 
   .add { border-top: 1px solid var(--line); padding: 16px 20px 18px; background: var(--raise); }
   .add h3 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
@@ -229,7 +236,7 @@
     main { padding: 0 16px 72px; }
     .row { grid-template-columns: 1fr; }
     .grid { grid-template-columns: 1fr 1fr; }
-    #proxy-address { width: 100%; }
+    #proxy-address, #image-url, #image-model, #image-key { width: 100%; }
     .controls { width: 100%; }
     .hint { display: none; }
   }
@@ -265,6 +272,19 @@
         <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false">
         <button id="proxy-save" type="button" data-i18n="save">保存</button>
         <label class="switch"><input id="proxy-on" type="checkbox" data-i18n-aria="proxy" aria-label="代理"><span></span></label>
+      </div>
+    </div>
+    <div class="row">
+      <h2 data-i18n="image">出图</h2>
+      <div>
+        <p class="desc" data-i18n="imageDesc">填写 OpenAI 兼容的出图接口后，Agent 模式才会提供 GenerateImage。密钥留空表示保持原密钥。</p>
+        <p class="meta" id="image-meta"></p>
+      </div>
+      <div class="controls wrap">
+        <input id="image-url" type="text" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false">
+        <input id="image-model" type="text" placeholder="dall-e-3" autocomplete="off" spellcheck="false">
+        <input id="image-key" type="password" data-i18n-placeholder="apiKey" placeholder="密钥" autocomplete="off" spellcheck="false">
+        <button id="image-save" type="button" data-i18n="save">保存</button>
       </div>
     </div>
     <div class="row">
@@ -322,11 +342,16 @@
       </div>
       <div class="actions">
         <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
+        <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
+        <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
+        <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1000" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+        <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
         <button id="draft-test" type="button" data-i18n="test">测试</button>
         <button class="primary" type="submit" data-i18n="add">添加</button>
       </div>
     </form>
   </section>
+  <p class="credit">MIT · <a href="https://github.com/CSGrandeur/cursor-inner">CSGrandeur</a></p>
 </main>
 <div class="toast" id="banner" role="status"></div>
 <script>
@@ -335,12 +360,14 @@ const MESSAGES = {
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
     takeover: "接管", takeoverDesc: "打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。",
     proxy: "代理", proxyDesc: "官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。",
+    image: "出图", imageDesc: "填写 OpenAI 兼容的出图接口后，Agent 模式才会提供 GenerateImage。密钥留空表示保持原密钥。",
+    imageEmpty: "未配置，模型看不到 GenerateImage。", imageReady: "已配置 {model}{hint}",
     save: "保存", autostart: "开机启动", autostartDesc: "登录系统后自动启动。反复开关始终只保留一条启动项。",
     models: "自定义模型", modelsHint: "测试会流式请求 1 到 120 的数字，记录速度、首字和输出",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥",
-    useProxy: "走代理", test: "测试", testing: "测试中…", add: "添加", del: "删除",
+    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", optional: "可选", test: "测试", testing: "测试中…", add: "添加", del: "删除",
     showKey: "显示密钥", hideKey: "隐藏密钥",
     notTakenOver: "这次启动没有接管。", mitm: "接管代理 {url}",
     proxyOn: "生效中：Cursor 的联网经过这个代理。", proxyOff: "当前直连。",
@@ -356,12 +383,14 @@ const MESSAGES = {
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
     takeover: "Takeover", takeoverDesc: "Closes any running Cursor on start. Official models still come from Cursor; custom models are added to the end of the list.",
     proxy: "Proxy", proxyDesc: "Official models and the rest of Cursor's traffic go through this proxy. A bare host:port is treated as socks5; leave it empty for a direct connection.",
+    image: "Images", imageDesc: "After an OpenAI-compatible image endpoint is saved, Agent mode can call GenerateImage. Leave the key empty to keep the current one.",
+    imageEmpty: "Not configured. The model will not see GenerateImage.", imageReady: "Configured {model}{hint}",
     save: "Save", autostart: "Start at login", autostartDesc: "Starts automatically after you log in. Toggling it repeatedly always leaves exactly one entry.",
     models: "Custom models", modelsHint: "Tests stream the numbers 1 to 120 and record speed, first token and output",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key",
-    useProxy: "Use proxy", test: "Test", testing: "Testing…", add: "Add", del: "Delete",
+    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", optional: "optional", test: "Test", testing: "Testing…", add: "Add", del: "Delete",
     showKey: "Show key", hideKey: "Hide key",
     notTakenOver: "Takeover is not active in this session.", mitm: "Takeover proxy {url}",
     proxyOn: "Active: Cursor's traffic goes through this proxy.", proxyOff: "Direct connection.",
@@ -396,6 +425,7 @@ function applyLang() {
   document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
   document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = t(node.dataset.i18nTitle); });
   document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.dataset.i18nPlaceholder); });
   document.querySelector("#lang").textContent = t("switchLang");
   syncReveal();
   if (lastState) render(lastState);
@@ -464,8 +494,34 @@ function formModel() {
     base_url: fd.get("base_url") || "",
     api_key: fd.get("api_key") || "",
     model: fd.get("model") || "",
-    use_proxy: form.use_proxy.checked
+    use_proxy: form.use_proxy.checked,
+    reasoning: form.reasoning.checked,
+    fast: form.fast.checked,
+    context_window: tokenField(fd.get("context_window")),
+    max_output_tokens: tokenField(fd.get("max_output_tokens"))
   };
+}
+
+function tokenField(value) {
+  const n = Number(String(value || "").trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n);
+}
+
+function tokenInput(model, field, label) {
+  const lab = el("label", "mini");
+  const input = el("input", "mono token");
+  input.type = "number";
+  input.min = "0";
+  input.step = "1";
+  input.placeholder = t("optional");
+  if (model[field] > 0) input.value = String(model[field]);
+  input.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({[field]: tokenField(input.value)})
+  })));
+  lab.append(document.createTextNode(label), input);
+  return lab;
 }
 
 function el(tag, className, text) {
@@ -504,6 +560,13 @@ function render(state) {
   const address = document.querySelector("#proxy-address");
   if (document.activeElement !== address) address.value = state.proxy.address || "";
   document.querySelector("#proxy-meta").textContent = state.proxy.effective ? t("proxyOn") : t("proxyOff");
+  const image = state.image || {};
+  for (const [id, value] of [["#image-url", image.base_url], ["#image-model", image.model]]) {
+    const input = document.querySelector(id);
+    if (document.activeElement !== input) input.value = value || "";
+  }
+  const hint = image.key_hint ? " · " + image.key_hint : "";
+  document.querySelector("#image-meta").textContent = image.base_url ? t("imageReady", {model: image.model || "", hint}) : t("imageEmpty");
   document.querySelector("#autostart").checked = !!state.autostart.enabled;
   document.querySelector("#boot-meta").textContent = tr(state.autostart.detail);
 
@@ -540,6 +603,31 @@ function render(state) {
     })));
     sw.append(checkbox, el("span"));
     proxy.append(sw, document.createTextNode(t("useProxy")));
+    const reason = el("label", "mini");
+    const rsw = el("span", "switch sm");
+    const rbox = el("input");
+    rbox.type = "checkbox";
+    rbox.checked = !!model.reasoning;
+    rbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({reasoning: rbox.checked})
+    })));
+    rsw.append(rbox, el("span"));
+    reason.append(rsw, document.createTextNode(t("reasoning")));
+    const fast = el("label", "mini");
+    const fsw = el("span", "switch sm");
+    const fbox = el("input");
+    fbox.type = "checkbox";
+    fbox.checked = !!model.fast;
+    fbox.disabled = model.type !== "openai-chat";
+    fbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({fast: fbox.checked})
+    })));
+    fsw.append(fbox, el("span"));
+    fast.append(fsw, document.createTextNode(t("fast")));
+    const context = tokenInput(model, "context_window", t("contextWindow"));
+    const maxOut = tokenInput(model, "max_output_tokens", t("maxOutput"));
     const test = el("button", "sm", t("test"));
     test.type = "button";
     test.addEventListener("click", () => busy(test, t("testing"), () => act(async () => {
@@ -550,7 +638,7 @@ function render(state) {
     const del = el("button", "sm danger", t("del"));
     del.type = "button";
     del.addEventListener("click", () => act(() => send("/api/models/" + model.id, {method: "DELETE"})));
-    inner.append(proxy, test, del);
+    inner.append(proxy, reason, fast, context, maxOut, test, del);
     ops.append(inner);
     tr_.append(who, api, last, ops);
     box.append(tr_);
@@ -585,6 +673,16 @@ document.querySelector("#takeover").addEventListener("change", (event) => {
 });
 document.querySelector("#autostart").addEventListener("change", (event) => {
   act(() => send("/api/autostart", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: event.target.checked})}));
+});
+document.querySelector("#image-save").addEventListener("click", () => {
+  act(() => send("/api/image", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+    base_url: document.querySelector("#image-url").value,
+    model: document.querySelector("#image-model").value,
+    api_key: document.querySelector("#image-key").value
+  })}).then((state) => {
+    document.querySelector("#image-key").value = "";
+    return state;
+  }));
 });
 document.querySelector("#proxy-save").addEventListener("click", () => {
   act(() => send("/api/proxy", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
