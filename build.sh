@@ -25,10 +25,16 @@ export CGO_ENABLED=0
 export GOOS="$os"
 export GOARCH="$arch"
 mkdir -p dist
+version=${VERSION:-}
+suffix=""
 if [ "$os" = windows ]; then
-	out="dist/cursor-inner.exe"
+	suffix=".exe"
+fi
+# 与 Release 资源同名：cursor-inner-vX.Y.Z-windows-amd64.exe。未指定版本时省略版本段。
+if [ -n "$version" ]; then
+	out="dist/cursor-inner-${version}-${os}-${arch}${suffix}"
 else
-	out="dist/cursor-inner-${os}-${arch}"
+	out="dist/cursor-inner-${os}-${arch}${suffix}"
 fi
 if [ "$os" = windows ] && [ "$arch" = amd64 ]; then
 	bindir=$(go env GOBIN)
@@ -41,8 +47,11 @@ if [ "$os" = windows ] && [ "$arch" = amd64 ]; then
 	"$bindir/rsrc" -arch amd64 -ico assets/icon.ico -o cmd/cursor-inner/rsrc.syso
 	trap 'rm -f cmd/cursor-inner/rsrc.syso' EXIT
 fi
-version=${VERSION:-dev}
-ldflags="-s -w -X main.version=$version"
+stamp=$version
+if [ -z "$stamp" ]; then
+	stamp=dev
+fi
+ldflags="-s -w -X main.version=$stamp"
 if [ "$os" = windows ]; then
 	# 窗口子系统：点控制台的叉只会关掉窗口。控制台子系统会在关闭事件返回后结束进程。
 	ldflags="$ldflags -H windowsgui"

@@ -2,7 +2,7 @@
 # 根据编译产物里实际链接的模块生成 THIRD_PARTY_NOTICES.md。
 set -eu
 cd "$(dirname "$0")/.."
-bin=${1:-dist/cursor-inner.exe}
+bin=${1:-dist/cursor-inner-windows-amd64.exe}
 modcache=$(go env GOMODCACHE)
 goroot=$(go env GOROOT)
 out=THIRD_PARTY_NOTICES.md

@@ -259,9 +259,9 @@ Requires Go 1.26 or later.
 
 ```bash
 go test ./...
-./build.sh windows                   # writes dist/cursor-inner.exe
-./build.sh darwin arm64              # writes dist/cursor-inner-darwin-arm64
-VERSION=v0.1.0 ./build.sh linux      # stamps a version
+./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
+./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
+VERSION=v0.1.0 ./build.sh linux      # dist/cursor-inner-v0.1.0-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).

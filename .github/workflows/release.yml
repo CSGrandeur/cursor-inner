@@ -52,16 +52,17 @@ jobs:
           ./build.sh windows amd64
           name="cursor-inner-${VERSION}-windows-amd64"
           mkdir -p "out/${name}"
-          cp dist/cursor-inner.exe $docs "out/${name}/"
+          cp "dist/${name}.exe" "out/${name}/cursor-inner.exe"
+          cp $docs "out/${name}/"
           (cd out && zip -qr "${name}.zip" "${name}" && rm -r "${name}")
-          cp dist/cursor-inner.exe "out/${name}.exe"
+          cp "dist/${name}.exe" "out/${name}.exe"
 
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             os=${target%/*}; arch=${target#*/}
             ./build.sh "$os" "$arch"
             name="cursor-inner-${VERSION}-${os}-${arch}"
             mkdir -p "out/${name}"
-            cp "dist/cursor-inner-${os}-${arch}" "out/${name}/cursor-inner"
+            cp "dist/${name}" "out/${name}/cursor-inner"
             cp assets/icon.svg "out/${name}/cursor-inner.svg"
             cp $docs "out/${name}/"
             tar -C out -czf "out/${name}.tar.gz" "${name}"

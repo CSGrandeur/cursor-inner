@@ -259,9 +259,9 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 
 ```bash
 go test ./...
-./build.sh windows                   # 输出 dist/cursor-inner.exe
-./build.sh darwin arm64              # 输出 dist/cursor-inner-darwin-arm64
-VERSION=v0.1.0 ./build.sh linux      # 写入版本号
+./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
+./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
+VERSION=v0.1.0 ./build.sh linux      # dist/cursor-inner-v0.1.0-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。

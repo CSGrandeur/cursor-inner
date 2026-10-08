@@ -98,7 +98,7 @@
     display: flex; align-items: baseline; gap: 10px;
     padding: 16px 20px 12px;
   }
-  h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; }
+  h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; }
   .count {
     font-family: var(--mono); font-size: 11px; color: var(--muted);
     padding: 1px 7px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line);
@@ -106,18 +106,22 @@
   .hint { margin-left: auto; color: var(--faint); font-size: 12px; }
 
   .row {
-    display: grid; grid-template-columns: 108px minmax(0, 1fr) auto;
-    gap: 6px 24px; align-items: center;
-    padding: 16px 20px;
+    display: grid; grid-template-columns: max-content minmax(0, 1fr) auto;
+    gap: 4px 20px; align-items: center;
+    padding: 12px 20px;
   }
   .row + .row { border-top: 1px solid var(--line); }
-  .desc { margin: 0; color: var(--muted); }
-  .meta { margin: 4px 0 0; color: var(--faint); font-size: 12px; white-space: pre-line; }
+  .copy { min-width: 0; }
+  .desc, .meta {
+    margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .desc { color: var(--faint); font-size: 12px; }
+  .meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
   .meta:empty { display: none; }
   .meta.warn { color: var(--bad); }
   .meta .ok { color: var(--good); }
   .controls { display: flex; align-items: center; gap: 8px; }
-  .controls.wrap { flex-wrap: wrap; justify-content: flex-end; }
+  .controls.wrap { flex-wrap: nowrap; justify-content: flex-end; }
 
   .switch { position: relative; width: 34px; height: 20px; flex: none; }
   .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -148,9 +152,9 @@
   }
   input::placeholder { color: var(--faint); }
   input:focus, select:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
-  #proxy-address { width: 230px; font-family: var(--mono); font-size: 12px; }
-  #image-url { width: 240px; font-family: var(--mono); font-size: 12px; }
-  #image-model, #image-key { width: 140px; }
+  #proxy-address { width: 168px; font-family: var(--mono); font-size: 12px; }
+  #image-url { width: 220px; font-family: var(--mono); font-size: 12px; }
+  #image-model, #image-key { width: 108px; }
 
   button {
     appearance: none; height: 32px; padding: 0 14px;
@@ -169,15 +173,16 @@
   table { width: 100%; border-collapse: collapse; }
   th {
     text-align: left; font-weight: 500; font-size: 11px; color: var(--faint);
-    letter-spacing: .04em; padding: 0 20px 8px;
+    letter-spacing: .02em; padding: 0 16px 8px; white-space: nowrap;
   }
-  td { padding: 12px 20px; border-top: 1px solid var(--line); vertical-align: middle; }
+  td { padding: 12px 16px; border-top: 1px solid var(--line); vertical-align: middle; }
   tbody tr { transition: background .12s; }
   tbody tr:hover { background: var(--raise); }
-  .name { font-weight: 500; white-space: nowrap; }
-  .sub { color: var(--faint); margin-top: 2px; white-space: nowrap; }
+  .name, .sub { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name { font-weight: 500; }
+  .sub { color: var(--faint); margin-top: 2px; }
   .api { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); }
-  .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+  .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
   .tag {
     font-family: var(--mono); font-size: 11px; color: var(--muted);
     padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); flex: none;
@@ -192,10 +197,11 @@
   .speed.bad { color: var(--bad); background: var(--bad-soft); }
   .speed.idle { color: var(--faint); background: transparent; cursor: default; padding-left: 0; }
   .speed.idle::before { display: none; }
-  td.ops { text-align: right; white-space: nowrap; }
-  .ops-inner { display: inline-flex; align-items: center; gap: 6px; }
-  .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-right: 6px; cursor: pointer; }
-  input.token { width: 7.2em; height: 26px; padding: 0 8px; }
+  td.ops { text-align: right; }
+  .ops-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .ops-line { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; white-space: nowrap; }
+  input.token { width: 6.2em; height: 26px; padding: 0 8px; }
   .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
   .credit { margin: 22px 2px 0; color: var(--faint); font-size: 12px; }
   .credit a { color: inherit; text-decoration: none; }
@@ -215,8 +221,8 @@
   .secret button:hover { color: var(--text); background: transparent; }
   .secret svg { display: block; }
   .secret svg[hidden] { display: none !important; }
-  .actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
-  .actions .mini { margin-right: auto; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 14px; }
+  .actions .spacer { flex: 1 1 12px; }
 
   .toast {
     position: fixed; left: 50%; bottom: 24px; z-index: 10;
@@ -237,7 +243,7 @@
     .row { grid-template-columns: 1fr; }
     .grid { grid-template-columns: 1fr 1fr; }
     #proxy-address, #image-url, #image-model, #image-key { width: 100%; }
-    .controls { width: 100%; }
+    .controls, .controls.wrap { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
     .hint { display: none; }
   }
 </style>
@@ -257,16 +263,16 @@
   <section class="panel">
     <div class="row">
       <h2 data-i18n="takeover">接管</h2>
-      <div>
-        <p class="desc" data-i18n="takeoverDesc">打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。</p>
+      <div class="copy">
+        <p class="desc" data-i18n="takeoverDesc">启动时关闭 Cursor，自定义模型追加在列表末尾。</p>
         <p class="meta" id="takeover-meta"></p>
       </div>
       <label class="switch"><input id="takeover" type="checkbox" data-i18n-aria="takeover" aria-label="接管"><span></span></label>
     </div>
     <div class="row">
       <h2 data-i18n="proxy">代理</h2>
-      <div>
-        <p class="desc" data-i18n="proxyDesc">官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。</p>
+      <div class="copy">
+        <p class="desc" data-i18n="proxyDesc">host:port 按 socks5，留空则直连。</p>
         <p class="meta" id="proxy-meta"></p>
       </div>
       <div class="controls">
@@ -277,8 +283,8 @@
     </div>
     <div class="row">
       <h2 data-i18n="image">出图</h2>
-      <div>
-        <p class="desc" data-i18n="imageDesc">填写 OpenAI 兼容的出图接口后，Agent 模式才会提供 GenerateImage。密钥留空表示保持原密钥。</p>
+      <div class="copy">
+        <p class="desc" data-i18n="imageDesc">OpenAI 兼容出图接口，供 GenerateImage。密钥留空不改。</p>
         <p class="meta" id="image-meta"></p>
       </div>
       <div class="controls wrap">
@@ -290,8 +296,8 @@
     </div>
     <div class="row">
       <h2 data-i18n="autostart">开机启动</h2>
-      <div>
-        <p class="desc" data-i18n="autostartDesc">登录系统后自动启动。反复开关始终只保留一条启动项。</p>
+      <div class="copy">
+        <p class="desc" data-i18n="autostartDesc">登录后自动启动，只保留一条启动项。</p>
         <p class="meta" id="boot-meta"></p>
       </div>
       <label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label>
@@ -347,6 +353,7 @@
         <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
         <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1000" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
         <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+        <span class="spacer"></span>
         <button id="draft-test" type="button" data-i18n="test">测试</button>
         <button class="primary" type="submit" data-i18n="add">添加</button>
       </div>
@@ -360,11 +367,11 @@ const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
-    takeover: "接管", takeoverDesc: "打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。",
-    proxy: "代理", proxyDesc: "官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。",
-    image: "出图", imageDesc: "填写 OpenAI 兼容的出图接口后，Agent 模式才会提供 GenerateImage。密钥留空表示保持原密钥。",
+    takeover: "接管", takeoverDesc: "启动时关闭 Cursor，自定义模型追加在列表末尾。",
+    proxy: "代理", proxyDesc: "host:port 按 socks5，留空则直连。",
+    image: "出图", imageDesc: "OpenAI 兼容出图接口，供 GenerateImage。密钥留空不改。",
     imageEmpty: "未配置，模型看不到 GenerateImage。", imageReady: "已配置 {model}{hint}",
-    save: "保存", autostart: "开机启动", autostartDesc: "登录系统后自动启动。反复开关始终只保留一条启动项。",
+    save: "保存", autostart: "开机启动", autostartDesc: "登录后自动启动，只保留一条启动项。",
     models: "自定义模型", modelsHint: "测试会流式请求 1 到 120 的数字，记录速度、首字和输出",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型",
@@ -384,11 +391,11 @@ const MESSAGES = {
   en: {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
-    takeover: "Takeover", takeoverDesc: "Closes any running Cursor on start. Official models still come from Cursor; custom models are added to the end of the list.",
-    proxy: "Proxy", proxyDesc: "Official models and the rest of Cursor's traffic go through this proxy. A bare host:port is treated as socks5; leave it empty for a direct connection.",
-    image: "Images", imageDesc: "After an OpenAI-compatible image endpoint is saved, Agent mode can call GenerateImage. Leave the key empty to keep the current one.",
+    takeover: "Takeover", takeoverDesc: "Closes Cursor on start. Custom models are appended to the list.",
+    proxy: "Proxy", proxyDesc: "host:port is socks5. Empty means a direct connection.",
+    image: "Images", imageDesc: "OpenAI-compatible endpoint for GenerateImage. An empty key is kept.",
     imageEmpty: "Not configured. The model will not see GenerateImage.", imageReady: "Configured {model}{hint}",
-    save: "Save", autostart: "Start at login", autostartDesc: "Starts automatically after you log in. Toggling it repeatedly always leaves exactly one entry.",
+    save: "Save", autostart: "Start at login", autostartDesc: "Starts at login, and keeps a single entry.",
     models: "Custom models", modelsHint: "Tests stream the numbers 1 to 120 and record speed, first token and output",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model",
@@ -425,7 +432,10 @@ function tr(value) {
 
 function applyLang() {
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-  document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+    if (node.classList.contains("desc")) node.title = node.textContent;
+  });
   document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = t(node.dataset.i18nTitle); });
   document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.dataset.i18nPlaceholder); });
@@ -557,21 +567,28 @@ function render(state) {
   if (state.takeover && !state.takeover_active) bits.push(t("notTakenOver"));
   if (state.takeover_active && state.mitm_url) bits.push(t("mitm", {url: state.mitm_url}));
   for (const text of [tr(state.ca_detail), tr(state.catalog_warning), lastError]) if (text) bits.push(text);
-  meta.textContent = bits.join("\n");
+  meta.textContent = bits.join(" · ");
+  meta.title = bits.join("\n");
 
   document.querySelector("#proxy-on").checked = !!state.proxy.enabled;
   const address = document.querySelector("#proxy-address");
   if (document.activeElement !== address) address.value = state.proxy.address || "";
-  document.querySelector("#proxy-meta").textContent = state.proxy.effective ? t("proxyOn") : t("proxyOff");
+  const proxyMeta = document.querySelector("#proxy-meta");
+  proxyMeta.textContent = state.proxy.effective ? t("proxyOn") : t("proxyOff");
+  proxyMeta.title = proxyMeta.textContent;
   const image = state.image || {};
   for (const [id, value] of [["#image-url", image.base_url], ["#image-model", image.model]]) {
     const input = document.querySelector(id);
     if (document.activeElement !== input) input.value = value || "";
   }
   const hint = image.key_hint ? " · " + image.key_hint : "";
-  document.querySelector("#image-meta").textContent = image.base_url ? t("imageReady", {model: image.model || "", hint}) : t("imageEmpty");
+  const imageMeta = document.querySelector("#image-meta");
+  imageMeta.textContent = image.base_url ? t("imageReady", {model: image.model || "", hint}) : t("imageEmpty");
+  imageMeta.title = imageMeta.textContent;
   document.querySelector("#autostart").checked = !!state.autostart.enabled;
-  document.querySelector("#boot-meta").textContent = tr(state.autostart.detail);
+  const bootMeta = document.querySelector("#boot-meta");
+  bootMeta.textContent = tr(state.autostart.detail);
+  bootMeta.title = bootMeta.textContent;
 
   const box = document.querySelector("#models");
   box.replaceChildren();
@@ -641,7 +658,11 @@ function render(state) {
     const del = el("button", "sm danger", t("del"));
     del.type = "button";
     del.addEventListener("click", () => act(() => send("/api/models/" + model.id, {method: "DELETE"})));
-    inner.append(proxy, reason, fast, context, maxOut, test, del);
+    const switches = el("div", "ops-line");
+    const tokens = el("div", "ops-line");
+    switches.append(proxy, reason, fast, test, del);
+    tokens.append(context, maxOut);
+    inner.append(switches, tokens);
     ops.append(inner);
     tr_.append(who, api, last, ops);
     box.append(tr_);
