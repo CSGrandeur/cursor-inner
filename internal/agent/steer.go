@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
@@ -12,7 +13,8 @@ import (
 	"cursor-inner/internal/provider"
 )
 
-// errBreak 表示用户在工具还没结束时发来新消息。当前工具中止，同一轮用新消息继续。
+// errBreak 表示用户用一条新的用户消息打断正在执行的工具。当前工具中止，同一轮用新消息继续。
+// InjectContextAction 里的用户消息是 steer：当前工具做完，消息并进下一次模型调用。
 var errBreak = errors.New("user message interrupted the tool")
 
 type steer struct {
@@ -43,7 +45,7 @@ func (s *Session) deliverAction(action *cursorpb.ConversationAction) {
 			return
 		}
 		if user := inject.GetUserContext().GetUserMessage(); user.GetText() != "" {
-			item = steer{kind: "break", user: user, injectionID: inject.GetInjectionId()}
+			item = steer{kind: "steer", user: user, injectionID: inject.GetInjectionId()}
 			break
 		}
 		text := actionText(action)
@@ -96,6 +98,8 @@ func (s *Session) hold(item steer) {
 	switch item.kind {
 	case "insert":
 		s.inserts = append(s.inserts, item.text)
+	case "steer":
+		s.steers = append(s.steers, item)
 	case "summarize":
 		s.wantSummary = true
 	case "break":
@@ -103,7 +107,7 @@ func (s *Session) hold(item steer) {
 	}
 }
 
-func (s *Session) drainSteer(send Emit, messages []provider.Message) ([]provider.Message, error) {
+func (s *Session) drainSteer(send Emit, messages []provider.Message) ([]provider.Message, bool, error) {
 	for {
 		select {
 		case item := <-s.steer:
@@ -113,21 +117,36 @@ func (s *Session) drainSteer(send Emit, messages []provider.Message) ([]provider
 		}
 	}
 drained:
+	steered := false
 	for _, text := range s.inserts {
 		messages = append(messages, provider.Message{Role: "user", Content: text})
 		if err := send(appended(text)); err != nil {
-			return messages, err
+			return messages, steered, err
 		}
 	}
 	s.inserts = nil
+	for _, item := range s.steers {
+		steered = true
+		messages = append(messages, userTurn(item.user))
+		if err := send(appendedUser(item.user)); err != nil {
+			return messages, steered, err
+		}
+		if item.injectionID != "" {
+			if err := send(injectionDelivered(item.injectionID)); err != nil {
+				return messages, steered, err
+			}
+		}
+	}
+	s.steers = nil
 	if s.breakUser != nil {
+		steered = true
 		messages = append(messages, userTurn(s.breakUser))
-		if err := send(appended(s.breakUser.GetText())); err != nil {
-			return messages, err
+		if err := send(appendedUser(s.breakUser)); err != nil {
+			return messages, steered, err
 		}
 		s.breakUser = nil
 	}
-	return messages, nil
+	return messages, steered, nil
 }
 
 func (s *Session) emit(msg *cursorpb.AgentServerMessage) {
@@ -158,8 +177,24 @@ func injectionRejected(id, reason string) *cursorpb.AgentServerMessage {
 }
 
 func appended(text string) *cursorpb.AgentServerMessage {
+	return appendedUser(&cursorpb.UserMessage{Text: text})
+}
+
+func appendedUser(user *cursorpb.UserMessage) *cursorpb.AgentServerMessage {
+	if user == nil {
+		user = &cursorpb.UserMessage{}
+	}
 	return interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_UserMessageAppended{UserMessageAppended: &cursorpb.UserMessageAppendedUpdate{
-		UserMessage: &cursorpb.UserMessage{Text: text},
+		UserMessage: user,
+	}}})
+}
+
+func injectionDelivered(id string) *cursorpb.AgentServerMessage {
+	return interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ContextInjectionState{ContextInjectionState: &cursorpb.ContextInjectionStateUpdate{
+		InjectionId: id,
+		State: &cursorpb.ContextInjectionState{State: &cursorpb.ContextInjectionState_Delivered{
+			Delivered: &cursorpb.ContextInjectionDelivered{DeliveredAtMs: time.Now().UnixMilli()},
+		}},
 	}}})
 }
 

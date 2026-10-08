@@ -47,6 +47,7 @@ type Session struct {
 	early            map[uint32]*cursorpb.ExecClientMessage
 	steer            chan steer
 	inserts          []string
+	steers           []steer
 	breakUser        *cursorpb.UserMessage
 	wantSummary      bool
 	autoSummarized   bool
@@ -382,7 +383,7 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 next:
 	for step := 0; step < maxSteps; step++ {
 		var err error
-		messages, err = s.drainSteer(send, messages)
+		messages, _, err = s.drainSteer(send, messages)
 		if err != nil {
 			return err
 		}
@@ -445,7 +446,7 @@ next:
 					}
 					if s.breakUser != nil {
 						messages = append(messages, userTurn(s.breakUser))
-						if err := send(appended(s.breakUser.GetText())); err != nil {
+						if err := send(appendedUser(s.breakUser)); err != nil {
 							return err
 						}
 						s.breakUser = nil
@@ -474,12 +475,34 @@ next:
 					return fmt.Errorf("工具 %s 连续 %d 次参数错误，已停止", outcome.call.Name, argFailLimit)
 				}
 			}
+			var steered bool
+			messages, steered, err = s.drainSteer(send, messages)
+			if err != nil {
+				return err
+			}
+			if steered {
+				for _, call := range reply.ToolCalls[i:] {
+					if call.ID == "" {
+						continue
+					}
+					messages = append(messages, provider.Message{Role: "tool", ToolCallID: call.ID, Content: "Skipped because the user sent a new message.", IsError: true})
+				}
+				continue next
+			}
 		}
 		if reply.Truncated {
 			messages = append(messages, provider.Message{Role: "user", Content: "Your output was truncated. Finish the work in smaller steps."})
 			continue
 		}
 		if len(reply.ToolCalls) == 0 {
+			var steered bool
+			messages, steered, err = s.drainSteer(send, messages)
+			if err != nil {
+				return err
+			}
+			if steered {
+				continue
+			}
 			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
 				return err
 			}

@@ -42,5 +42,10 @@ if [ "$os" = windows ] && [ "$arch" = amd64 ]; then
 	trap 'rm -f cmd/cursor-inner/rsrc.syso' EXIT
 fi
 version=${VERSION:-dev}
-go build -trimpath -ldflags "-s -w -X main.version=$version" -o "$out" ./cmd/cursor-inner
+ldflags="-s -w -X main.version=$version"
+if [ "$os" = windows ]; then
+	# 窗口子系统：点控制台的叉只会关掉窗口。控制台子系统会在关闭事件返回后结束进程。
+	ldflags="$ldflags -H windowsgui"
+fi
+go build -trimpath -ldflags "$ldflags" -o "$out" ./cmd/cursor-inner
 echo "$out"

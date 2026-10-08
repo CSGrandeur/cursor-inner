@@ -26,6 +26,8 @@ type fakeModel struct {
 	mu        sync.Mutex
 	responses []string
 	requests  []string
+	// pause 非空时，写出响应前先通知测试并等待放行。用来在模型还没返回时插入 steer。
+	pause chan struct{}
 }
 
 func (f *fakeModel) server(t *testing.T) *httptest.Server {
@@ -35,7 +37,12 @@ func (f *fakeModel) server(t *testing.T) *httptest.Server {
 		f.requests = append(f.requests, string(body))
 		reply := f.responses[0]
 		f.responses = f.responses[1:]
+		pause := f.pause
 		f.mu.Unlock()
+		if pause != nil {
+			pause <- struct{}{}
+			<-pause
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		_, _ = io.WriteString(w, reply)
 	}))
@@ -634,7 +641,7 @@ func TestBreakReplacesTheOpenTool(t *testing.T) {
 	}
 }
 
-func TestInjectOnAnotherRequestAbortsTheTool(t *testing.T) {
+func TestSteerKeepsTheOpenTool(t *testing.T) {
 	fm := &fakeModel{responses: []string{
 		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),
 		sse(`{"choices":[{"delta":{"content":"continued"}}]}`),
@@ -659,40 +666,192 @@ func TestInjectOnAnotherRequestAbortsTheTool(t *testing.T) {
 			return nil
 		})
 	}()
-	var aborted, queued bool
+	var aborted, queued, delivered bool
+	var echoed string
 	for {
 		select {
 		case m := <-out:
 			if m.GetExecServerControlMessage().GetAbort() != nil {
 				aborted = true
 			}
-			if m.GetInteractionUpdate().GetContextInjectionState().GetState().GetQueued() != nil {
+			state := m.GetInteractionUpdate().GetContextInjectionState().GetState()
+			if state.GetQueued() != nil {
 				queued = true
 			}
-			if m.GetExecServerMessage().GetReadArgs() == nil {
+			if state.GetDelivered() != nil {
+				delivered = true
+			}
+			if appended := m.GetInteractionUpdate().GetUserMessageAppended().GetUserMessage(); appended.GetMessageId() != "" {
+				echoed = appended.GetMessageId()
+			}
+			exec := m.GetExecServerMessage()
+			if exec.GetReadArgs() == nil {
 				continue
 			}
 			note := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
 				Action: &cursorpb.ConversationAction_InjectContextAction{InjectContextAction: &cursorpb.InjectContextAction{
 					InjectionId:   "inj-1",
 					ExpectedRunId: "br",
-					Payload:       &cursorpb.InjectContextAction_UserContext{UserContext: &cursorpb.UserContextInjection{UserMessage: &cursorpb.UserMessage{Text: "follow-up"}}},
+					Payload: &cursorpb.InjectContextAction_UserContext{UserContext: &cursorpb.UserContextInjection{UserMessage: &cursorpb.UserMessage{
+						Text: "follow-up", MessageId: "msg-steer",
+					}}},
 				}},
 			}}}
 			route, err := hub.Bidi(bidi(t, "other", note))
 			if err != nil || !route.Local {
 				t.Fatalf("local=%v err=%v", route.Local, err)
 			}
+			result := execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+				Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.go", Output: &cursorpb.ReadSuccess_Content{Content: "package a"}}},
+			}}})
+			if _, err := hub.Bidi(bidi(t, "br", result)); err != nil {
+				t.Fatal(err)
+			}
 		case err := <-done:
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !aborted || !queued || len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "follow-up") || !strings.Contains(fm.requests[1], "Interrupted") {
-				t.Fatalf("aborted=%v queued=%v requests=%d", aborted, queued, len(fm.requests))
+			if aborted || !queued || !delivered || echoed != "msg-steer" || len(fm.requests) < 2 {
+				t.Fatalf("aborted=%v queued=%v delivered=%v echoed=%s requests=%d", aborted, queued, delivered, echoed, len(fm.requests))
+			}
+			body := fm.requests[1]
+			if !strings.Contains(body, "follow-up") || !strings.Contains(body, "package a") || strings.Contains(body, "Interrupted") {
+				t.Fatalf("%s", body)
 			}
 			return
 		case <-ctx.Done():
-			t.Fatal("inject did not finish")
+			t.Fatal("steer did not finish")
+		}
+	}
+}
+
+func TestSteerSkipsToolsThatHaveNotStarted(t *testing.T) {
+	fm := &fakeModel{responses: []string{
+		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Shell","arguments":"{\"command\":\"echo hi\"}"}},{"index":1,"id":"call_2","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),
+		sse(`{"choices":[{"delta":{"content":"stopped early"}}]}`),
+	}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, nil)
+	if _, err := hub.Bidi(bidi(t, "sk", runRequest("mine", "conv-sk", "run it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "sk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	var sawRead bool
+	for {
+		select {
+		case m := <-out:
+			if m.GetExecServerMessage().GetReadArgs() != nil {
+				sawRead = true
+			}
+			exec := m.GetExecServerMessage()
+			if exec.GetShellStreamArgs() == nil {
+				continue
+			}
+			note := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
+				Action: &cursorpb.ConversationAction_InjectContextAction{InjectContextAction: &cursorpb.InjectContextAction{
+					InjectionId:   "inj-skip",
+					ExpectedRunId: "sk",
+					Payload:       &cursorpb.InjectContextAction_UserContext{UserContext: &cursorpb.UserContextInjection{UserMessage: &cursorpb.UserMessage{Text: "stop after this"}}},
+				}},
+			}}}
+			if _, err := hub.Bidi(bidi(t, "sk", note)); err != nil {
+				t.Fatal(err)
+			}
+			result := execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ShellStream{ShellStream: &cursorpb.ShellStream{
+				Event: &cursorpb.ShellStream_Exit{Exit: &cursorpb.ShellStreamExit{Code: 0}},
+			}}})
+			if _, err := hub.Bidi(bidi(t, "sk", result)); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sawRead || len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "stop after this") || !strings.Contains(fm.requests[1], "Skipped because the user sent a new message.") {
+				t.Fatalf("read=%v requests=%v", sawRead, fm.requests)
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("steer skip did not finish")
+		}
+	}
+}
+
+func TestSteerDuringTheAnswerContinuesTheTurn(t *testing.T) {
+	fm := &fakeModel{
+		pause: make(chan struct{}),
+		responses: []string{
+			sse(`{"choices":[{"delta":{"content":"first draft"}}]}`),
+			sse(`{"choices":[{"delta":{"content":"revised"}}]}`),
+		},
+	}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, nil)
+	if _, err := hub.Bidi(bidi(t, "ans", runRequest("mine", "conv-ans", "draft it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "ans")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	steered := false
+	var delivered bool
+	for {
+		select {
+		case <-fm.pause:
+			if !steered {
+				note := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
+					Action: &cursorpb.ConversationAction_InjectContextAction{InjectContextAction: &cursorpb.InjectContextAction{
+						InjectionId:   "inj-ans",
+						ExpectedRunId: "ans",
+						Payload:       &cursorpb.InjectContextAction_UserContext{UserContext: &cursorpb.UserContextInjection{UserMessage: &cursorpb.UserMessage{Text: "change the plan"}}},
+					}},
+				}}}
+				if _, err := hub.Bidi(bidi(t, "ans", note)); err != nil {
+					t.Fatal(err)
+				}
+				steered = true
+			}
+			fm.pause <- struct{}{}
+		case m := <-out:
+			if m.GetInteractionUpdate().GetContextInjectionState().GetState().GetDelivered() != nil {
+				delivered = true
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !steered || !delivered || len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "change the plan") || !strings.Contains(fm.requests[1], "first draft") {
+				t.Fatalf("steered=%v delivered=%v requests=%v", steered, delivered, fm.requests)
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("steer during answer did not finish")
 		}
 	}
 }
@@ -747,7 +906,8 @@ func TestInsertArrivesBeforeTheNextModelCall(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "extra note") {
+			body := fm.requests[1]
+			if len(fm.requests) < 2 || !strings.Contains(body, "extra note") || !strings.Contains(body, "package a") || strings.Contains(body, "Interrupted") {
 				t.Fatalf("%v", fm.requests)
 			}
 			return

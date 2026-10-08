@@ -62,6 +62,7 @@ var (
 	trayHwnd       atomic.Uintptr
 	trayReady      atomic.Bool
 	trayNoted      atomic.Bool
+	trayConcealed  atomic.Bool
 	trayIconHandle uintptr
 	residentTerm   *console.Console
 	residentOpen   func()
@@ -309,6 +310,8 @@ func copyUTF16(dst []uint16, s string) {
 	copy(dst, u)
 }
 
+func consoleHidden() bool { return trayConcealed.Load() }
+
 func removeTrayIcon() {
 	if trayHwnd.Load() == 0 {
 		return
@@ -323,14 +326,14 @@ func hideConsoleToTray() bool {
 	if !trayReady.Load() {
 		return false
 	}
+	trayConcealed.Store(true)
 	if residentTerm != nil {
 		residentTerm.Detach()
 	}
-	if hwnd := consoleWindow(); hwnd != 0 {
-		_, _, _ = procShowWindow.Call(hwnd, 0)
-	}
 	if r, _, _ := procFreeConsole.Call(); r == 0 {
-		return false
+		if hwnd := consoleWindow(); hwnd != 0 {
+			_, _, _ = procShowWindow.Call(hwnd, 0)
+		}
 	}
 	if trayNoted.CompareAndSwap(false, true) {
 		text := "Still running in the notification area. Right-click the icon to quit."
@@ -343,6 +346,7 @@ func hideConsoleToTray() bool {
 }
 
 func showFromTray() {
+	trayConcealed.Store(false)
 	if hwnd := consoleWindow(); hwnd != 0 {
 		const swRestore = 9
 		_, _, _ = procShowWindow.Call(hwnd, swRestore)

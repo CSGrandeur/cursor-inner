@@ -64,4 +64,5 @@ type Backend interface {
 	TestDraft(model config.Model) provider.Result
 	TestSaved(id string) provider.Result
 	Quit() error
+	OpenCursor() error
 }

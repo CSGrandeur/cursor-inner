@@ -177,6 +177,13 @@ func Handler(backend Backend) http.Handler {
 	mux.HandleFunc("POST /api/models/{id}/test", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, backend.TestSaved(r.PathValue("id")))
 	})
+	mux.HandleFunc("POST /api/cursor", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.OpenCursor(); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.Quit(); err != nil {
 			writeErr(w, http.StatusConflict, err)

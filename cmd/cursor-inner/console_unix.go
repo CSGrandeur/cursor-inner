@@ -21,6 +21,12 @@ func executable() string {
 	return p
 }
 
+func handoffToClassicConsole() bool { return false }
+
+func bindConsoleIO() {}
+
+func consoleHidden() bool { return false }
+
 func watchConsole(func()) {}
 
 func startWatchdog(dir string) error {

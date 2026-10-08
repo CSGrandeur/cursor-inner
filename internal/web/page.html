@@ -248,6 +248,7 @@
     <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
     <div class="top-right">
       <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
+      <button id="open-cursor" type="button" class="sm" data-i18n="openCursor" data-i18n-title="openCursorTitle" title="启动 Cursor，不关闭 cursor-inner">启动 Cursor</button>
       <button id="lang" type="button" class="sm" aria-label="Language">EN</button>
       <button id="quit" type="button" class="sm" data-i18n="quit" data-i18n-title="quitTitle" title="退出 cursor-inner，并还原 Cursor 的代理设置">退出</button>
     </div>
@@ -357,6 +358,7 @@
 <script>
 const MESSAGES = {
   zh: {
+    openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
     takeover: "接管", takeoverDesc: "打开时结束正在运行的 Cursor。官方模型照常从 Cursor 获取，自定义模型追加在列表后面。",
     proxy: "代理", proxyDesc: "官方模型和 Cursor 其余联网走这里。只填主机和端口时按 socks5 处理，地址留空等于不代理。",
@@ -380,6 +382,7 @@ const MESSAGES = {
     switchLang: "EN"
   },
   en: {
+    openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
     takeover: "Takeover", takeoverDesc: "Closes any running Cursor on start. Official models still come from Cursor; custom models are added to the end of the list.",
     proxy: "Proxy", proxyDesc: "Official models and the rest of Cursor's traffic go through this proxy. A bare host:port is treated as socks5; leave it empty for a direct connection.",
@@ -704,6 +707,13 @@ draftTest.addEventListener("click", () => busy(draftTest, t("testing"), () => ac
   showTest(result);
   return null;
 })));
+document.querySelector("#open-cursor").addEventListener("click", () => {
+  act(async () => {
+    await send("/api/cursor", {method: "POST"});
+    toast(t("cursorStarted"), "ok");
+    return null;
+  });
+});
 document.querySelector("#quit").addEventListener("click", async () => {
   if (!confirm(t("quitConfirm"))) return;
   try {

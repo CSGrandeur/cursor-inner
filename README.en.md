@@ -123,7 +123,7 @@ Files downloaded in a browser carry a download mark. On Windows, when SmartScree
 
 ## Usage
 
-1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser.
+1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again without quitting cursor-inner.
 2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Image.
 3. Reopen Cursor, start a new chat, and pick the model you added from the model list.
 4. Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon's right-click menu, or click Quit on the settings page. On macOS and Linux, closing the terminal quits as well. Cursor's settings are restored automatically.
@@ -173,7 +173,6 @@ On Windows, when started from Explorer, the Start menu or at login, cursor-inner
 - Web search merges Bing, DuckDuckGo and Baidu; Baidu sometimes returns only a captcha page, and then only the other two sources remain.
 - With a custom model selected, typing `@` in the input box does not open the file menu. Drag a file into the chat, or use Add to Chat.
 - Some OpenAI-compatible APIs do not return a cache-hit count, so the window cannot show a cache-hit rate or confirm that prompt caching is working.
-- In Cursor 3.23, a message sent while a tool is still running waits until that turn ends.
 
 ## FAQ
 
@@ -187,7 +186,7 @@ Auto lets Cursor's servers choose a model, and they only choose among official m
 <details>
 <summary><b>Can custom models edit files or run commands?</b></summary>
 
-Models that support tool calls (OpenAI function calling or Anthropic tool use) can already read, search, edit and delete files, edit notebooks, run commands, update todos, ask questions, switch mode, present a plan, search or open the web after approval, call MCP tools from the current conversation, and start a subagent in Agent mode. GenerateImage is offered only after an image endpoint is saved on the settings page. Workspace search collects term matches, then the current custom model keeps the hits that match the query. Edits show a diff on the tool card and are written after you accept them. Command output updates on the tool card, and a command that reaches its time limit moves to the background. Past about 70% of the context window, earlier tool output is shortened, and if that is not enough the model writes a summary before answering. Ask, Plan, Debug and Multitask include that mode's instructions. An explore subagent only reads and searches; other subagents can edit files. Stop aborts a tool that has not finished. In Cursor 3.23, a message sent while a tool is still running waits until that turn ends. `/summarize` replaces earlier history with a summary. Each turn writes a checkpoint, and a later turn can resume from an earlier one. Inline edit and terminal Cmd+K are answered here when a custom model is selected. Commit messages and chat titles do not carry a model id, so Cursor still generates them. Tab completion and other features are still served by Cursor.
+Models that support tool calls (OpenAI function calling or Anthropic tool use) can already read, search, edit and delete files, edit notebooks, run commands, update todos, ask questions, switch mode, present a plan, search or open the web after approval, call MCP tools from the current conversation, and start a subagent in Agent mode. GenerateImage is offered only after an image endpoint is saved on the settings page. Workspace search collects term matches, then the current custom model keeps the hits that match the query. Edits show a diff on the tool card and are written after you accept them. Command output updates on the tool card, and a command that reaches its time limit moves to the background. Past about 70% of the context window, earlier tool output is shortened, and if that is not enough the model writes a summary before answering. Ask, Plan, Debug and Multitask include that mode's instructions. An explore subagent only reads and searches; other subagents can edit files. Stop aborts a tool that has not finished. A message sent while a tool is still running joins the current turn: that tool finishes, tools that have not started are skipped, and the next model call sees the message. `/summarize` replaces earlier history with a summary. Each turn writes a checkpoint, and a later turn can resume from an earlier one. Inline edit and terminal Cmd+K are answered here when a custom model is selected. Commit messages and chat titles do not carry a model id, so Cursor still generates them. Tab completion and other features are still served by Cursor.
 
 </details>
 

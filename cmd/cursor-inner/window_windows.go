@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,11 +14,14 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+var errLauncherExited = errors.New("launcher exited")
+
 var (
 	user32                          = windows.NewLazySystemDLL("user32.dll")
 	shell32                         = windows.NewLazySystemDLL("shell32.dll")
 	ole32                           = windows.NewLazySystemDLL("ole32.dll")
 	procGetConsoleWindow            = kernel32.NewProc("GetConsoleWindow")
+	procAttachConsole               = kernel32.NewProc("AttachConsole")
 	procGetConsoleProcessList       = kernel32.NewProc("GetConsoleProcessList")
 	procSetConsoleTitleW            = kernel32.NewProc("SetConsoleTitleW")
 	procGetClassNameW               = user32.NewProc("GetClassNameW")
@@ -26,6 +30,57 @@ var (
 	procSHGetPropertyStoreForWindow = shell32.NewProc("SHGetPropertyStoreForWindow")
 	procCoInitializeEx              = ole32.NewProc("CoInitializeEx")
 )
+
+// handoffToClassicConsole 在双击或 Windows Terminal 里启动时，改由 conhost 打开经典控制台后退出当前进程。
+// Windows Terminal 关闭标签页时会结束作业里的进程，FreeConsole 也拦不住。
+func handoffToClassicConsole() bool {
+	host := ""
+	if consoleWindow() == 0 {
+		const attachParent = ^uintptr(0)
+		if r, _, _ := procAttachConsole.Call(attachParent); r != 0 {
+			host = windowClass(consoleWindow())
+		}
+	} else {
+		host = windowClass(consoleWindow())
+	}
+	switch consoleLaunchAction(classicConsole(os.Args[1:]), host) {
+	case "stay":
+		return false
+	case "alloc":
+		allocOwnConsole()
+		return false
+	default:
+		if host != "" {
+			_, _, _ = procFreeConsole.Call()
+		}
+		if startClassicConsole() == nil {
+			return true
+		}
+		allocOwnConsole()
+		return false
+	}
+}
+
+func allocOwnConsole() {
+	_, _, _ = procAllocConsole.Call()
+}
+
+func bindConsoleIO() {
+	out, err := os.OpenFile("CONOUT$", os.O_RDWR, 0)
+	if err != nil {
+		return
+	}
+	_ = windows.SetStdHandle(windows.STD_OUTPUT_HANDLE, windows.Handle(out.Fd()))
+	_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(out.Fd()))
+	os.Stdout = out
+	os.Stderr = out
+	in, err := os.OpenFile("CONIN$", os.O_RDWR, 0)
+	if err != nil {
+		return
+	}
+	_ = windows.SetStdHandle(windows.STD_INPUT_HANDLE, windows.Handle(in.Fd()))
+	os.Stdin = in
+}
 
 // needsClassicConsole 判断是否要改用经典控制台重开：控制台只属于本进程（双击、开始菜单、开机启动），
 // 且由 Windows Terminal 托管。Windows Terminal 的任务栏按钮只能显示它自己的图标。
@@ -57,7 +112,9 @@ func startClassicConsole() error {
 	exe := executable()
 	extra := os.Args[1:]
 	conhost := filepath.Join(os.Getenv("SystemRoot"), "System32", "conhost.exe")
-	if err := launchDetached(append([]string{conhost, exe, "--classic-console"}, extra...), classicConsoleCreationFlags()); err == nil {
+	err := launchDetached(append([]string{conhost, exe, "--classic-console"}, extra...), classicConsoleCreationFlags())
+	if err == nil || errors.Is(err, errLauncherExited) {
+		// conhost 的启动进程经常马上退出，真正的窗口还在。这时再拉起一份就会出现两个「已经在运行」。
 		return nil
 	}
 	return launchDetached(append([]string{exe, "--classic-console"}, extra...), fallbackConsoleCreationFlags())
@@ -87,7 +144,7 @@ func launchDetached(argv []string, flags uint32) error {
 	if st == 0 { // WAIT_OBJECT_0：进程已退出
 		var code uint32
 		_ = windows.GetExitCodeProcess(pi.Process, &code)
-		return fmt.Errorf("%s exited immediately (code %d)", argv[0], code)
+		return fmt.Errorf("%w: %s code %d", errLauncherExited, argv[0], code)
 	}
 	return nil
 }

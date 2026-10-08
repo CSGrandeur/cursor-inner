@@ -10,6 +10,7 @@ import (
 
 	"cursor-inner/internal/autostart"
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/cursorlaunch"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/provider"
 	"cursor-inner/internal/takeover"
@@ -90,6 +91,10 @@ func (a *App) DisableTakeover() error {
 		f.Takeover = false
 		return nil
 	})
+}
+
+func (a *App) OpenCursor() error {
+	return cursorlaunch.Start()
 }
 
 func (a *App) Shutdown() {

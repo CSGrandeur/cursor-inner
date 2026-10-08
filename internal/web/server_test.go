@@ -17,6 +17,7 @@ type fake struct {
 	autostart bool
 	takeover  bool
 	quit      bool
+	opened    bool
 }
 
 func (f *fake) State() (View, error) {
@@ -60,6 +61,21 @@ func (f *fake) TestDraft(config.Model) provider.Result {
 }
 func (f *fake) TestSaved(string) provider.Result { return provider.Result{OK: true} }
 func (f *fake) Quit() error                      { f.quit = true; return nil }
+func (f *fake) OpenCursor() error                { f.opened = true; return nil }
+
+func TestOpenCursorEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/cursor", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || !f.opened {
+		t.Fatalf("status %d opened %v", res.StatusCode, f.opened)
+	}
+}
 
 func TestQuitEndpoint(t *testing.T) {
 	f := &fake{}
@@ -113,7 +129,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))

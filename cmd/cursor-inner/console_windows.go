@@ -68,11 +68,13 @@ func watchConsole(shutdown func()) {
 }
 
 func onConsoleCtrl(ctrl uintptr) uintptr {
+	// 关闭按钮只收回通知区域。处理函数返回后，Windows 会结束仍挂在这个控制台上的控制台子系统进程；
+	// 程序按窗口子系统构建，并先 FreeConsole，这样点叉不会结束进程。
 	if consoleCloseAction(uint32(ctrl), trayReady.Load()) == closeHide && hideConsoleToTray() {
 		return 1
 	}
 	switch uint32(ctrl) {
-	case windows.CTRL_C_EVENT, windows.CTRL_BREAK_EVENT, windows.CTRL_CLOSE_EVENT, windows.CTRL_LOGOFF_EVENT, windows.CTRL_SHUTDOWN_EVENT:
+	case windows.CTRL_C_EVENT, windows.CTRL_BREAK_EVENT, windows.CTRL_LOGOFF_EVENT, windows.CTRL_SHUTDOWN_EVENT:
 		if consoleShutdown != nil {
 			consoleShutdown()
 		}

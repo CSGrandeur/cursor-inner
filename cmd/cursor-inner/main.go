@@ -38,6 +38,29 @@ func (e consoleEvents) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+func rejectIfRunning(dir string) bool {
+	release, already, err := acquireSingleton(dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if !already {
+		release()
+		return false
+	}
+	notifyAlreadyRunning(listenURL(dir))
+	os.Exit(0)
+	return true
+}
+
+func listenURL(dir string) string {
+	raw, err := os.ReadFile(filepath.Join(dir, "listen.url"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
+}
+
 func main() {
 	opt := parseArgs(os.Args[1:])
 	if opt.watch > 0 {
@@ -50,16 +73,24 @@ func main() {
 	}
 
 	dir := opt.dataDir
+	if dir == "" && !opt.debug {
+		dir = config.DefaultDir()
+	}
+	// 已在运行时直接提示并退出，不要再为换控制台拉起第二个进程，否则会弹出两份提示。
+	if dir != "" && rejectIfRunning(dir) {
+		return
+	}
+	if handoffToClassicConsole() {
+		return
+	}
+	bindConsoleIO()
+
 	if dir == "" {
-		if opt.debug {
-			var err error
-			dir, err = os.MkdirTemp("", "cursor-inner-debug-")
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-		} else {
-			dir = config.DefaultDir()
+		var err error
+		dir, err = os.MkdirTemp("", "cursor-inner-debug-")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
 		}
 	}
 	noTakeover := opt.noTakeover
@@ -69,22 +100,8 @@ func main() {
 		os.Exit(1)
 	}
 	if already {
-		url := ""
-		if raw, err := os.ReadFile(filepath.Join(dir, "listen.url")); err == nil {
-			url = strings.TrimSpace(string(raw))
-			fmt.Println(url)
-		}
-		notifyAlreadyRunning(url)
+		notifyAlreadyRunning(listenURL(dir))
 		os.Exit(0)
-	}
-	if needsClassicConsole() {
-		release()
-		if startClassicConsole() == nil {
-			return
-		}
-		if release, already, err = acquireSingleton(dir); err != nil || already {
-			os.Exit(1)
-		}
 	}
 	defer release()
 	brandConsoleWindow()
@@ -200,8 +217,12 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	go func() {
-		<-sig
-		quit()
+		for range sig {
+			if consoleHidden() {
+				continue
+			}
+			quit()
+		}
 	}()
 
 	if !opt.debug {

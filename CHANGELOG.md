@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
+### Added
+
+- The settings page has an Open Cursor button.
+- A message sent while a custom-model tool is running joins the current turn after that tool finishes. The next model call sees it. Tools from the same model step that have not started are skipped.
+
+### Fixed
+
+- On Windows, the console close button hides cursor-inner to the notification area. The process keeps running until Quit is chosen from the icon menu or the settings page.
+
 ## [0.2.0] - 2026-10-08
 
 ### Added
@@ -45,6 +56,7 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CSGrandeur/cursor-inner/releases/tag/v0.1.0
