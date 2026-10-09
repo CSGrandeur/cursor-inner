@@ -40,7 +40,7 @@ func (f *Forwarder) file() string {
 
 // Sync 在自定义代理开着时写上 hosts 并开始转发，关掉时删掉。
 // Sync 写 hosts 并听 443。当前接管路径不调用；保留给测试，以及以后用户明确要求再覆盖直连子进程。
-// mirrored WSL 上曾挂死 WSLService，见 docs/design/wsl-remote-download.md。
+// 在 mirrored 网络模式的 WSL 上，它曾让 WSLService 挂死。
 func (f *Forwarder) Sync(on bool) error {
 	if !on {
 		return f.Stop()

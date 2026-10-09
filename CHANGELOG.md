@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-10-10
+
+### Changed
+
+- The README notes that Open Cursor and Open Grok sit in the settings page top bar with their app icons.
+- A source comment no longer points at a file that is not in this repository.
+
 ## [0.3.5] - 2026-10-09
 
 ### Added
@@ -114,7 +121,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.2...v0.3.4
 [0.3.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.1...v0.3.2

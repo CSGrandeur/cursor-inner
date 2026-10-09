@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.5` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.6` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -123,7 +123,7 @@ A browser download is marked as coming from the internet. The first double-click
 
 ## Usage
 
-1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again; Open Grok starts the installed Grok Bot, and does not start a second copy if one is already running. Neither quits cursor-inner.
+1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again; Open Grok starts the installed Grok Bot, and does not start a second copy if one is already running. Both buttons sit in the settings page top bar, each with a small Cursor or Grok icon, and neither quits cursor-inner.
 2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. Turning on Reasoning adds an effort choice in the model menu. An OpenAI-compatible model can also turn on Fast; that turn then sends `service_tier`. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Images.
 3. Reopen Cursor, start a new chat, and pick the model you added from the model list.
 4. Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon's right-click menu, or click Quit on the settings page. On macOS and Linux, closing the terminal quits as well. Cursor's settings are restored automatically.
@@ -151,7 +151,7 @@ The system hosts file is not modified. The settings page has separate switches, 
 The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.3.5   http://127.0.0.1:52341   press Enter to open settings
+ ▌▐ cursor-inner v0.3.6   http://127.0.0.1:52341   press Enter to open settings
     takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.5 ./build.sh linux      # dist/cursor-inner-v0.3.5-linux-amd64, and stamps that version
+VERSION=v0.3.6 ./build.sh linux      # dist/cursor-inner-v0.3.6-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).
