@@ -13,11 +13,12 @@ import (
 )
 
 type fake struct {
-	view      View
-	autostart bool
-	takeover  bool
-	quit      bool
-	opened    bool
+	view       View
+	autostart  bool
+	takeover   bool
+	quit       bool
+	opened     bool
+	openedGrok bool
 }
 
 func (f *fake) State() (View, error) {
@@ -70,6 +71,7 @@ func (f *fake) TestDraft(config.Model) provider.Result {
 func (f *fake) TestSaved(string) provider.Result { return provider.Result{OK: true} }
 func (f *fake) Quit() error                      { f.quit = true; return nil }
 func (f *fake) OpenCursor() error                { f.opened = true; return nil }
+func (f *fake) OpenGrok() error                  { f.openedGrok = true; return nil }
 
 func TestOpenCursorEndpoint(t *testing.T) {
 	f := &fake{}
@@ -82,6 +84,20 @@ func TestOpenCursorEndpoint(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 || !f.opened {
 		t.Fatalf("status %d opened %v", res.StatusCode, f.opened)
+	}
+}
+
+func TestOpenGrokEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/grok", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || !f.openedGrok {
+		t.Fatalf("status %d opened %v", res.StatusCode, f.openedGrok)
 	}
 }
 
@@ -137,7 +153,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))

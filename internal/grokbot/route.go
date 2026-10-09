@@ -28,7 +28,12 @@ func Routed(cmdline, proxyURL string) bool {
 	if proxyURL == "" {
 		return false
 	}
-	return strings.Contains(cmdline, "--proxy-server="+proxyURL) && strings.Contains(cmdline, "--disable-quic")
+	for _, arg := range ProxyArgs(proxyURL) {
+		if !strings.Contains(cmdline, arg) {
+			return false
+		}
+	}
+	return true
 }
 
 // ShouldRestart 判断正在运行的 Grok Bot 要不要关掉再开。
@@ -39,6 +44,9 @@ func ShouldRestart(cmds []string, proxyURL string) bool {
 	if proxyURL == "" {
 		for _, cmd := range cmds {
 			if strings.Contains(cmd, "--proxy-server=") && strings.Contains(cmd, "--disable-quic") {
+				return true
+			}
+			if strings.Contains(cmd, EnvProxyMark) {
 				return true
 			}
 		}

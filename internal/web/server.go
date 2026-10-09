@@ -218,6 +218,13 @@ func Handler(backend Backend) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("POST /api/grok", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.OpenGrok(); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.Quit(); err != nil {
 			writeErr(w, http.StatusConflict, err)

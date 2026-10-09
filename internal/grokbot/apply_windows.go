@@ -116,35 +116,8 @@ func stop() error {
 }
 
 func start(exe, proxyURL string) error {
-	var args []string
-	if proxyURL != "" {
-		args = []string{"--proxy-server=" + proxyURL, "--disable-quic"}
-	}
-	cmd := exec.Command(exe, args...)
+	cmd := exec.Command(exe, ProxyArgs(proxyURL)...)
 	cmd.Dir = filepath.Dir(exe)
-	cmd.Env = envFor(proxyURL)
+	cmd.Env = ProxyEnv(proxyURL, os.Environ())
 	return cmd.Start()
-}
-
-func envFor(proxyURL string) []string {
-	out := make([]string, 0, len(os.Environ())+8)
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(strings.ToUpper(entry), "ELECTRON_RUN_AS_NODE=") {
-			continue
-		}
-		name, _, _ := strings.Cut(entry, "=")
-		switch strings.ToUpper(name) {
-		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
-			continue
-		}
-		out = append(out, entry)
-	}
-	if proxyURL == "" {
-		return out
-	}
-	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
-		out = append(out, key+"="+proxyURL)
-	}
-	out = append(out, "NO_PROXY=localhost,127.0.0.1", "no_proxy=localhost,127.0.0.1")
-	return out
 }

@@ -23,11 +23,15 @@ func TestHTTPProxyURL(t *testing.T) {
 }
 
 func TestRouted(t *testing.T) {
-	cmd := `"Grok Bot.exe" --proxy-server=http://127.0.0.1:1080 --disable-quic`
-	if !Routed(cmd, "http://127.0.0.1:1080") {
+	proxy := "http://127.0.0.1:1080"
+	cmd := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic ` + EnvProxyMark
+	if !Routed(cmd, proxy) {
 		t.Fatal("expected routed")
 	}
-	if Routed(`"Grok Bot.exe"`, "http://127.0.0.1:1080") {
+	if Routed(`"Grok Bot.exe" --proxy-server=`+proxy+` --disable-quic`, proxy) {
+		t.Fatal("old launch without undici env-proxy mark is not routed")
+	}
+	if Routed(`"Grok Bot.exe"`, proxy) {
 		t.Fatal("plain launch is not routed")
 	}
 	if Routed(cmd, "") {
@@ -37,7 +41,7 @@ func TestRouted(t *testing.T) {
 
 func TestShouldRestartLeavesLoginReturnAlone(t *testing.T) {
 	proxy := "http://127.0.0.1:1080"
-	routed := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic`
+	routed := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic ` + EnvProxyMark
 	returned := `"Grok Bot.exe" sand://login`
 	if ShouldRestart([]string{routed, returned}, proxy) {
 		t.Fatal("a second process without the proxy must not close the one that is already polling")
@@ -53,5 +57,17 @@ func TestShouldRestartLeavesLoginReturnAlone(t *testing.T) {
 	}
 	if !ShouldRestart([]string{routed}, "") {
 		t.Fatal("clearing the proxy restarts a process that still has our arguments")
+	}
+}
+
+func TestShouldRestartUpgradesOldProxyLaunch(t *testing.T) {
+	proxy := "http://127.0.0.1:1080"
+	old := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic`
+	if !ShouldRestart([]string{old}, proxy) {
+		t.Fatal("process missing undici env-proxy mark must restart so NODE_USE_ENV_PROXY can apply")
+	}
+	upgraded := old + ` ` + EnvProxyMark
+	if ShouldRestart([]string{upgraded, `"Grok Bot.exe" sand://login`}, proxy) {
+		t.Fatal("upgraded process plus login return must not restart")
 	}
 }

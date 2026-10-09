@@ -206,6 +206,10 @@
   button.primary { background: var(--primary-bg); color: var(--primary-text); border-color: transparent; }
   button.primary:hover { opacity: .88; background: var(--primary-bg); }
   button.sm { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
+  button.sm.launch {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  button.sm.launch svg { width: 13px; height: 13px; flex: none; display: block; }
   button.danger:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
   button:disabled { opacity: .45; cursor: default; }
 
@@ -333,7 +337,14 @@
     <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
     <div class="top-right">
       <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
-      <button id="open-cursor" type="button" class="sm" data-i18n="openCursor" data-i18n-title="openCursorTitle" title="启动 Cursor，不关闭 cursor-inner">启动 Cursor</button>
+      <button id="open-cursor" type="button" class="sm launch" data-i18n-title="openCursorTitle" title="启动 Cursor，不关闭 cursor-inner">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2.6 1.8 14.2 8.1 8.3 9.6 6.8 14.4z"/></svg>
+        <span data-i18n="openCursor">启动 Cursor</span>
+      </button>
+      <button id="open-grok" type="button" class="sm launch" data-i18n-title="openGrokTitle" title="启动 Grok，不关闭 cursor-inner">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 1.1 9.15 6.85 14.9 8 9.15 9.15 8 14.9 6.85 9.15 1.1 8 6.85 6.85z"/></svg>
+        <span data-i18n="openGrok">启动 Grok</span>
+      </button>
       <button id="lang" type="button" class="sm" aria-label="Language">EN</button>
       <button id="quit" type="button" class="sm" data-i18n="quit" data-i18n-title="quitTitle" title="退出 cursor-inner，并还原 Cursor 的代理设置">退出</button>
     </div>
@@ -471,6 +482,7 @@
 const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
+    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
     takeoverCursor: "接管 Cursor", takeoverCursorDesc: "写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。",
     takeoverGrok: "接管 Grok", takeoverGrokDesc: "写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。",
@@ -507,6 +519,7 @@ const MESSAGES = {
   },
   en: {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
+    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
     takeoverCursor: "Take over Cursor", takeoverCursorDesc: "Writes Cursor's proxy settings. A running window does not see that, so turning it on or off closes Cursor — open it again yourself. Custom models are appended to the list.",
     takeoverGrok: "Take over Grok", takeoverGrokDesc: "Sets launch args and HTTPS_PROXY. A process that already has the current proxy is left alone; a bare window from the login page can exit on its own. Not started if it is not already running.",
@@ -945,6 +958,13 @@ document.querySelector("#open-cursor").addEventListener("click", () => {
   act(async () => {
     await send("/api/cursor", {method: "POST"});
     toast(t("cursorStarted"), "ok");
+    return null;
+  });
+});
+document.querySelector("#open-grok").addEventListener("click", () => {
+  act(async () => {
+    await send("/api/grok", {method: "POST"});
+    toast(t("grokStarted"), "ok");
     return null;
   });
 });

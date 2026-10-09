@@ -67,4 +67,5 @@ type Backend interface {
 	TestSaved(id string) provider.Result
 	Quit() error
 	OpenCursor() error
+	OpenGrok() error
 }

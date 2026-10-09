@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.4` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.5` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -123,7 +123,7 @@ A browser download is marked as coming from the internet. The first double-click
 
 ## Usage
 
-1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again without quitting cursor-inner.
+1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again; Open Grok starts the installed Grok Bot, and does not start a second copy if one is already running. Neither quits cursor-inner.
 2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. Turning on Reasoning adds an effort choice in the model menu. An OpenAI-compatible model can also turn on Fast; that turn then sends `service_tier`. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Images.
 3. Reopen Cursor, start a new chat, and pick the model you added from the model list.
 4. Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon's right-click menu, or click Quit on the settings page. On macOS and Linux, closing the terminal quits as well. Cursor's settings are restored automatically.
@@ -144,14 +144,14 @@ On takeover, cursor-inner edits Cursor's `settings.json`: `http.proxy` points at
 
 The local proxy decrypts only connections to `*.cursor.sh`; everything else is tunneled directly. Chat requests are routed by model id: ids that belong to a custom model are handled locally, everything else is forwarded to Cursor unchanged.
 
-The system hosts file is not modified. The settings page has separate switches, Take over Cursor and Take over Grok, both on by default. Cursor traffic that honors the proxy setting enters the local proxy and then leaves through the configured proxy. A running Cursor does not see that settings change, so the switch closes it and leaves you to open it again. A running Grok Bot is closed and opened again for the current choice: when takeover is on and a proxy is configured, window traffic uses `--proxy-server` and its own official client uses `HTTPS_PROXY`. Only the host and port are kept, and the connection is an HTTP proxy. Grok Bot is not started if it is not already running. Processes that ignore the proxy and connect directly are not covered.
+The system hosts file is not modified. The settings page has separate switches, Take over Cursor and Take over Grok, both on by default. Cursor traffic that honors the proxy setting enters the local proxy and then leaves through the configured proxy. A running Cursor does not see that settings change, so the switch closes it and leaves you to open it again, or use Open Cursor in the top bar. A running Grok Bot is closed and opened again for the current choice: when takeover is on and a proxy is configured, window traffic uses `--proxy-server`, and the main-process undici client (including the login poll) uses `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` and `--use-env-proxy`. Only the host and port are kept, and the connection is an HTTP proxy. Grok Bot is not started if it is not already running; Open Grok on the settings page is the cold start, and uses the same arguments when takeover is on. Processes that ignore the proxy and connect directly are not covered. Analytics, nudge, and similar requests that still carry a local custom-model id are replaced with a same-length placeholder before they leave; the selected model is remembered locally so Cmd+K can keep using it.
 
 ## Console window
 
 The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.3.4   http://127.0.0.1:52341   press Enter to open settings
+ ▌▐ cursor-inner v0.3.5   http://127.0.0.1:52341   press Enter to open settings
     takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.4 ./build.sh linux      # dist/cursor-inner-v0.3.4-linux-amd64, and stamps that version
+VERSION=v0.3.5 ./build.sh linux      # dist/cursor-inner-v0.3.5-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).
@@ -290,7 +290,7 @@ internal/
 ├── logx/              Logs: per-turn console summary and inner.log detail
 ├── mitm/              Local proxy: decrypts *.cursor.sh, routes requests, inline edit and terminal Cmd+K
 ├── procfwd/           Direct child-process forwarder (kept; current takeover does not edit hosts or bind 443)
-├── grokbot/           On Windows, adds or clears Grok Bot proxy launch arguments from the settings switch
+├── grokbot/           On Windows, finds and launches Grok Bot, and adds or clears proxy launch arguments from the settings switch
 ├── protox/            Connect frames and protobuf field encoding
 ├── provider/          Calls OpenAI Chat / Anthropic endpoints, including streamed tool calls
 ├── tools/             Converts between model tool calls and Cursor exec requests and results

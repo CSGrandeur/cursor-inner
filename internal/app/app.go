@@ -98,6 +98,20 @@ func (a *App) OpenCursor() error {
 	return cursorlaunch.Start()
 }
 
+func (a *App) OpenGrok() error {
+	proxyURL := ""
+	cfg := a.store.Get()
+	if cfg.TakeoverGrok {
+		spec, on, err := dialer.EffectiveAddress(cfg.Proxy)
+		if err == nil && on {
+			if u, ok := grokbot.HTTPProxyURL(spec); ok {
+				proxyURL = u
+			}
+		}
+	}
+	return grokbot.Launch(proxyURL)
+}
+
 func (a *App) Shutdown() {
 	a.shutdown.Do(func() {
 		_ = grokbot.Apply("")

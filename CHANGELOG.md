@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-09
+
+### Added
+
+- The settings page has an Open Grok button next to Open Cursor, each with a small inline app mark. On Windows it finds Grok Bot from a running process, the App Paths / uninstall registry, or the usual per-user and Program Files locations. If Grok takeover is on, the process is started with the same proxy arguments and environment SyncGrok uses (`NODE_USE_ENV_PROXY=1`, `--use-env-proxy`, `--proxy-server`, `--disable-quic`). A running Grok Bot is not started a second time.
+
+### Fixed
+
+- On Windows, taking over Grok Bot also sets `NODE_USE_ENV_PROXY=1` and passes `--use-env-proxy`, so the Electron main-process undici client (including auth poll) uses the configured HTTP proxy instead of dialing the origin on port 443 directly. A process that still has only the older proxy arguments is restarted once so the new environment applies. Login-return processes still do not force a restart when an already-routed process is present.
+
 ## [0.3.4] - 2026-10-09
 
 ### Changed
@@ -104,7 +114,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.2...v0.3.4
 [0.3.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.0...v0.3.1
