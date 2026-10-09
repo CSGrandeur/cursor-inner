@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/provider"
@@ -25,8 +26,11 @@ func startShell(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServer
 		}
 		timeout = *n
 	}
+	requested := timeout
+	if timeout > foregroundMaxMs {
+		timeout = foregroundMaxMs
+	}
 	threshold := uint64(40_000)
-	hard := int32(86_400_000)
 	shell := &cursorpb.ShellArgs{
 		Command:                  command,
 		WorkingDirectory:         stringOr(a, "working_directory"),
@@ -37,7 +41,6 @@ func startShell(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServer
 		RequestedSandboxPolicy:   shellSandbox(a),
 		FileOutputThresholdBytes: &threshold,
 		TimeoutBehavior:          cursorpb.TimeoutBehavior_TIMEOUT_BEHAVIOR_BACKGROUND,
-		HardTimeout:              &hard,
 		Description:              a.optStr("description"),
 		CloseStdin:               true,
 		OutputNotification:       shellNotification(a),
@@ -55,7 +58,25 @@ func startShell(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServer
 			Args:        shell,
 		}},
 	}
-	return exec, ui, &Pending{Call: call, shell: &shellState{}}, nil
+	pending := &Pending{Call: call, shell: &shellState{}, Wait: shellWait(timeout)}
+	if requested > foregroundMaxMs {
+		pending.Note = "The foreground wait is capped at 10 minutes. The command continues in the background and is not killed when that wait ends."
+	}
+	return exec, ui, pending, nil
+}
+
+// foregroundMaxMs 是一轮里最多前台等待的时间。
+// 更长的命令改为后台继续跑，不设硬超时，所以以天计的命令不会被掐掉。
+const foregroundMaxMs = int32(600_000)
+
+// shellWait 是这条命令在没有新输出时，本地最多再等多久。
+// 客户端会在这段前台时间后转入后台；这里多留一点，让那条结果能回来。
+func shellWait(blockUntilMs int32) time.Duration {
+	wait := time.Duration(blockUntilMs)*time.Millisecond + 15*time.Second
+	if wait < 45*time.Second {
+		return 45 * time.Second
+	}
+	return wait
 }
 
 func shellParsing(command string) *cursorpb.ShellCommandParsingResult {
@@ -158,6 +179,9 @@ func (p *Pending) Feed(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall) (
 	case *cursorpb.ShellStream_Backgrounded:
 		result := backgroundResult(event.Backgrounded, p.shell.stdout.String(), p.shell.stderr.String(), p.Terminals)
 		text, isErr = shellText(result)
+		if p.Note != "" {
+			text = p.Note + "\n" + text
+		}
 		setShellUI(ui, result)
 		return nil, nil, text, isErr, true
 	case *cursorpb.ShellStream_Rejected:

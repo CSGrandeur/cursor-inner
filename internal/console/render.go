@@ -104,6 +104,31 @@ func styleLine(text string) string {
 	}
 }
 
+// LinkSpan 是顶栏第一行里地址所占的列，左右都是闭开区间。宽字符按两列计。
+func LinkSpan(url, version string, cols int) (start, end int) {
+	limit := cols - 1
+	if limit < 1 {
+		return 0, 0
+	}
+	used := 0
+	for _, part := range []string{" ▌", "▐ ", "cursor-inner", " " + version, "   "} {
+		w := width(part)
+		if used+w > limit {
+			return 0, 0
+		}
+		used += w
+	}
+	w := width(url)
+	if used >= limit || w == 0 {
+		return 0, 0
+	}
+	end = used + w
+	if end > limit {
+		end = limit
+	}
+	return used, end
+}
+
 func width(s string) int {
 	n := 0
 	for _, r := range s {

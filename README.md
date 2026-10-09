@@ -49,7 +49,7 @@ cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthr
   <tr>
     <td width="33%" valign="top">
       <b>出站代理</b><br>
-      Cursor 的全部联网可以走 socks5 或 http 代理；每个自定义模型单独决定是否走代理。
+      只填一个地址。没写协议时自动识别 socks5 或 http，留空则直连。每个自定义模型单独决定是否走它。
     </td>
     <td width="33%" valign="top">
       <b>可靠还原</b><br>
@@ -62,7 +62,7 @@ cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthr
   </tr>
 </table>
 
-自定义模型做多轮工具调用时，思考内容按接口处理。DeepSeek、Kimi、MiMo 会把思考原文带回下一轮。不接受该字段的 OpenAI 兼容接口会去掉它。Anthropic 回放带签名的思考块。只读工具可以并行，写文件按顺序执行。过长的工具输出会截断。工具参数末尾多一个逗号时会先修好再执行。限流、5xx 和流中断只在还没有输出文字时重试。系统提示词不写当前时间，时间写在每一轮用户消息里。上下文缓存能否命中，要看接口是否返回缓存命中数。有的 OpenAI 兼容接口只返回输入、输出和总 token。
+自定义模型做多轮工具调用时，思考内容按接口处理。DeepSeek、Kimi、MiMo 会把思考原文带回下一轮。不接受该字段的 OpenAI 兼容接口会去掉它。Anthropic 回放带签名的思考块。只读工具可以并行，写文件按顺序执行。过长的工具输出会截断。工具参数包在代码块里、末尾多一个逗号，或括号没闭合时，会先修好再执行。限流、5xx 和流中断只在还没有输出文字时重试。系统提示词不写当前时间，时间写在每一轮用户消息里。上下文缓存能否命中，要看接口是否返回缓存命中数。有的 OpenAI 兼容接口只返回输入、输出和总 token。
 
 ## 安装
 
@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.1.0`。
+安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.3.2`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -124,7 +124,7 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 ## 使用
 
 1. 运行 cursor-inner。它会关闭正在运行的 Cursor，并在浏览器里打开配置页。配置页上的「启动 Cursor」会再打开 Cursor，不退出 cursor-inner。
-2. 添加模型：填写显示名、类型、模型名、接口地址和密钥，点「测试」确认能连通。上下文窗口和最大输出可以留空；填了之后，压缩历史按这个窗口计算，每次请求的输出不超过这个上限。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容的出图接口。
+2. 添加模型：填写显示名、类型、模型名、接口地址和密钥，点「测试」确认能连通。已添加的模型可以编辑；复制会把这项填进添加表单，密钥需要重新填写；添加表单可以清空。编辑时密钥留空表示不改。上下文窗口和最大输出可以留空；填了之后，压缩历史按这个窗口计算，每次请求的输出不超过这个上限。打开「推理」后，模型菜单里可以选择力度。OpenAI 兼容接口还可以打开 Fast，选中后这一轮请求带 `service_tier`。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容的出图接口。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选择刚添加的模型。
 4. 用完后退出。Windows 上点窗口关闭按钮只会把窗口收回通知区域，右键图标选「退出」才结束；也可以在配置页点「退出」。macOS 和 Linux 上关闭终端窗口同样会退出。Cursor 的设置会自动还原。
 
@@ -144,12 +144,14 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 
 本机代理只解密发往 `*.cursor.sh` 的连接，其余主机直接隧道转发。对话请求按模型 id 分流：属于自定义模型的由本地处理，其余原样转给官方。
 
+Cursor 有的子进程不读这个代理设置，会自己连接 `api3.cursor.sh`、`api4.cursor.sh`、`repo42.cursor.sh` 和 `us-only` / `us-eu` / `us-asia.gcpp.cursor.sh`。接管并且自定义代理开着时，这些连接也从自定义代理出去，协议保持原样。这需要能改系统 hosts，并在本机 443 端口监听；做不到时配置页会提示，其余流量不受影响。退出时先去掉这段 hosts，再关掉 443。去不掉就继续听着，避免这几个名字中断。
+
 ## 命令行窗口
 
-配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页；在支持超链接的终端里（Windows Terminal、iTerm2、GNOME Terminal 等），也可以按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
+配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页。在 Windows 上双击打开时，单击顶栏里的地址也会打开。在 Windows Terminal、iTerm2、GNOME Terminal 里，按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.2.0   http://127.0.0.1:52341   按回车打开配置页
+ ▌▐ cursor-inner v0.3.2   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
     模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
@@ -261,7 +263,7 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.1.0 ./build.sh linux      # dist/cursor-inner-v0.1.0-linux-amd64，并写入版本号
+VERSION=v0.3.2 ./build.sh linux      # dist/cursor-inner-v0.3.2-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。
@@ -270,14 +272,16 @@ VERSION=v0.1.0 ./build.sh linux      # dist/cursor-inner-v0.1.0-linux-amd64，�
 <summary><b>项目结构</b></summary>
 
 ```text
-cmd/cursor-inner/      程序入口：单实例、命令行参数、弹窗、窗口图标、退出清理
+cmd/cursor-inner/      程序入口
 internal/
+├── program/           启动流程：单实例、命令行参数、弹窗、窗口图标、退出清理
 ├── agent/             自定义模型的运行：请求路由、模型与工具循环、检查点、压缩、系统提示词与各模式说明
 ├── app/               配置页用到的各项操作
 ├── autostart/         开机启动：Windows 登录任务、macOS LaunchAgent、Linux XDG 自动启动
 ├── catalog/           生成追加到 Cursor 模型目录里的条目
 ├── config/            读写 config.json
 ├── console/           命令行窗口的固定顶栏和日志
+├── cursorlaunch/      从配置页启动本机已安装的 Cursor
 ├── cursorpb/          由 proto/cursor/agent_v1.proto 生成的 Cursor 协议代码
 ├── cursorsettings/    修改并还原 Cursor 的 settings.json
 ├── dialer/            直连或经 socks5 / http 代理拨号
@@ -285,6 +289,7 @@ internal/
 ├── i18n/              配置页用到的中英双语文本
 ├── logx/              日志：窗口里的每轮摘要、inner.log 明细
 ├── mitm/              本机代理：解密 *.cursor.sh、分流、行内编辑与终端 Cmd+K
+├── procfwd/           接管期间，把指定子进程的直连改从已配置的代理出去
 ├── protox/            Connect 帧与 protobuf 字段读写
 ├── provider/          调用 OpenAI Chat / Anthropic 接口，含流式工具调用
 ├── tools/             模型工具调用与 Cursor 执行请求、执行结果之间的转换

@@ -856,6 +856,148 @@ func TestSteerDuringTheAnswerContinuesTheTurn(t *testing.T) {
 	}
 }
 
+func TestStepLimitStillSendsCheckpoint(t *testing.T) {
+	responses := make([]string, maxSteps)
+	for i := range responses {
+		responses[i] = sse(fmt.Sprintf(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c%d","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`, i))
+	}
+	fm := &fakeModel{responses: responses}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "cap", runRequest("mine", "conv-cap", "read it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "cap")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 64)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	checkpoint := false
+	for {
+		select {
+		case m := <-out:
+			if m.GetConversationCheckpointUpdate() != nil {
+				checkpoint = true
+			}
+			exec := m.GetExecServerMessage()
+			if exec.GetReadArgs() == nil {
+				continue
+			}
+			if _, err := hub.Bidi(bidi(t, "cap", execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+				Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.go", Output: &cursorpb.ReadSuccess_Content{Content: "x"}}},
+			}}}))); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-done:
+			if err == nil || !strings.Contains(err.Error(), "50") {
+				t.Fatalf("err=%v", err)
+			}
+			for len(out) > 0 {
+				if (<-out).GetConversationCheckpointUpdate() != nil {
+					checkpoint = true
+				}
+			}
+			if !checkpoint {
+				t.Fatal("stopped turn did not send a checkpoint")
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("step limit did not finish")
+		}
+	}
+}
+
+func TestQuietModelOpensThinkingBeforeTheFirstToken(t *testing.T) {
+	previous := quietThinkingAfter
+	quietThinkingAfter = 40 * time.Millisecond
+	t.Cleanup(func() { quietThinkingAfter = previous })
+
+	fm := &fakeModel{
+		pause: make(chan struct{}),
+		responses: []string{
+			sse(`{"choices":[{"delta":{"content":"ok"}}]}`),
+		},
+	}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, nil)
+	if _, err := hub.Bidi(bidi(t, "quiet", runRequest("mine", "conv-quiet", "say ok", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "quiet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	holding := false
+	released := false
+	sawThinking := false
+	var completed bool
+	var text string
+	for {
+		select {
+		case <-fm.pause:
+			holding = true
+			if sawThinking && !released {
+				fm.pause <- struct{}{}
+				released = true
+			}
+		case m := <-out:
+			if m.GetInteractionUpdate().GetHeartbeat() != nil {
+				continue
+			}
+			if delta := m.GetInteractionUpdate().GetThinkingDelta(); delta != nil {
+				if delta.GetText() != " " {
+					t.Fatalf("placeholder %q", delta.GetText())
+				}
+				sawThinking = true
+			}
+			if m.GetInteractionUpdate().GetThinkingCompleted() != nil {
+				completed = true
+			}
+			if d := m.GetInteractionUpdate().GetTextDelta(); d != nil {
+				text += d.GetText()
+			}
+			if sawThinking && holding && !released {
+				fm.pause <- struct{}{}
+				released = true
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !sawThinking || !completed || text != "ok" {
+				t.Fatalf("thinking=%v completed=%v text=%q", sawThinking, completed, text)
+			}
+			if strings.Contains(fm.requests[0], "reasoning_content") {
+				t.Fatal("placeholder was sent back to the model")
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("quiet thinking did not finish")
+		}
+	}
+}
+
 func TestInsertArrivesBeforeTheNextModelCall(t *testing.T) {
 	fm := &fakeModel{responses: []string{
 		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),
@@ -1406,6 +1548,64 @@ func TestSemSearchUsesClientGrepAndOnlyKeepsNumberedHits(t *testing.T) {
 	})
 	if len(fm.requests) < 3 || !strings.Contains(fm.requests[1], "/w/note.txt") || !strings.Contains(fm.requests[2], "/w/note.txt") || strings.Contains(fm.requests[2], "made-up") {
 		t.Fatalf("requests=%d", len(fm.requests))
+	}
+}
+
+func TestToolSilenceBecomesAFailureTheModelCanContinue(t *testing.T) {
+	prev := toolWaitLimit
+	toolWaitLimit = 200 * time.Millisecond
+	t.Cleanup(func() { toolWaitLimit = prev })
+
+	fm := &fakeModel{responses: []string{
+		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),
+		sse(`{"choices":[{"delta":{"content":"The read did not finish, so I will stop there."}}]}`),
+	}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", DisplayName: "Mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	hub := New(func(id string) (config.Model, bool) { return model, id == "mine" }, NewHistory(t.TempDir()))
+	env := &cursorpb.RequestContextEnv{WorkspacePaths: []string{"/w"}, OsVersion: "linux"}
+	if _, err := hub.Bidi(bidi(t, "hang", runRequest("mine", "conv-hang", "read a.go", env))); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "hang")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 64)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	for {
+		select {
+		case m := <-out:
+			exec := m.GetExecServerMessage()
+			if exec.GetRequestContextArgs() != nil {
+				if _, err := hub.Bidi(bidi(t, "hang", execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_RequestContextResult{RequestContextResult: &cursorpb.RequestContextResult{
+					Result: &cursorpb.RequestContextResult_Success{Success: &cursorpb.RequestContextSuccess{RequestContext: &cursorpb.RequestContext{Env: env}}},
+				}}}))); err != nil {
+					t.Fatal(err)
+				}
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			fm.mu.Lock()
+			defer fm.mu.Unlock()
+			if len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "did not finish within the time limit") {
+				t.Fatalf("model did not receive the timeout: %d", len(fm.requests))
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("session did not finish")
+		}
 	}
 }
 

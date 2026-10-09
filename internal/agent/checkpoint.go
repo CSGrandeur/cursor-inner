@@ -190,6 +190,9 @@ func wireMessage(message provider.Message, index int, names map[string]string) w
 		name := names[message.ToolCallID]
 		doc.ID = message.ToolCallID
 		doc.Content = []wirePart{{Type: "tool-result", ToolCallID: message.ToolCallID, ToolName: name, Result: message.Content, IsError: message.IsError}}
+		for _, image := range message.Images {
+			doc.Content = append(doc.Content, wirePart{Type: "image", Image: base64.StdEncoding.EncodeToString(image.Data), MIMEType: image.MIME})
+		}
 	default:
 		if message.Content != "" {
 			doc.Content = append(doc.Content, wirePart{Type: "text", Text: message.Content})
@@ -516,6 +519,16 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 		message.ToolCallID = parts[0].ToolCallID
 		message.Content = parts[0].Result
 		message.IsError = parts[0].IsError
+		for _, part := range parts[1:] {
+			if part.Type != "image" {
+				continue
+			}
+			data, err := base64.StdEncoding.DecodeString(part.Image)
+			if err != nil {
+				return provider.Message{}, 0, fmt.Errorf("checkpoint: image is not base64")
+			}
+			message.Images = append(message.Images, provider.Image{MIME: part.MIMEType, Data: data})
+		}
 	default:
 		var text strings.Builder
 		for _, part := range parts {

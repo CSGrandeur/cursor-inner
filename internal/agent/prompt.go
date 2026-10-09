@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-	"time"
 
 	"cursor-inner/internal/cursorpb"
 )
@@ -43,14 +42,7 @@ func systemPrompt(modelName string, ctx *cursorpb.RequestContext) string {
 	if folder := env.GetTerminalsFolder(); folder != "" {
 		fmt.Fprintf(&b, "Terminals folder: %s\n", folder)
 	}
-	fmt.Fprintf(&b, "Today's date: %s\n", today(env.GetTimeZone()))
 	b.WriteString("</user_info>\n")
-	for _, repo := range ctx.GetGitRepos() {
-		if strings.TrimSpace(repo.GetStatus()) == "" {
-			continue
-		}
-		fmt.Fprintf(&b, "\n<git_status>\nThis is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.\n\nGit repo: %s\n\n```\n%s\n```\n</git_status>\n", repo.GetPath(), repo.GetStatus())
-	}
 	if folder := env.GetAgentTranscriptsFolder(); folder != "" {
 		fmt.Fprintf(&b, "\n<agent_transcripts>\nAgent transcripts (past chats) live in %s. They have names like <uuid>.jsonl, cite parent chat transcripts to the user as [<title for chat <=6 words>](<uuid excluding .jsonl>). Don't discuss the folder structure.\n</agent_transcripts>\n", folder)
 	}
@@ -141,14 +133,21 @@ func gitRepoLine(ctx *cursorpb.RequestContext, workspace string) string {
 	return "No"
 }
 
-func today(zone string) string {
-	loc := time.Local
-	if zone != "" {
-		if parsed, err := time.LoadLocation(zone); err == nil {
-			loc = parsed
-		}
+func gitStatus(ctx *cursorpb.RequestContext) string {
+	if ctx == nil {
+		return ""
 	}
-	return time.Now().In(loc).Format("2006-01-02")
+	var b strings.Builder
+	for _, repo := range ctx.GetGitRepos() {
+		if strings.TrimSpace(repo.GetStatus()) == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "<git_status>\nThis is the git status at the start of this turn. It is a snapshot and will not update until the next user message.\n\nGit repo: %s\n\n```\n%s\n```\n</git_status>", repo.GetPath(), repo.GetStatus())
+	}
+	return b.String()
 }
 
 func isSkillRule(rule *cursorpb.CursorRule) bool {

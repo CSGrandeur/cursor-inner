@@ -130,14 +130,47 @@ func Handler(backend Backend) http.Handler {
 	})
 	mux.HandleFunc("PUT /api/models/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			UseProxy        *bool `json:"use_proxy"`
-			Reasoning       *bool `json:"reasoning"`
-			Fast            *bool `json:"fast"`
-			ContextWindow   *int  `json:"context_window"`
-			MaxOutputTokens *int  `json:"max_output_tokens"`
+			DisplayName     *string `json:"display_name"`
+			Type            string  `json:"type"`
+			BaseURL         string  `json:"base_url"`
+			APIKey          string  `json:"api_key"`
+			Model           string  `json:"model"`
+			UseProxy        *bool   `json:"use_proxy"`
+			Reasoning       *bool   `json:"reasoning"`
+			Fast            *bool   `json:"fast"`
+			ContextWindow   *int    `json:"context_window"`
+			MaxOutputTokens *int    `json:"max_output_tokens"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if body.DisplayName != nil {
+			model := config.Model{
+				DisplayName: *body.DisplayName,
+				Type:        body.Type,
+				BaseURL:     body.BaseURL,
+				APIKey:      body.APIKey,
+				Model:       body.Model,
+				UseProxy:    body.UseProxy != nil && *body.UseProxy,
+				Reasoning:   body.Reasoning != nil && *body.Reasoning,
+				FastSupport: body.Fast != nil && *body.Fast,
+			}
+			if body.ContextWindow != nil {
+				model.ContextWindow = *body.ContextWindow
+			}
+			if body.MaxOutputTokens != nil {
+				model.MaxOutputTokens = *body.MaxOutputTokens
+			}
+			if err := backend.UpdateModel(r.PathValue("id"), model); err != nil {
+				status := http.StatusBadRequest
+				if err.Error() == "没有这个模型" {
+					status = http.StatusNotFound
+				}
+				writeErr(w, status, err)
+				return
+			}
+			writeState(w, backend)
 			return
 		}
 		if body.Reasoning != nil {

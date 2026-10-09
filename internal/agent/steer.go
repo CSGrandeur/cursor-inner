@@ -21,6 +21,7 @@ type steer struct {
 	kind        string
 	text        string
 	user        *cursorpb.UserMessage
+	ctx         *cursorpb.RequestContext
 	injectionID string
 }
 
@@ -36,7 +37,8 @@ func (s *Session) deliverAction(action *cursorpb.ConversationAction) {
 	var item steer
 	switch {
 	case action.GetUserMessageAction() != nil:
-		item = steer{kind: "break", user: action.GetUserMessageAction().GetUserMessage()}
+		message := action.GetUserMessageAction()
+		item = steer{kind: "break", user: message.GetUserMessage(), ctx: message.GetRequestContext()}
 	case action.GetInjectContextAction() != nil:
 		inject := action.GetInjectContextAction()
 		if inject.GetExpectedRunId() != "" && inject.GetExpectedRunId() != s.RequestID {
@@ -104,7 +106,15 @@ func (s *Session) hold(item steer) {
 		s.wantSummary = true
 	case "break":
 		s.breakUser = item.user
+		s.breakCtx = item.ctx
 	}
+}
+
+func (s *Session) turnContext() *cursorpb.RequestContext {
+	if s.breakCtx != nil {
+		return s.breakCtx
+	}
+	return s.reqCtx
 }
 
 func (s *Session) drainSteer(send Emit, messages []provider.Message) ([]provider.Message, bool, error) {
@@ -127,7 +137,7 @@ drained:
 	s.inserts = nil
 	for _, item := range s.steers {
 		steered = true
-		messages = append(messages, userTurn(item.user))
+		messages = append(messages, userTurn(item.user, s.reqCtx))
 		if err := send(appendedUser(item.user)); err != nil {
 			return messages, steered, err
 		}
@@ -140,11 +150,12 @@ drained:
 	s.steers = nil
 	if s.breakUser != nil {
 		steered = true
-		messages = append(messages, userTurn(s.breakUser))
+		messages = append(messages, userTurn(s.breakUser, s.turnContext()))
 		if err := send(appendedUser(s.breakUser)); err != nil {
 			return messages, steered, err
 		}
 		s.breakUser = nil
+		s.breakCtx = nil
 	}
 	return messages, steered, nil
 }

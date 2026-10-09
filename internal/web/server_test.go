@@ -39,11 +39,12 @@ func (f *fake) SetAutostart(enabled bool) error {
 	f.view.Autostart = autostart.State{Enabled: enabled, Mode: "logon-task", Detail: i18n.T("已写入", "Written")}
 	return nil
 }
-func (f *fake) AddModel(config.Model) error          { return nil }
-func (f *fake) DeleteModel(string) error             { return nil }
-func (f *fake) SetModelProxy(string, bool) error     { return nil }
-func (f *fake) SetModelReasoning(string, bool) error { return nil }
-func (f *fake) SetModelFast(string, bool) error      { return nil }
+func (f *fake) AddModel(config.Model) error            { return nil }
+func (f *fake) UpdateModel(string, config.Model) error { return nil }
+func (f *fake) DeleteModel(string) error               { return nil }
+func (f *fake) SetModelProxy(string, bool) error       { return nil }
+func (f *fake) SetModelReasoning(string, bool) error   { return nil }
+func (f *fake) SetModelFast(string, bool) error        { return nil }
 func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
 	if len(f.view.Models) == 0 {
 		f.view.Models = []ModelView{{}}
@@ -129,7 +130,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))

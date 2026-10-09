@@ -37,6 +37,17 @@ func TestHeaderShowsTrafficCounts(t *testing.T) {
 	}
 }
 
+func TestLinkSpanMatchesTheHeaderURL(t *testing.T) {
+	url := "http://127.0.0.1:52341"
+	start, end := LinkSpan(url, "v0.3.1", 80)
+	if end-start != len(url) || start < 10 {
+		t.Fatalf("span %d:%d", start, end)
+	}
+	if s, e := LinkSpan(url, "v0.3.1", 8); s != 0 || e != 0 {
+		t.Fatalf("narrow span %d:%d", s, e)
+	}
+}
+
 func TestClipCountsWideRunes(t *testing.T) {
 	if got := clip("自定义模型", 5); got != "自定" {
 		t.Fatalf("%q", got)

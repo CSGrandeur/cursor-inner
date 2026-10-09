@@ -1,4 +1,4 @@
-package main
+package program
 
 import "testing"
 
@@ -11,6 +11,21 @@ func TestConsoleLaunchAction(t *testing.T) {
 	}
 	if consoleLaunchAction(true, "ConsoleWindowClass") != "stay" || consoleLaunchAction(true, "") != "alloc" {
 		t.Fatal("relaunched child must not relaunch again")
+	}
+}
+
+func TestConcealCaptionClose(t *testing.T) {
+	if !concealCaptionClose("ConsoleWindowClass", hitClose) {
+		t.Fatal("close button")
+	}
+	if concealCaptionClose("ConsoleWindowClass", 1) || concealCaptionClose("PseudoConsoleWindow", hitClose) {
+		t.Fatal("other clicks stay")
+	}
+	if !concealAltF4("ConsoleWindowClass", vkF4, llkhfAltDown) {
+		t.Fatal("alt f4")
+	}
+	if concealAltF4("ConsoleWindowClass", vkF4, llkhfAltDown|llkhfUp) || concealAltF4("PseudoConsoleWindow", vkF4, llkhfAltDown) {
+		t.Fatal("keyup and other windows stay")
 	}
 }
 

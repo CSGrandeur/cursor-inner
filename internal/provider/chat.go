@@ -13,11 +13,13 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/runlog"
 )
 
 // Message 是与接口无关的对话消息。Role 取 system、user、assistant、tool。
@@ -73,32 +75,69 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 		return Message{}, i18n.E("没有用户消息", "No user message")
 	}
 	var last error
+	started := time.Now()
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
+			noteModel(ctx, runlog.Note{Kind: "model_retry", Attempt: attempt, Error: Explain(last), ElapsedMs: time.Since(started).Milliseconds()})
 			if err := waitRetry(ctx, last, attempt); err != nil {
 				return Message{}, err
 			}
 		}
+		noteModel(ctx, runlog.Note{Kind: "model_attempt", Attempt: attempt, Tools: len(tools), Messages: len(messages)})
+		var lastPiece time.Time
+		piece := func(kind string, text string, fn func(string) error) error {
+			if fn == nil {
+				return nil
+			}
+			gap := int64(0)
+			now := time.Now()
+			if !lastPiece.IsZero() {
+				gap = now.Sub(lastPiece).Milliseconds()
+			}
+			lastPiece = now
+			noteModel(ctx, runlog.Note{Kind: kind, Attempt: attempt, Bytes: len(text), GapMs: gap})
+			return fn(text)
+		}
 		emitted := false
 		msg, err := chatOnce(ctx, m, dial, system, messages, tools, func(text string) error {
 			emitted = true
-			return onText(text)
+			return piece("model_text", text, onText)
 		}, func(text string) error {
 			emitted = true
 			if onThinking == nil {
 				return nil
 			}
-			return onThinking(text)
+			return piece("model_thinking", text, onThinking)
 		})
 		if err == nil {
+			noteModel(ctx, runlog.Note{
+				Kind: "model_done", Attempt: attempt, ElapsedMs: time.Since(started).Milliseconds(),
+				Tools: len(msg.ToolCalls), Prompt: msg.PromptTokens, Output: msg.CompletionTokens,
+				Bytes: len(msg.Content) + len(msg.Reasoning),
+			})
 			return msg, nil
 		}
 		last = err
+		noteModel(ctx, modelError(attempt, time.Since(started), err))
 		if emitted || !Retryable(err) {
 			return Message{}, withRetries(err, attempt)
 		}
 	}
 	return Message{}, withRetries(last, maxAttempts-1)
+}
+
+func noteModel(ctx context.Context, n runlog.Note) {
+	n.Request = runlog.RequestID(ctx)
+	runlog.Emit(n)
+}
+
+func modelError(attempt int, elapsed time.Duration, err error) runlog.Note {
+	n := runlog.Note{Kind: "model_error", Attempt: attempt, ElapsedMs: elapsed.Milliseconds(), Error: Explain(err)}
+	var api *APIError
+	if errors.As(err, &api) {
+		n.Status = api.Status
+	}
+	return n
 }
 
 func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
@@ -183,6 +222,8 @@ func do(ctx context.Context, m config.Model, dial dialer.Func, req chatRequest) 
 	if err != nil {
 		return nil, err
 	}
+	noteModel(ctx, runlog.Note{Kind: "model_request", Bytes: len(payload)})
+	asked := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
@@ -201,7 +242,12 @@ func do(ctx context.Context, m config.Model, dial dialer.Func, req chatRequest) 
 		ForceAttemptHTTP2: false,
 		TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
 	}}
-	return client.Do(httpReq)
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	noteModel(ctx, runlog.Note{Kind: "model_status", Status: resp.StatusCode, ElapsedMs: time.Since(asked).Milliseconds()})
+	return resp, nil
 }
 
 func requestBody(m config.Model, req chatRequest) ([]byte, error) {
@@ -305,7 +351,7 @@ func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
 		Name         string          `json:"name,omitempty"`
 		Input        json.RawMessage `json:"input,omitempty"`
 		ToolUseID    string          `json:"tool_use_id,omitempty"`
-		Content      string          `json:"content,omitempty"`
+		Content      any             `json:"content,omitempty"`
 		IsError      bool            `json:"is_error,omitempty"`
 		Source       *imageSource    `json:"source,omitempty"`
 		CacheControl *cacheControl   `json:"cache_control,omitempty"`
@@ -358,7 +404,7 @@ func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
 				push("assistant", block{Type: "tool_use", ID: c.ID, Name: c.Name, Input: input})
 			}
 		case "tool":
-			push("user", block{Type: "tool_result", ToolUseID: message.ToolCallID, Content: message.Content, IsError: message.IsError})
+			push("user", block{Type: "tool_result", ToolUseID: message.ToolCallID, Content: anthropicToolContent(message), IsError: message.IsError})
 		default:
 			push("user", block{Type: "text", Text: message.Content})
 			for _, image := range message.Images {
@@ -650,6 +696,24 @@ func staticMessage(raw []byte, kind string) (Message, error) {
 		}
 	}
 	return msg, nil
+}
+
+func anthropicToolContent(message Message) any {
+	if len(message.Images) == 0 {
+		return message.Content
+	}
+	parts := []any{map[string]string{"type": "text", "text": message.Content}}
+	for _, image := range message.Images {
+		parts = append(parts, map[string]any{
+			"type": "image",
+			"source": map[string]string{
+				"type":       "base64",
+				"media_type": image.MIME,
+				"data":       base64.StdEncoding.EncodeToString(image.Data),
+			},
+		})
+	}
+	return parts
 }
 
 func openAIContent(message Message) any {

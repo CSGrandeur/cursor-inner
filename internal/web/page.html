@@ -61,12 +61,12 @@
     -webkit-font-smoothing: antialiased;
     font-variant-numeric: tabular-nums;
   }
-  main { max-width: 1040px; margin: 0 auto; padding: 0 28px 72px; }
+  main { max-width: 1120px; margin: 0 auto; padding: 0 20px 28px; }
   .mono { font-family: var(--mono); font-size: 12px; }
 
   .top {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    height: 64px;
+    height: 48px;
   }
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand img { width: 24px; height: 24px; display: block; }
@@ -91,12 +91,12 @@
     border: 1px solid var(--line);
     border-radius: 12px;
     box-shadow: var(--shadow);
-    margin-top: 16px;
+    margin-top: 10px;
     overflow: hidden;
   }
   .panel-head {
-    display: flex; align-items: baseline; gap: 10px;
-    padding: 16px 20px 12px;
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 8px 14px 4px;
   }
   h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; }
   .count {
@@ -106,22 +106,25 @@
   .hint { margin-left: auto; color: var(--faint); font-size: 12px; }
 
   .row {
-    display: grid; grid-template-columns: max-content minmax(0, 1fr) auto;
-    gap: 4px 20px; align-items: center;
-    padding: 12px 20px;
+    display: grid; grid-template-columns: 4.75em minmax(0, 1fr) max-content;
+    column-gap: 14px; align-items: center;
+    min-height: 36px; padding: 5px 14px;
   }
+  html[lang="en"] .row { grid-template-columns: 8.6em minmax(0, 1fr) max-content; }
+  .row > h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .row + .row { border-top: 1px solid var(--line); }
-  .copy { min-width: 0; }
+  .copy { display: flex; min-width: 0; align-items: baseline; }
   .desc, .meta {
-    margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .desc { color: var(--faint); font-size: 12px; }
-  .meta { margin-top: 2px; color: var(--muted); font-size: 12px; }
+  .desc { flex: 0 1 auto; color: var(--faint); font-size: 12px; }
+  .meta { flex: 1 1 auto; color: var(--muted); font-size: 12px; }
+  .meta:not(:empty)::before { content: " · "; color: var(--faint); }
   .meta:empty { display: none; }
   .meta.warn { color: var(--bad); }
-  .meta .ok { color: var(--good); }
-  .controls { display: flex; align-items: center; gap: 8px; }
-  .controls.wrap { flex-wrap: nowrap; justify-content: flex-end; }
+  .meta.warn::before { color: var(--bad); }
+  .tail { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .switch-gap { width: 34px; height: 20px; flex: none; }
 
   .switch { position: relative; width: 34px; height: 20px; flex: none; }
   .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -144,7 +147,7 @@
   .switch.sm input:checked + span::after { transform: translateX(12px); }
 
   input[type="text"], input[type="password"], select {
-    width: 100%; height: 32px; padding: 0 10px;
+    width: 100%; height: 28px; padding: 0 8px;
     color: var(--text); background: var(--field);
     border: 1px solid var(--line-strong); border-radius: 7px;
     font: inherit; outline: none;
@@ -152,12 +155,12 @@
   }
   input::placeholder { color: var(--faint); }
   input:focus, select:focus { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
-  #proxy-address { width: 168px; font-family: var(--mono); font-size: 12px; }
-  #image-url { width: 220px; font-family: var(--mono); font-size: 12px; }
-  #image-model, #image-key { width: 108px; }
+  #proxy-address { width: 148px; font-family: var(--mono); font-size: 12px; }
+  #image-url { width: 196px; font-family: var(--mono); font-size: 12px; }
+  #image-model, #image-key { width: 96px; }
 
   button {
-    appearance: none; height: 32px; padding: 0 14px;
+    appearance: none; height: 28px; padding: 0 12px;
     border: 1px solid var(--line-strong); border-radius: 7px;
     background: transparent; color: var(--text);
     font: inherit; font-weight: 500; cursor: pointer;
@@ -170,23 +173,41 @@
   button.danger:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
   button:disabled { opacity: .45; cursor: default; }
 
-  table { width: 100%; border-collapse: collapse; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  col.c-name { width: 146px; }
+  col.c-test { width: 118px; }
+  col.c-sw { width: 76px; }
+  col.c-num { width: 78px; }
+  col.c-ops { width: 232px; }
   th {
     text-align: left; font-weight: 500; font-size: 11px; color: var(--faint);
-    letter-spacing: .02em; padding: 0 16px 8px; white-space: nowrap;
+    letter-spacing: .02em; padding: 2px 8px 6px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
   }
-  td { padding: 12px 16px; border-top: 1px solid var(--line); vertical-align: middle; }
+  th[data-tip] { cursor: help; }
+  th.mid, td.mid { text-align: center; padding-left: 2px; padding-right: 2px; }
+  td { padding: 5px 8px; border-top: 1px solid var(--line); vertical-align: middle; overflow: hidden; }
   tbody tr { transition: background .12s; }
   tbody tr:hover { background: var(--raise); }
-  .name, .sub { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .name { font-weight: 500; }
-  .sub { color: var(--faint); margin-top: 2px; }
-  .api { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--muted); }
-  .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
-  .tag {
-    font-family: var(--mono); font-size: 11px; color: var(--muted);
-    padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line-strong); flex: none;
+  .name { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  button.model-name {
+    display: block; max-width: 100%; height: auto; margin-top: 1px; padding: 0;
+    border: 0; border-radius: 0; background: transparent;
+    color: var(--faint); font-family: var(--mono); font-size: 12px; font-weight: 400; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer;
   }
+  button.model-name:hover { color: var(--text); background: transparent; border-color: transparent; }
+  .api { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; color: var(--muted); }
+  .url-line { display: flex; align-items: baseline; gap: 6px; max-width: 100%; min-width: 0; }
+  .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .api .hint { flex: none; color: var(--faint); }
+  button.tag {
+    height: auto; padding: 1px 6px; border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); cursor: pointer;
+  }
+  button.tag:hover { color: var(--text); }
+  tbody tr.editing { background: var(--signal-soft); }
   .speed {
     display: inline-flex; align-items: center; gap: 6px;
     font-family: var(--mono); font-size: 12px; white-space: nowrap;
@@ -197,20 +218,22 @@
   .speed.bad { color: var(--bad); background: var(--bad-soft); }
   .speed.idle { color: var(--faint); background: transparent; cursor: default; padding-left: 0; }
   .speed.idle::before { display: none; }
-  td.ops { text-align: right; }
-  .ops-inner { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .ops-line { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  td.mid .switch { display: inline-block; vertical-align: middle; }
+  th.ops, td.ops { text-align: right; white-space: nowrap; overflow: visible; }
+  td.ops .sm { padding: 0 8px; }
+  td.ops .sm + .sm { margin-left: 4px; }
   .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; white-space: nowrap; }
-  input.token { width: 6.2em; height: 26px; padding: 0 8px; }
+  input.token { width: 100%; height: 26px; padding: 0 6px; text-align: center; }
+  .actions input.token { width: 5.6em; }
   .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
   .credit { margin: 22px 2px 0; color: var(--faint); font-size: 12px; }
   .credit a { color: inherit; text-decoration: none; }
   .credit a:hover { color: var(--muted); }
 
-  .add { border-top: 1px solid var(--line); padding: 16px 20px 18px; background: var(--raise); }
-  .add h3 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
-  .grid { display: grid; grid-template-columns: 1.1fr 140px 1fr 1.5fr 1.3fr; gap: 10px; align-items: end; }
-  label.field { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+  .add { border-top: 1px solid var(--line); padding: 10px 14px 12px; background: var(--raise); }
+  .add h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .grid { display: grid; grid-template-columns: 1.1fr 132px 1fr 1.4fr 1.2fr; gap: 8px; align-items: end; }
+  label.field { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
   .secret { position: relative; display: block; }
   .secret input { padding-right: 34px; }
   .secret button {
@@ -221,7 +244,7 @@
   .secret button:hover { color: var(--text); background: transparent; }
   .secret svg { display: block; }
   .secret svg[hidden] { display: none !important; }
-  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 14px; }
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; }
   .actions .spacer { flex: 1 1 12px; }
 
   .toast {
@@ -237,13 +260,21 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
   .toast.ok { border-color: var(--good); }
   .toast.err { border-color: var(--bad); color: var(--bad); }
+  .hover-tip {
+    position: fixed; z-index: 20; max-width: 280px;
+    padding: 8px 10px; border-radius: 8px;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line-strong); box-shadow: var(--shadow);
+    font-size: 12px; line-height: 1.45; pointer-events: none;
+  }
 
   @media (max-width: 860px) {
-    main { padding: 0 16px 72px; }
-    .row { grid-template-columns: 1fr; }
+    main { padding: 0 16px 28px; }
+    .row, html[lang="en"] .row { grid-template-columns: 4.75em minmax(0, 1fr); }
+    .tail { grid-column: 1 / -1; justify-content: flex-start; }
     .grid { grid-template-columns: 1fr 1fr; }
     #proxy-address, #image-url, #image-model, #image-key { width: 100%; }
-    .controls, .controls.wrap { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+    .tail { flex-wrap: wrap; }
     .hint { display: none; }
   }
 </style>
@@ -267,15 +298,15 @@
         <p class="desc" data-i18n="takeoverDesc">启动时关闭 Cursor，自定义模型追加在列表末尾。</p>
         <p class="meta" id="takeover-meta"></p>
       </div>
-      <label class="switch"><input id="takeover" type="checkbox" data-i18n-aria="takeover" aria-label="接管"><span></span></label>
+      <div class="tail"><label class="switch"><input id="takeover" type="checkbox" data-i18n-aria="takeover" aria-label="接管"><span></span></label></div>
     </div>
     <div class="row">
       <h2 data-i18n="proxy">代理</h2>
       <div class="copy">
-        <p class="desc" data-i18n="proxyDesc">host:port 按 socks5，留空则直连。</p>
+        <p class="desc" data-i18n="proxyDesc">一个地址。没写协议时自动识别 socks5 或 http，留空则直连。</p>
         <p class="meta" id="proxy-meta"></p>
       </div>
-      <div class="controls">
+      <div class="tail">
         <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false">
         <button id="proxy-save" type="button" data-i18n="save">保存</button>
         <label class="switch"><input id="proxy-on" type="checkbox" data-i18n-aria="proxy" aria-label="代理"><span></span></label>
@@ -287,11 +318,12 @@
         <p class="desc" data-i18n="imageDesc">OpenAI 兼容出图接口，供 GenerateImage。密钥留空不改。</p>
         <p class="meta" id="image-meta"></p>
       </div>
-      <div class="controls wrap">
+      <div class="tail">
         <input id="image-url" type="text" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false">
         <input id="image-model" type="text" placeholder="dall-e-3" autocomplete="off" spellcheck="false">
         <input id="image-key" type="password" data-i18n-placeholder="apiKey" placeholder="密钥" autocomplete="off" spellcheck="false">
         <button id="image-save" type="button" data-i18n="save">保存</button>
+        <span class="switch-gap"></span>
       </div>
     </div>
     <div class="row">
@@ -300,7 +332,7 @@
         <p class="desc" data-i18n="autostartDesc">登录后自动启动，只保留一条启动项。</p>
         <p class="meta" id="boot-meta"></p>
       </div>
-      <label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label>
+      <div class="tail"><label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label></div>
     </div>
   </section>
 
@@ -310,16 +342,31 @@
       <span class="count" id="model-count">0</span>
       <span class="hint" data-i18n="modelsHint">测试会流式请求 1 到 120 的数字，记录速度、首字和输出</span>
     </div>
+    <div class="table-scroll">
     <table id="model-table">
+      <colgroup>
+        <col class="c-name"><col><col class="c-test"><col class="c-sw"><col class="c-sw"><col class="c-sw"><col class="c-num"><col class="c-num"><col class="c-ops">
+      </colgroup>
       <thead>
-        <tr><th data-i18n="colModel">模型</th><th data-i18n="colEndpoint">接口</th><th data-i18n="colLastTest">上次测试</th><th></th></tr>
+        <tr>
+          <th data-i18n="colModel" data-i18n-tip="tipModel">模型</th>
+          <th data-i18n="colEndpoint" data-i18n-tip="tipEndpoint">接口</th>
+          <th data-i18n="colLastTest" data-i18n-tip="tipLastTest">上次测试</th>
+          <th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy">代理</th>
+          <th class="mid" data-i18n="colReason" data-i18n-tip="tipReason">推理</th>
+          <th class="mid" data-i18n="colFast" data-i18n-tip="tipFast">Fast</th>
+          <th class="mid" data-i18n="colContext" data-i18n-tip="tipContext">上下文</th>
+          <th class="mid" data-i18n="colMax" data-i18n-tip="tipMax">最大</th>
+          <th class="ops" data-i18n="colOps" data-i18n-tip="tipOps">操作</th>
+        </tr>
       </thead>
       <tbody id="models"></tbody>
     </table>
+    </div>
     <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
 
     <form id="model-form" class="add">
-      <h3 data-i18n="addModel">添加模型</h3>
+      <h3 id="form-title" data-i18n="addModel">添加模型</h3>
       <div class="grid">
         <label class="field"><span data-i18n="displayName">显示名</span><input name="display_name" type="text" required></label>
         <label class="field"><span data-i18n="type">类型</span>
@@ -351,32 +398,44 @@
         <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
         <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
         <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
-        <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1000" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+        <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
         <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
         <span class="spacer"></span>
+        <button id="form-clear" type="button" data-i18n="clear">清空</button>
         <button id="draft-test" type="button" data-i18n="test">测试</button>
-        <button class="primary" type="submit" data-i18n="add">添加</button>
+        <button id="model-submit" class="primary" type="submit" data-i18n="add">添加</button>
       </div>
     </form>
   </section>
   <p class="credit">MIT · <a href="https://github.com/CSGrandeur/cursor-inner">CSGrandeur</a></p>
 </main>
 <div class="toast" id="banner" role="status"></div>
+<div class="hover-tip" id="hover-tip" hidden></div>
 <script>
 const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
     takeover: "接管", takeoverDesc: "启动时关闭 Cursor，自定义模型追加在列表末尾。",
-    proxy: "代理", proxyDesc: "host:port 按 socks5，留空则直连。",
+    proxy: "代理", proxyDesc: "一个地址。没写协议时自动识别 socks5 或 http，留空则直连。",
     image: "出图", imageDesc: "OpenAI 兼容出图接口，供 GenerateImage。密钥留空不改。",
     imageEmpty: "未配置，模型看不到 GenerateImage。", imageReady: "已配置 {model}{hint}",
     save: "保存", autostart: "开机启动", autostartDesc: "登录后自动启动，只保留一条启动项。",
     models: "自定义模型", modelsHint: "测试会流式请求 1 到 120 的数字，记录速度、首字和输出",
-    colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试",
-    empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型",
+    colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试", colProxy: "代理", colReason: "推理", colFast: "Fast", colContext: "上下文", colMax: "最大", colOps: "操作",
+    tipModel: "上面是显示名，下面是请求使用的模型名。点击模型名复制，悬停可看被截断的全名。",
+    tipEndpoint: "上面是接口类型，下面是地址。点击类型标签复制地址。",
+    tipLastTest: "最近一次测试。数字是速度，悬停数字可看首字、耗时和返回。",
+    tipProxy: "这个模型的请求是否经过页面上方的代理。",
+    tipReason: "打开后，Cursor 的模型菜单里可以选择推理力度，请求会带上这个力度。",
+    tipFast: "打开后，Cursor 里可以使用 Fast，请求带 service_tier。只有 OpenAI Chat 能开。",
+    tipContext: "这个模型的上下文上限，单位是 token。留空时按 128k。Cursor 里选更小的档会取更小的那个。",
+    tipMax: "单次回复最多输出的 token。留空时 OpenAI 兼容接口不传上限，Anthropic 用 8192。",
+    tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
+    empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥",
-    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", optional: "可选", test: "测试", testing: "测试中…", add: "添加", del: "删除",
+    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", optional: "可选", test: "测试", testing: "测试中…", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
+    keepKey: "留空不改", copyUrl: "点击复制接口地址", copied: "已复制", copiedToForm: "已填入添加表单。密钥不会带过去，需要重新填写。",
     showKey: "显示密钥", hideKey: "隐藏密钥",
     notTakenOver: "这次启动没有接管。", mitm: "接管代理 {url}",
     proxyOn: "生效中：Cursor 的联网经过这个代理。", proxyOff: "当前直连。",
@@ -392,15 +451,25 @@ const MESSAGES = {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
     takeover: "Takeover", takeoverDesc: "Closes Cursor on start. Custom models are appended to the list.",
-    proxy: "Proxy", proxyDesc: "host:port is socks5. Empty means a direct connection.",
+    proxy: "Proxy", proxyDesc: "One address. A bare host:port is detected as socks5 or http. Empty means direct.",
     image: "Images", imageDesc: "OpenAI-compatible endpoint for GenerateImage. An empty key is kept.",
     imageEmpty: "Not configured. The model will not see GenerateImage.", imageReady: "Configured {model}{hint}",
     save: "Save", autostart: "Start at login", autostartDesc: "Starts at login, and keeps a single entry.",
     models: "Custom models", modelsHint: "Tests stream the numbers 1 to 120 and record speed, first token and output",
-    colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test",
-    empty: "No custom models yet. Add the first one below.", addModel: "Add model",
+    colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test", colProxy: "Proxy", colReason: "Reasoning", colFast: "Fast", colContext: "Context", colMax: "Max", colOps: "Actions",
+    tipModel: "Display name on top, request model name below. Click the model name to copy it. Hover to read a truncated name.",
+    tipEndpoint: "Endpoint type on top, URL below. Click the type tag to copy the URL.",
+    tipLastTest: "The latest test. The number is speed. Hover it for the first token, duration and reply.",
+    tipProxy: "Whether this model's requests go through the proxy above.",
+    tipReason: "Shows an effort picker in Cursor's model menu and sends that effort.",
+    tipFast: "Allows Fast in Cursor and sends service_tier. OpenAI Chat only.",
+    tipContext: "Context limit in tokens. Empty uses 128k. A smaller Cursor choice wins when it is smaller.",
+    tipMax: "Max output tokens for one reply. Empty omits the limit for OpenAI-compatible endpoints and uses 8192 for Anthropic.",
+    tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
+    empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key",
-    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", optional: "optional", test: "Test", testing: "Testing…", add: "Add", del: "Delete",
+    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", optional: "optional", test: "Test", testing: "Testing…", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
+    keepKey: "Leave blank to keep", copyUrl: "Click to copy the endpoint URL", copied: "Copied", copiedToForm: "Filled into the add form. The API key is not copied.",
     showKey: "Show key", hideKey: "Hide key",
     notTakenOver: "Takeover is not active in this session.", mitm: "Takeover proxy {url}",
     proxyOn: "Active: Cursor's traffic goes through this proxy.", proxyOff: "Direct connection.",
@@ -439,13 +508,18 @@ function applyLang() {
   document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = t(node.dataset.i18nTitle); });
   document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => { node.placeholder = t(node.dataset.i18nPlaceholder); });
+  document.querySelectorAll("[data-i18n-tip]").forEach((node) => { node.dataset.tip = t(node.dataset.i18nTip); });
   document.querySelector("#lang").textContent = t("switchLang");
   syncReveal();
+  syncFormMode();
   if (lastState) render(lastState);
 }
 
 const banner = document.querySelector("#banner");
 const form = document.querySelector("#model-form");
+const hoverTip = document.querySelector("#hover-tip");
+let editingId = "";
+let tipAnchor = null;
 let toastTimer = 0;
 
 function toast(text, kind) {
@@ -501,7 +575,7 @@ async function send(url, options) {
 
 function formModel() {
   const fd = new FormData(form);
-  return {
+  const body = {
     display_name: fd.get("display_name") || "",
     type: fd.get("type"),
     base_url: fd.get("base_url") || "",
@@ -513,6 +587,62 @@ function formModel() {
     context_window: tokenField(fd.get("context_window")),
     max_output_tokens: tokenField(fd.get("max_output_tokens"))
   };
+  if (editingId) body.id = editingId;
+  return body;
+}
+
+function syncFormMode() {
+  const editing = editingId !== "";
+  form.classList.toggle("editing", editing);
+  document.querySelector("#form-title").textContent = editing ? t("editModel") : t("addModel");
+  document.querySelector("#model-submit").textContent = editing ? t("save") : t("add");
+  const key = document.querySelector("#api-key");
+  key.required = !editing;
+  key.placeholder = editing ? t("keepKey") : "";
+}
+
+function clearForm() {
+  editingId = "";
+  form.reset();
+  const key = document.querySelector("#api-key");
+  key.type = "password";
+  document.querySelector("#eye-on").hidden = true;
+  document.querySelector("#eye-off").hidden = false;
+  syncReveal();
+  syncFormMode();
+}
+
+function fillForm(model, mode) {
+  form.display_name.value = model.display_name || "";
+  form.type.value = model.type || "openai-chat";
+  form.model.value = model.model || "";
+  form.base_url.value = model.base_url || "";
+  form.api_key.value = "";
+  form.use_proxy.checked = !!model.use_proxy;
+  form.reasoning.checked = !!model.reasoning;
+  form.fast.checked = !!model.fast;
+  form.context_window.value = model.context_window > 0 ? String(model.context_window) : "";
+  form.max_output_tokens.value = model.max_output_tokens > 0 ? String(model.max_output_tokens) : "";
+  editingId = mode === "edit" ? model.id : "";
+  syncFormMode();
+  if (lastState) render(lastState);
+  form.scrollIntoView({block: "nearest"});
+  form.display_name.focus();
+}
+
+async function copyText(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+  toast(t("copied"), "ok");
 }
 
 function tokenField(value) {
@@ -521,20 +651,38 @@ function tokenField(value) {
   return Math.floor(n);
 }
 
-function tokenInput(model, field, label) {
-  const lab = el("label", "mini");
+function flagCell(model, field, label, disabled) {
+  const td = el("td", "mid");
+  const sw = el("span", "switch sm");
+  const box = el("input");
+  box.type = "checkbox";
+  box.checked = !!model[field];
+  box.disabled = disabled;
+  box.setAttribute("aria-label", label);
+  box.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({[field]: box.checked})
+  })));
+  sw.append(box, el("span"));
+  td.append(sw);
+  return td;
+}
+
+function limitCell(model, field, label) {
+  const td = el("td", "mid");
   const input = el("input", "mono token");
   input.type = "number";
   input.min = "0";
   input.step = "1";
   input.placeholder = t("optional");
+  input.setAttribute("aria-label", label);
   if (model[field] > 0) input.value = String(model[field]);
   input.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
     method: "PUT", headers: {"Content-Type": "application/json"},
     body: JSON.stringify({[field]: tokenField(input.value)})
   })));
-  lab.append(document.createTextNode(label), input);
-  return lab;
+  td.append(input);
+  return td;
 }
 
 function el(tag, className, text) {
@@ -553,6 +701,8 @@ function busy(button, label, run) {
 
 function render(state) {
   lastState = state;
+  hoverTip.hidden = true;
+  tipAnchor = null;
   const listen = document.querySelector("#listen");
   document.querySelector("#listen-text").textContent = state.listen_url || "";
   listen.href = state.listen_url || "/";
@@ -598,56 +748,30 @@ function render(state) {
   document.querySelector("#model-count").textContent = state.models.length;
   for (const model of state.models) {
     const tr_ = el("tr");
+    if (model.id === editingId) tr_.classList.add("editing");
     const who = el("td");
-    who.append(el("div", "name", model.display_name), el("div", "sub mono", model.model));
+    const name = el("div", "name", model.display_name);
+    name.dataset.tip = model.display_name || "";
+    const modelName = el("button", "model-name mono", model.model);
+    modelName.type = "button";
+    modelName.dataset.tip = model.model || "";
+    modelName.addEventListener("click", () => copyText(model.model));
+    who.append(name, modelName);
     const api = el("td");
     const apiInner = el("div", "api");
+    const tag = el("button", "tag", model.type);
+    tag.type = "button";
+    tag.dataset.tip = t("copyUrl");
+    tag.addEventListener("click", () => copyText(model.base_url));
+    const urlLine = el("div", "url-line");
     const url = el("span", "url mono", model.base_url);
-    url.title = model.base_url;
-    apiInner.append(el("span", "tag", model.type), url);
-    if (model.key_hint) apiInner.append(el("span", "mono", model.key_hint));
+    url.dataset.tip = model.base_url || "";
+    urlLine.append(url);
+    if (model.key_hint) urlLine.append(el("span", "mono hint", model.key_hint));
+    apiInner.append(tag, urlLine);
     api.append(apiInner);
     const last = el("td");
     last.append(testBadge(model.last_test));
-
-    const ops = el("td", "ops");
-    const inner = el("div", "ops-inner");
-    const proxy = el("label", "mini");
-    const sw = el("span", "switch sm");
-    const checkbox = el("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = model.use_proxy;
-    checkbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
-      method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({use_proxy: checkbox.checked})
-    })));
-    sw.append(checkbox, el("span"));
-    proxy.append(sw, document.createTextNode(t("useProxy")));
-    const reason = el("label", "mini");
-    const rsw = el("span", "switch sm");
-    const rbox = el("input");
-    rbox.type = "checkbox";
-    rbox.checked = !!model.reasoning;
-    rbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
-      method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({reasoning: rbox.checked})
-    })));
-    rsw.append(rbox, el("span"));
-    reason.append(rsw, document.createTextNode(t("reasoning")));
-    const fast = el("label", "mini");
-    const fsw = el("span", "switch sm");
-    const fbox = el("input");
-    fbox.type = "checkbox";
-    fbox.checked = !!model.fast;
-    fbox.disabled = model.type !== "openai-chat";
-    fbox.addEventListener("change", () => act(() => send("/api/models/" + model.id, {
-      method: "PUT", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({fast: fbox.checked})
-    })));
-    fsw.append(fbox, el("span"));
-    fast.append(fsw, document.createTextNode(t("fast")));
-    const context = tokenInput(model, "context_window", t("contextWindow"));
-    const maxOut = tokenInput(model, "max_output_tokens", t("maxOutput"));
     const test = el("button", "sm", t("test"));
     test.type = "button";
     test.addEventListener("click", () => busy(test, t("testing"), () => act(async () => {
@@ -655,16 +779,29 @@ function render(state) {
       showTest(result);
       return send("/api/state");
     })));
+    const edit = el("button", "sm", t("edit"));
+    edit.type = "button";
+    edit.addEventListener("click", () => fillForm(model, "edit"));
+    const copy = el("button", "sm", t("copy"));
+    copy.type = "button";
+    copy.addEventListener("click", () => {
+      fillForm(model, "copy");
+      toast(t("copiedToForm"), "ok");
+    });
     const del = el("button", "sm danger", t("del"));
     del.type = "button";
     del.addEventListener("click", () => act(() => send("/api/models/" + model.id, {method: "DELETE"})));
-    const switches = el("div", "ops-line");
-    const tokens = el("div", "ops-line");
-    switches.append(proxy, reason, fast, test, del);
-    tokens.append(context, maxOut);
-    inner.append(switches, tokens);
-    ops.append(inner);
-    tr_.append(who, api, last, ops);
+    const ops = el("td", "ops");
+    ops.append(test, edit, copy, del);
+    tr_.append(
+      who, api, last,
+      flagCell(model, "use_proxy", t("useProxy"), false),
+      flagCell(model, "reasoning", t("reasoning"), false),
+      flagCell(model, "fast", t("fast"), model.type !== "openai-chat"),
+      limitCell(model, "context_window", t("contextWindow")),
+      limitCell(model, "max_output_tokens", t("maxOutput")),
+      ops
+    );
     box.append(tr_);
   }
 }
@@ -716,11 +853,19 @@ document.querySelector("#proxy-save").addEventListener("click", () => {
 });
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  const editing = editingId;
   act(async () => {
-    const state = await send("/api/models", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
-    form.reset();
+    const payload = JSON.stringify(formModel());
+    const state = editing
+      ? await send("/api/models/" + editing, {method: "PUT", headers: {"Content-Type": "application/json"}, body: payload})
+      : await send("/api/models", {method: "POST", headers: {"Content-Type": "application/json"}, body: payload});
+    clearForm();
     return state;
   });
+});
+document.querySelector("#form-clear").addEventListener("click", () => {
+  clearForm();
+  if (lastState) render(lastState);
 });
 const draftTest = document.querySelector("#draft-test");
 draftTest.addEventListener("click", () => busy(draftTest, t("testing"), () => act(async () => {
@@ -761,6 +906,35 @@ document.querySelector("#reveal-key").addEventListener("click", () => {
   document.querySelector("#eye-on").hidden = !show;
   document.querySelector("#eye-off").hidden = show;
   syncReveal();
+});
+document.addEventListener("mouseover", (event) => {
+  const node = event.target.closest ? event.target.closest("[data-tip]") : null;
+  if (node === tipAnchor) return;
+  tipAnchor = node;
+  const text = node && node.dataset.tip;
+  if (!text) {
+    hoverTip.hidden = true;
+    return;
+  }
+  hoverTip.textContent = text;
+  hoverTip.hidden = false;
+  const rect = node.getBoundingClientRect();
+  const width = hoverTip.offsetWidth;
+  const height = hoverTip.offsetHeight;
+  let left = rect.left;
+  if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+  if (left < 8) left = 8;
+  let top = rect.bottom + 6;
+  if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 6);
+  hoverTip.style.left = left + "px";
+  hoverTip.style.top = top + "px";
+});
+document.addEventListener("mouseout", (event) => {
+  if (!tipAnchor) return;
+  const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest("[data-tip]") : null;
+  if (next === tipAnchor) return;
+  tipAnchor = null;
+  hoverTip.hidden = true;
 });
 applyLang();
 load();

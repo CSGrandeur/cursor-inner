@@ -18,6 +18,19 @@ func TestEstimateUsesReportedPromptTokens(t *testing.T) {
 	}
 }
 
+func TestCompactDropsEarlierImages(t *testing.T) {
+	image := []provider.Image{{MIME: "image/png", Data: []byte{1, 2, 3, 4}}}
+	messages := []provider.Message{{Role: "user", Content: "look"}}
+	messages = append(messages, provider.Message{Role: "tool", ToolCallID: "old", Content: "Read image file: /w/old.png", Images: image})
+	for i := 0; i < 6; i++ {
+		messages = append(messages, provider.Message{Role: "user", Content: "next"})
+	}
+	out := compactMessages(messages, 100)
+	if len(out[1].Images) != 0 || !strings.Contains(out[1].Content, "[earlier image omitted]") {
+		t.Fatalf("%+v", out[1])
+	}
+}
+
 func TestCompactLeavesShortHistoryAlone(t *testing.T) {
 	in := []provider.Message{{Role: "user", Content: "hi"}, {Role: "tool", Content: "short"}}
 	out := compactMessages(in, 128000)

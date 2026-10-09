@@ -369,6 +369,13 @@ func finishImage(ui *cursorpb.ToolCall, resp *cursorpb.GenerateImageRequestRespo
 		if tool != nil {
 			tool.GenerateImageToolCall.Result = &cursorpb.GenerateImageResult{Result: &cursorpb.GenerateImageResult_Success{Success: &cursorpb.GenerateImageSuccess{FilePath: path, ImageData: data}}}
 		}
+		raw, err := base64.StdEncoding.DecodeString(data)
+		if err == nil && imageMIME(raw) != "" {
+			if path != "" {
+				return "Generated an image: " + path, false, ""
+			}
+			return "Generated an image.", false, ""
+		}
 		return fmt.Sprintf("Generated an image (%d bytes).", len(data)), false, ""
 	default:
 		return "Image generation was not approved.", true, ""
@@ -435,4 +442,21 @@ func generateImage(web dialer.Func, image ImageAPI, prompt string) (string, erro
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(raw), nil
+}
+
+// GeneratedImage 取出刚生成、并且能认出格式的图片，交给模型看。
+func GeneratedImage(ui *cursorpb.ToolCall) (provider.Image, bool) {
+	encoded := ui.GetGenerateImageToolCall().GetResult().GetSuccess().GetImageData()
+	if encoded == "" {
+		return provider.Image{}, false
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return provider.Image{}, false
+	}
+	mime := imageMIME(raw)
+	if mime == "" {
+		return provider.Image{}, false
+	}
+	return provider.Image{MIME: mime, Data: raw}, true
 }

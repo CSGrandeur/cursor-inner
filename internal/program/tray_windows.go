@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package program
 
 import (
 	"fmt"
@@ -137,6 +137,7 @@ func runTray(done chan struct{}) {
 		slog.Warn(fmt.Sprintf("通知区域图标没有挂上：%v", err))
 		return
 	}
+	installConsoleCloseHook()
 	var m trayMsg
 	for {
 		r, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
@@ -313,6 +314,7 @@ func copyUTF16(dst []uint16, s string) {
 func consoleHidden() bool { return trayConcealed.Load() }
 
 func removeTrayIcon() {
+	removeConsoleCloseHook()
 	if trayHwnd.Load() == 0 {
 		return
 	}
@@ -335,13 +337,7 @@ func hideConsoleToTray() bool {
 			_, _, _ = procShowWindow.Call(hwnd, 0)
 		}
 	}
-	if trayNoted.CompareAndSwap(false, true) {
-		text := "Still running in the notification area. Right-click the icon to quit."
-		if uiChinese() {
-			text = "仍在任务栏通知区域运行。右键图标可以选择退出。"
-		}
-		shellNotify(nimModify, 0x1|0x2|0x4, text)
-	}
+	noteConcealed()
 	return true
 }
 
@@ -375,6 +371,7 @@ func showFromTray() {
 		residentTerm.Attach(out)
 		if residentOpen != nil {
 			residentTerm.OnEnter(residentOpen)
+			installConsoleLink(residentTerm, residentOpen)
 		}
 	}
 }

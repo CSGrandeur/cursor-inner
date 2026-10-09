@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/provider"
@@ -34,6 +35,10 @@ type Pending struct {
 	Terminals string
 	// Note 是交给模型的补充说明，例如云端子代理改在本地执行。
 	Note string
+	// Images 是这次工具结果里要交给模型看的图片。读到 PNG、JPEG、GIF、WebP 时填上。
+	Images []provider.Image
+	// Wait 是这条执行在没有新消息时最多再等多久。为零时由调用方用自己的默认值。
+	Wait time.Duration
 }
 
 // Request 把模型的工具调用变成 Cursor 的执行请求和界面卡片。返回错误时，应把错误文本作为工具结果交回模型。
@@ -123,9 +128,11 @@ func (p *Pending) Advance(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall
 
 // Result 把 Cursor 的执行结果变成交给模型的文本，并补全界面卡片里的结果。
 func (p *Pending) Result(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall) (string, bool) {
+	p.Images = nil
 	switch result := msg.GetMessage().(type) {
 	case *cursorpb.ExecClientMessage_ReadResult:
-		text, isErr := readText(result.ReadResult)
+		text, images, isErr := readText(result.ReadResult)
+		p.Images = images
 		if tool, ok := ui.GetTool().(*cursorpb.ToolCall_ReadToolCall); ok {
 			tool.ReadToolCall.Result = readUI(result.ReadResult)
 		}
@@ -158,7 +165,8 @@ func (p *Pending) Result(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall)
 		}
 		return text, isErr
 	case *cursorpb.ExecClientMessage_McpResult:
-		text, isErr := mcpText(result.McpResult)
+		text, images, isErr := mcpText(result.McpResult)
+		p.Images = images
 		if tool, ok := ui.GetTool().(*cursorpb.ToolCall_McpToolCall); ok {
 			tool.McpToolCall.Result = mcpUI(result.McpResult)
 		}
@@ -173,7 +181,8 @@ func (p *Pending) Result(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall)
 		}
 		return text, isErr
 	case *cursorpb.ExecClientMessage_ReadMcpResourceExecResult:
-		text, isErr := resourceText(result.ReadMcpResourceExecResult)
+		text, images, isErr := resourceText(result.ReadMcpResourceExecResult)
+		p.Images = images
 		if tool, ok := ui.GetTool().(*cursorpb.ToolCall_ReadMcpResourceToolCall); ok {
 			tool.ReadMcpResourceToolCall.Result = result.ReadMcpResourceExecResult
 		}
@@ -183,37 +192,40 @@ func (p *Pending) Result(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall)
 	}
 }
 
-func readText(r *cursorpb.ReadResult) (string, bool) {
+func readText(r *cursorpb.ReadResult) (string, []provider.Image, bool) {
 	switch v := r.GetResult().(type) {
 	case *cursorpb.ReadResult_Success:
 		switch out := v.Success.GetOutput().(type) {
 		case *cursorpb.ReadSuccess_Content:
 			if out.Content == "" {
-				return "File is empty.", false
+				return "File is empty.", nil, false
 			}
-			return out.Content, false
+			return out.Content, nil, false
 		case *cursorpb.ReadSuccess_Data:
-			return fmt.Sprintf("%s is a binary file (%d bytes).", v.Success.GetPath(), len(out.Data)), false
+			if mime := imageMIME(out.Data); mime != "" {
+				return "Read image file: " + v.Success.GetPath(), []provider.Image{{MIME: mime, Data: append([]byte(nil), out.Data...)}}, false
+			}
+			return fmt.Sprintf("%s is a binary file (%d bytes).", v.Success.GetPath(), len(out.Data)), nil, false
 		}
-		return "read " + v.Success.GetPath(), false
+		return "read " + v.Success.GetPath(), nil, false
 	case *cursorpb.ReadResult_Error:
-		return v.Error.GetError(), true
+		return v.Error.GetError(), nil, true
 	case *cursorpb.ReadResult_Rejected:
-		return "The user rejected reading " + v.Rejected.GetPath() + ": " + v.Rejected.GetReason(), true
+		return "The user rejected reading " + v.Rejected.GetPath() + ": " + v.Rejected.GetReason(), nil, true
 	case *cursorpb.ReadResult_FileNotFound:
-		return "File not found: " + v.FileNotFound.GetPath(), true
+		return "File not found: " + v.FileNotFound.GetPath(), nil, true
 	case *cursorpb.ReadResult_PermissionDenied:
-		return "Permission denied: " + v.PermissionDenied.GetPath(), true
+		return "Permission denied: " + v.PermissionDenied.GetPath(), nil, true
 	case *cursorpb.ReadResult_InvalidFile:
-		return v.InvalidFile.GetReason(), true
+		return v.InvalidFile.GetReason(), nil, true
 	}
-	return "Cursor returned an empty read result", true
+	return "Cursor returned an empty read result", nil, true
 }
 
 func readUI(r *cursorpb.ReadResult) *cursorpb.ReadToolResult {
 	success, ok := r.GetResult().(*cursorpb.ReadResult_Success)
 	if !ok {
-		text, _ := readText(r)
+		text, _, _ := readText(r)
 		return &cursorpb.ReadToolResult{Result: &cursorpb.ReadToolResult_Error{Error: &cursorpb.ReadToolError{ErrorMessage: text}}}
 	}
 	s := success.Success

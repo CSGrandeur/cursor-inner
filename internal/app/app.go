@@ -173,10 +173,14 @@ func (a *App) SetProxy(enabled bool, address string) error {
 	if err := dialer.RejectSelf(mustSpec(next), a.life.Snapshot().URL); err != nil {
 		return err
 	}
-	return a.store.Update(func(f *config.File) error {
+	if err := a.store.Update(func(f *config.File) error {
 		f.Proxy = next
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+	a.life.SyncDirect()
+	return nil
 }
 
 func (a *App) SetImage(baseURL, apiKey, model string) error {
@@ -222,6 +226,41 @@ func (a *App) AddModel(model config.Model) error {
 		}
 		f.Models = append(f.Models, prepared)
 		return nil
+	})
+}
+
+func (a *App) UpdateModel(id string, model config.Model) error {
+	if model.ContextWindow < 0 || model.MaxOutputTokens < 0 {
+		return i18n.E("token 数不能为负", "Token counts cannot be negative")
+	}
+	return a.store.Update(func(f *config.File) error {
+		for i := range f.Models {
+			if f.Models[i].ID != id {
+				continue
+			}
+			prev := f.Models[i]
+			if strings.TrimSpace(model.APIKey) == "" {
+				model.APIKey = prev.APIKey
+			}
+			prepared, err := provider.Prepare(model)
+			if err != nil {
+				return err
+			}
+			if prepared.Type != "openai-chat" {
+				prepared.FastSupport = false
+			}
+			for _, other := range f.Models {
+				if other.ID == prepared.ID && other.ID != prev.ID {
+					return i18n.E("已经添加过这个模型", "This model has already been added")
+				}
+			}
+			if prev.Type == prepared.Type && prev.BaseURL == prepared.BaseURL && prev.Model == prepared.Model && prev.APIKey == prepared.APIKey {
+				prepared.LastTest = prev.LastTest
+			}
+			f.Models[i] = prepared
+			return nil
+		}
+		return i18n.E("没有这个模型", "No such model")
 	})
 }
 
@@ -326,6 +365,14 @@ func (a *App) TestSaved(id string) provider.Result {
 }
 
 func (a *App) TestDraft(model config.Model) provider.Result {
+	if strings.TrimSpace(model.APIKey) == "" && model.ID != "" {
+		for _, existing := range a.store.Get().Models {
+			if existing.ID == model.ID {
+				model.APIKey = existing.APIKey
+				break
+			}
+		}
+	}
 	prepared, err := provider.Prepare(model)
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"strings"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
@@ -22,7 +23,16 @@ func compactMessages(messages []provider.Message, window int) []provider.Message
 		cutoff = 1
 	}
 	for i := 1; i < cutoff; i++ {
-		if out[i].Role != "tool" || len(out[i].Content) < 800 {
+		if out[i].Role != "tool" {
+			continue
+		}
+		if len(out[i].Images) > 0 {
+			out[i].Images = nil
+			if !strings.Contains(out[i].Content, "[earlier image omitted]") {
+				out[i].Content += "\n[earlier image omitted]"
+			}
+		}
+		if len(out[i].Content) < 800 {
 			continue
 		}
 		body := out[i].Content
@@ -84,6 +94,7 @@ func estimateTokens(messages []provider.Message) int {
 	for _, message := range messages[from:] {
 		total += len(message.Content) / 4
 		total += len(message.Reasoning) / 4
+		total += len(message.Images) * 1024
 	}
 	return total
 }

@@ -12,6 +12,7 @@ import (
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/runlog"
 )
 
 func sse(events ...string) string {
@@ -215,6 +216,34 @@ func TestTruncatedToolCallIsDropped(t *testing.T) {
 	}
 }
 
+func TestToolResultCarriesTheImage(t *testing.T) {
+	png := []byte{1, 2, 3}
+	tool := Message{Role: "tool", ToolCallID: "c1", Content: "Read image file: /w/a.png", Images: []Image{{MIME: "image/png", Data: png}}}
+	var seen []byte
+	srv := serve(t, sse(`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`), &seen)
+	m := config.Model{Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "look"}, {Role: "assistant", ToolCalls: []ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}}, tool}, nil, func(string) error { return nil }, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(seen), `"role":"tool"`) || !strings.Contains(string(seen), "image_url") || !strings.Contains(string(seen), "data:image/png;base64,AQID") {
+		t.Fatalf("%s", seen)
+	}
+	seen = nil
+	srv = serve(t, sse(
+		`{"type":"content_block_start","index":0,"content_block":{"type":"text"}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}`,
+		`{"type":"message_stop"}`,
+	), &seen)
+	m.Type = "anthropic"
+	m.BaseURL = srv.URL
+	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "look"}, {Role: "assistant", ToolCalls: []ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}}, tool}, nil, func(string) error { return nil }, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(seen), `"type":"tool_result"`) || !strings.Contains(string(seen), `"media_type":"image/png"`) || !strings.Contains(string(seen), "AQID") {
+		t.Fatalf("%s", seen)
+	}
+}
+
 func TestReasoningEffortFastAndImage(t *testing.T) {
 	var seen []byte
 	srv := serve(t, sse(`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`), &seen)
@@ -326,6 +355,35 @@ func TestCloseDanglingFillsMissingResults(t *testing.T) {
 	})
 	if len(out) != 4 || out[2].ToolCallID != "b" || !out[2].IsError || out[2].Content != interruptedTool || out[3].Content != interruptedTurn {
 		t.Fatalf("%+v", out)
+	}
+}
+
+func TestChatNoteRecordsBytesNotText(t *testing.T) {
+	secret := "super-secret-reply"
+	var notes []runlog.Note
+	runlog.Set(func(n runlog.Note) { notes = append(notes, n) })
+	t.Cleanup(func() { runlog.Set(nil) })
+	var seen []byte
+	srv := serve(t, sse(`{"choices":[{"delta":{"content":"`+secret+`"}}]}`, "[DONE]"), &seen)
+	m := config.Model{Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	_, err := Chat(runlog.WithRequest(context.Background(), "req-1"), m, dialer.Direct(), "", []Message{{Role: "user", Content: "hi"}}, nil, func(string) error { return nil }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawBytes, sawRequest bool
+	for _, n := range notes {
+		if n.Kind == "model_text" && n.Bytes == len(secret) && n.Request == "req-1" {
+			sawBytes = true
+		}
+		if n.Kind == "model_request" && n.Bytes > 0 {
+			sawRequest = true
+		}
+		if strings.Contains(n.Error, secret) || strings.Contains(n.Detail, secret) || strings.Contains(n.Model, secret) {
+			t.Fatalf("note kept the reply: %+v", n)
+		}
+	}
+	if !sawBytes || !sawRequest {
+		t.Fatalf("notes %+v", notes)
 	}
 }
 

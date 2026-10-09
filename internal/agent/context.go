@@ -9,8 +9,12 @@ import (
 	"cursor-inner/internal/provider"
 )
 
-func userTurn(user *cursorpb.UserMessage) provider.Message {
-	text := "<timestamp>" + time.Now().Format(time.RFC3339) + "</timestamp>\n<user_query>\n" + user.GetText() + "\n</user_query>"
+func userTurn(user *cursorpb.UserMessage, ctx *cursorpb.RequestContext) provider.Message {
+	text := "<timestamp>" + time.Now().Format(time.RFC3339) + "</timestamp>\n"
+	if git := gitStatus(ctx); git != "" {
+		text += git + "\n"
+	}
+	text += "<user_query>\n" + user.GetText() + "\n</user_query>"
 	if extra := selectedContext(user.GetSelectedContext()); extra != "" {
 		text += "\n\n" + extra
 	}

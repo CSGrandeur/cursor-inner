@@ -13,18 +13,20 @@ import (
 	"cursor-inner/internal/cursorsettings"
 	"cursor-inner/internal/fsutil"
 	"cursor-inner/internal/mitm"
+	"cursor-inner/internal/procfwd"
 )
 
 type Service struct {
 	dir  string
 	mitm *mitm.Server
 
-	mu      sync.Mutex
-	active  bool
-	url     string
-	ca      string
-	detail  i18n.Text
-	problem i18n.Text
+	mu          sync.Mutex
+	active      bool
+	catchDirect bool
+	url         string
+	ca          string
+	detail      i18n.Text
+	problem     i18n.Text
 }
 
 func New(dir string, proxy *mitm.Server) *Service {
@@ -106,17 +108,29 @@ func (s *Service) Enable() error {
 		return err
 	}
 	s.active = true
+	s.catchDirect = true
 	s.url = url
 	s.problem = i18n.Text{}
+	s.mitm.SyncDirect()
 	if err := TerminateCursor(); err != nil {
 		s.problem = i18n.Of(i18n.Wrap("设置已写入，但没能结束 Cursor：", "Settings were written, but Cursor could not be closed: ", err))
 	}
 	return nil
 }
 
+func (s *Service) SyncDirect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.catchDirect {
+		return
+	}
+	s.mitm.SyncDirect()
+}
+
 func (s *Service) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.catchDirect = false
 	s.mitm.Stop()
 	s.active = false
 	s.url = ""
@@ -148,11 +162,12 @@ func Recover(dir string) error {
 }
 
 func rollback(dir string) error {
+	hostErr := procfwd.Restore()
 	err := restoreSettings(dir)
 	killErr := TerminateCursor()
 	if err == nil && killErr == nil {
 		Unmark(dir)
-		return nil
+		return hostErr
 	}
 	if err == nil {
 		return killErr

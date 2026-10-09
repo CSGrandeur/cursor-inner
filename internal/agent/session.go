@@ -8,12 +8,14 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/provider"
+	"cursor-inner/internal/runlog"
 	"cursor-inner/internal/tools"
 
 	"google.golang.org/protobuf/proto"
@@ -25,7 +27,23 @@ const (
 	argFailLimit      = 3
 	heartbeatInterval = 5 * time.Second
 	contextTimeout    = 15 * time.Second
+	toolStopped       = "The tool did not finish within the time limit and was stopped. Do not retry the same call. Use a different approach."
+	shellLeftRunning  = "The shell client stopped reporting before the foreground wait ended. The command was not stopped. Check the terminal before starting it again."
+	taskLeftRunning   = "The subagent did not return before the wait ended. It was not stopped. Continue without its result or resume it."
+	replyStopped      = "The user did not respond in time. Continue without that answer."
+	replyWait         = 10 * time.Minute
 )
+
+// toolWaitLimit 是一次普通执行在没有新消息时最多再等多久。
+// 到点就把失败交回模型，这一轮继续。测试可以改短。
+// 命令行和子代理用 Pending.Wait，到点结束等待，不把还在跑的工作杀掉。
+var toolWaitLimit = 60 * time.Second
+
+// quietThinkingAfter 是模型调用还没有任何文字或思考时，先打开思考气泡的等待时间。
+// Cursor 在生成中连续约 15 秒看不到文字、思考或进行中的工具，会显示 “Taking longer than expected”。
+// 心跳不算。有的接口把整段流攒到结束才一次发出，这段空档会被当成卡住。
+// 这里只给界面一个思考气泡，不写入回传给模型的思考内容。
+var quietThinkingAfter = 2 * time.Second
 
 // Session 是一次由自定义模型回答的 Agent 运行，从 BidiAppend 的 run_request 开始，到 RunSSE 流结束为止。
 type Session struct {
@@ -49,6 +67,8 @@ type Session struct {
 	inserts          []string
 	steers           []steer
 	breakUser        *cursorpb.UserMessage
+	breakCtx         *cursorpb.RequestContext
+	reqCtx           *cursorpb.RequestContext
 	wantSummary      bool
 	autoSummarized   bool
 	toolCount        int
@@ -257,11 +277,17 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	turnStarted := time.Now()
 	var mu sync.Mutex
 	send := func(m *cursorpb.AgentServerMessage) error {
+		noteClient(s.RequestID, m)
 		mu.Lock()
 		defer mu.Unlock()
-		return emit(m)
+		err := emit(m)
+		if err != nil {
+			runlog.Emit(runlog.Note{Kind: "client", Request: s.RequestID, Detail: "write_error", Error: err.Error()})
+		}
+		return err
 	}
 	ctx, cancelRun := context.WithCancel(ctx)
+	ctx = runlog.WithRequest(ctx, s.RequestID)
 	defer cancelRun()
 	s.notifyMu.Lock()
 	s.notify = send
@@ -320,8 +346,9 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	summarizeOnly := s.run.GetAction().GetSummarizeAction() != nil
 	user := action.GetUserMessage()
 	if !summarizeOnly && user != nil {
-		messages = append(messages, userTurn(user))
+		messages = append(messages, userTurn(user, reqCtx))
 	}
+	s.reqCtx = reqCtx
 	s.terminals = reqCtx.GetEnv().GetTerminalsFolder()
 	s.workspaces = append([]string{}, reqCtx.GetEnv().GetWorkspacePaths()...)
 	for _, folder := range user.GetSelectedContext().GetFolders() {
@@ -350,21 +377,30 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	}
 	short := conversationID(s.run.GetConversationId())
 	slog.Info("▶ "+name, "conversation", short, "turn", userTurns(messages), "window", model.ContextWindow)
+	runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "start", Messages: userTurns(messages)})
 	defer func() {
 		seconds := time.Since(turnStarted).Round(time.Millisecond).Seconds()
 		uses := formatToolUses(s.toolOrder, s.toolUses)
 		if runErr != nil {
 			slog.Error("✗ "+name, "conversation", short, "seconds", seconds, "reason", provider.Explain(runErr), "error", runErr)
+			runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "error", ElapsedMs: time.Since(turnStarted).Milliseconds(), Tools: s.toolCount, Error: provider.Explain(runErr)})
 			return
 		}
 		slog.Info("✓ "+name, "conversation", short, "seconds", seconds, "tools", s.toolCount, "tool_uses", uses, "prompt_tokens", s.promptTokens, "completion_tokens", s.completionTokens, "cache_tokens", s.cacheTokens)
+		runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "end", ElapsedMs: time.Since(turnStarted).Milliseconds(), Tools: s.toolCount, Prompt: s.promptTokens, Output: s.completionTokens})
 	}()
 
+	sentCheckpoint := false
 	defer func() {
 		for _, id := range s.inflight {
 			_ = send(abortExec(id))
 		}
 		messages = provider.CloseDangling(messages)
+		if !sentCheckpoint && hasModelWork(messages) {
+			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
+				slog.Error(fmt.Sprintf("会话 %s 的检查点没有发出：%v", s.RequestID, err))
+			}
+		}
 		if err := s.history.Save(conversation, messages); err != nil && conversation != "" {
 			slog.Error(fmt.Sprintf("会话 %s 的历史没有保存：%v", s.RequestID, err))
 		}
@@ -378,6 +414,7 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
 			return err
 		}
+		sentCheckpoint = true
 		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 	}
 next:
@@ -394,7 +431,7 @@ next:
 				return err
 			}
 		}
-		thought := false
+		var thought atomic.Bool
 		started := time.Now()
 		messages = compactMessages(messages, model.ContextWindow)
 		if !s.autoSummarized && overBudget(messages, model.ContextWindow) {
@@ -405,21 +442,26 @@ next:
 				return err
 			}
 		}
+		stopQuiet, waitQuiet := startQuietThinking(ctx, send, &thought)
 		var reply provider.Message
 		messages, reply, err = chatOrCompact(ctx, model, dial, system, messages, catalog, func(text string) error {
+			stopQuiet()
 			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: text}}}))
 		}, func(text string) error {
-			thought = true
+			thought.Store(true)
+			stopQuiet()
 			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ThinkingDelta{ThinkingDelta: &cursorpb.ThinkingDeltaUpdate{Text: text}}}))
 		})
+		stopQuiet()
+		waitQuiet()
+		if thought.Load() {
+			ms := int32(min(time.Since(started).Milliseconds(), 1<<31-1))
+			if cerr := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ThinkingCompleted{ThinkingCompleted: &cursorpb.ThinkingCompletedUpdate{ThinkingDurationMs: ms}}})); cerr != nil && err == nil {
+				err = cerr
+			}
+		}
 		if err != nil {
 			return err
-		}
-		if thought {
-			ms := int32(min(time.Since(started).Milliseconds(), 1<<31-1))
-			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ThinkingCompleted{ThinkingCompleted: &cursorpb.ThinkingCompletedUpdate{ThinkingDurationMs: ms}}})); err != nil {
-				return err
-			}
 		}
 		s.promptTokens = reply.PromptTokens
 		s.completionTokens = reply.CompletionTokens
@@ -445,11 +487,12 @@ next:
 						messages = append(messages, provider.Message{Role: "tool", ToolCallID: call.ID, Content: "Interrupted because the user sent a new message.", IsError: true})
 					}
 					if s.breakUser != nil {
-						messages = append(messages, userTurn(s.breakUser))
+						messages = append(messages, userTurn(s.breakUser, s.turnContext()))
 						if err := send(appendedUser(s.breakUser)); err != nil {
 							return err
 						}
 						s.breakUser = nil
+						s.breakCtx = nil
 					}
 					continue next
 				}
@@ -506,19 +549,30 @@ next:
 			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
 				return err
 			}
+			sentCheckpoint = true
 			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 		}
 	}
 	return fmt.Errorf("模型连续调用工具超过 %d 步，已停止", maxSteps)
 }
 
+func hasModelWork(messages []provider.Message) bool {
+	for _, message := range messages {
+		if message.Role == "assistant" || message.Role == "tool" {
+			return true
+		}
+	}
+	return false
+}
+
 type toolOutcome struct {
-	call  provider.ToolCall
-	text  string
-	isErr bool
-	stop  bool
-	mode  string
-	card  *cursorpb.ToolCall
+	call   provider.ToolCall
+	text   string
+	images []provider.Image
+	isErr  bool
+	stop   bool
+	mode   string
+	card   *cursorpb.ToolCall
 }
 
 func toolResult(outcome toolOutcome) provider.Message {
@@ -526,7 +580,7 @@ func toolResult(outcome toolOutcome) provider.Message {
 	if outcome.card != nil {
 		card = proto.Clone(outcome.card).(*cursorpb.ToolCall)
 	}
-	return provider.Message{Role: "tool", ToolCallID: outcome.call.ID, Content: tools.ClipForModel(outcome.text), IsError: outcome.isErr, Card: card}
+	return provider.Message{Role: "tool", ToolCallID: outcome.call.ID, Content: tools.ClipForModel(outcome.text), Images: outcome.images, IsError: outcome.isErr, Card: card}
 }
 
 func (s *Session) catalogFor(mode cursorpb.AgentMode) []provider.Tool {
@@ -563,6 +617,9 @@ func (s *Session) runTool(ctx context.Context, send Emit, call provider.ToolCall
 	if def, ok := tools.MatchMCP(call, s.mcp); ok {
 		s.nextID++
 		exec, ui, pending, err := tools.MCPExec(s.nextID, call, def)
+		if errors.Is(err, tools.ErrBrowserFileURL) {
+			return toolOutcome{call: call, text: err.Error(), isErr: true}, nil
+		}
 		if err != nil {
 			return s.argFailure(call, err), nil
 		}
@@ -638,11 +695,21 @@ func (s *Session) ask(ctx context.Context, send Emit, call provider.ToolCall, qu
 	if err := send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_InteractionQuery{InteractionQuery: query}}); err != nil {
 		return toolOutcome{}, err
 	}
-	resp, err := s.waitReply(ctx, query.GetId())
+	waitCtx, cancel := context.WithTimeout(ctx, replyWait)
+	resp, err := s.waitReply(waitCtx, query.GetId())
+	cancel()
+	if gaveUp(err, ctx) {
+		slog.Debug("会话等待用户回答超时", "conversation", s.RequestID, "tool", call.Name)
+		return s.stopTool(send, call, ui, replyStopped)
+	}
 	if err != nil {
 		return toolOutcome{}, err
 	}
 	text, isErr, mode := tools.CompleteInteraction(ui, resp, tools.ImageAPI{BaseURL: s.Model.ImageBaseURL, APIKey: s.Model.ImageAPIKey, Model: s.Model.ImageModel}, s.Web)
+	var images []provider.Image
+	if image, ok := tools.GeneratedImage(ui); ok {
+		images = []provider.Image{image}
+	}
 	if !isErr {
 		if err := s.writeGeneratedImage(ctx, send, ui); err != nil {
 			text += "\nFailed to write the image file: " + err.Error()
@@ -653,10 +720,10 @@ func (s *Session) ask(ctx context.Context, send Emit, call provider.ToolCall, qu
 	}
 	if isErr {
 		s.argFails[call.Name] = 0
-		return toolOutcome{call: call, text: text, isErr: true, mode: mode, card: ui}, nil
+		return toolOutcome{call: call, text: text, images: images, isErr: true, mode: mode, card: ui}, nil
 	}
 	s.argFails[call.Name] = 0
-	return toolOutcome{call: call, text: text, mode: mode, card: ui}, nil
+	return toolOutcome{call: call, text: text, images: images, mode: mode, card: ui}, nil
 }
 
 func userTurns(messages []provider.Message) int {
@@ -702,8 +769,14 @@ func (s *Session) writeGeneratedImage(ctx context.Context, send Emit, ui *cursor
 		return err
 	}
 	s.track(exec.GetId())
-	_, err = s.await(ctx, exec.GetId())
+	waitCtx, cancel := context.WithTimeout(ctx, toolWaitLimit)
+	_, err = s.await(waitCtx, exec.GetId())
+	cancel()
 	s.untrack(exec.GetId())
+	if gaveUp(err, ctx) {
+		_ = send(abortExec(exec.GetId()))
+		return errors.New("the file write did not finish within the time limit and was stopped")
+	}
 	return err
 }
 
@@ -727,6 +800,7 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 	s.argFails[call.Name] = 0
 	s.prepareExec(pending, exec)
 	s.noteTool(call.Name)
+	runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "start", WaitMs: toolBudget(pending).Milliseconds()})
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallStarted{ToolCallStarted: &cursorpb.ToolCallStartedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 		return toolOutcome{}, err
 	}
@@ -735,8 +809,20 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 			return toolOutcome{}, err
 		}
 		s.track(exec.GetId())
+		started := time.Now()
 		for {
-			result, err := s.await(ctx, exec.GetId())
+			result, err := s.awaitTool(ctx, pending, exec.GetId())
+			if gaveUp(err, ctx) {
+				slog.Debug("会话工具等待超时", "conversation", s.RequestID, "tool", call.Name)
+				s.untrack(exec.GetId())
+				if pending != nil && pending.Wait > 0 {
+					runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "left_running", ElapsedMs: time.Since(started).Milliseconds()})
+					return s.stopTool(send, call, ui, leftRunning(call.Name))
+				}
+				_ = send(abortExec(exec.GetId()))
+				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "stopped", ElapsedMs: time.Since(started).Milliseconds()})
+				return s.stopTool(send, call, ui, toolStopped)
+			}
 			if errors.Is(err, errBreak) {
 				s.untrack(exec.GetId())
 				_ = send(abortExec(exec.GetId()))
@@ -756,7 +842,14 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 				if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 					return toolOutcome{}, err
 				}
-				return toolOutcome{call: call, text: text, isErr: isErr, card: ui}, nil
+				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "done", ElapsedMs: time.Since(started).Milliseconds(), Bytes: len(text)})
+				return toolOutcome{call: call, text: text, images: pending.Images, isErr: isErr, card: ui}, nil
+			}
+			if pastWait(pending, started) {
+				slog.Debug("会话工具等待超时", "conversation", s.RequestID, "tool", call.Name)
+				s.untrack(exec.GetId())
+				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "left_running", ElapsedMs: time.Since(started).Milliseconds()})
+				return s.stopTool(send, call, ui, leftRunning(call.Name))
 			}
 			if next != nil {
 				s.untrack(exec.GetId())
@@ -816,7 +909,24 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		jobs[i] = live{pending: pending, ui: ui, call: call}
 	}
 	for len(waiting) > 0 {
-		msg, err := s.awaitAny(ctx, waiting)
+		waitCtx, cancel := context.WithTimeout(ctx, toolWaitLimit)
+		msg, err := s.awaitAny(waitCtx, waiting)
+		cancel()
+		if gaveUp(err, ctx) {
+			slog.Debug("会话并行工具等待超时", "conversation", s.RequestID, "pending", len(waiting))
+			runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Detail: "parallel_stopped", Tools: len(waiting)})
+			for id, index := range waiting {
+				s.untrack(id)
+				_ = send(abortExec(id))
+				job := jobs[index]
+				out, stopErr := s.stopTool(send, job.call, job.ui, toolStopped)
+				if stopErr != nil {
+					return outcomes, stopErr
+				}
+				outcomes[index] = out
+			}
+			return outcomes, nil
+		}
 		if err != nil {
 			return outcomes, err
 		}
@@ -839,7 +949,7 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: job.call.ID, ToolCall: job.ui}}})); err != nil {
 			return outcomes, err
 		}
-		outcomes[index] = toolOutcome{call: job.call, text: text, isErr: isErr, card: job.ui}
+		outcomes[index] = toolOutcome{call: job.call, text: text, images: job.pending.Images, isErr: isErr, card: job.ui}
 	}
 	return outcomes, nil
 }
@@ -851,6 +961,40 @@ func (s *Session) repair(call provider.ToolCall) provider.ToolCall {
 		call.Arguments = fixed
 	}
 	return call
+}
+
+func (s *Session) awaitTool(ctx context.Context, pending *tools.Pending, id uint32) (*cursorpb.ExecClientMessage, error) {
+	limit := toolWaitLimit
+	if pending != nil && pending.Wait > 0 {
+		limit = pending.Wait
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	return s.await(waitCtx, id)
+}
+
+func pastWait(pending *tools.Pending, started time.Time) bool {
+	return pending != nil && pending.Wait > 0 && time.Since(started) >= pending.Wait
+}
+
+func leftRunning(name string) string {
+	if name == "Task" {
+		return taskLeftRunning
+	}
+	return shellLeftRunning
+}
+
+func gaveUp(err error, parent context.Context) bool {
+	return errors.Is(err, context.DeadlineExceeded) && parent.Err() == nil
+}
+
+func (s *Session) stopTool(send Emit, call provider.ToolCall, ui *cursorpb.ToolCall, text string) (toolOutcome, error) {
+	if ui != nil {
+		if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
+			return toolOutcome{}, err
+		}
+	}
+	return toolOutcome{call: call, text: text, isErr: true, card: ui}, nil
 }
 
 func (s *Session) argFailure(call provider.ToolCall, err error) toolOutcome {
@@ -941,6 +1085,95 @@ func (s *Session) await(ctx context.Context, id uint32) (*cursorpb.ExecClientMes
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// startQuietThinking 在安静超过 quietThinkingAfter 时发一条思考增量。
+// stop 可多次调用。wait 等发送结束，避免思考增量排到本步结果之后。
+func startQuietThinking(ctx context.Context, send Emit, thought *atomic.Bool) (stop func(), wait func()) {
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		timer := time.NewTimer(quietThinkingAfter)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-stopCh:
+			return
+		case <-ctx.Done():
+			return
+		}
+		if !thought.CompareAndSwap(false, true) {
+			return
+		}
+		_ = send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ThinkingDelta{ThinkingDelta: &cursorpb.ThinkingDeltaUpdate{Text: " "}}}))
+	}()
+	var once sync.Once
+	stop = func() { once.Do(func() { close(stopCh) }) }
+	wait = func() { <-done }
+	return stop, wait
+}
+
+func toolBudget(pending *tools.Pending) time.Duration {
+	if pending != nil && pending.Wait > 0 {
+		return pending.Wait
+	}
+	return toolWaitLimit
+}
+
+func noteClient(id string, m *cursorpb.AgentServerMessage) {
+	if !runlog.Enabled() || m == nil {
+		return
+	}
+	n := runlog.Note{Kind: "client", Request: id, Detail: "other"}
+	switch msg := m.Message.(type) {
+	case *cursorpb.AgentServerMessage_InteractionUpdate:
+		switch u := msg.InteractionUpdate.GetMessage().(type) {
+		case *cursorpb.InteractionUpdate_TextDelta:
+			n.Detail = "text"
+			n.Bytes = len(u.TextDelta.GetText())
+		case *cursorpb.InteractionUpdate_ThinkingDelta:
+			text := u.ThinkingDelta.GetText()
+			n.Bytes = len(text)
+			n.Detail = "thinking"
+			if text == " " {
+				n.Detail = "quiet_thinking"
+			}
+		case *cursorpb.InteractionUpdate_ThinkingCompleted:
+			n.Detail = "thinking_done"
+			n.ElapsedMs = int64(u.ThinkingCompleted.GetThinkingDurationMs())
+		case *cursorpb.InteractionUpdate_Heartbeat:
+			n.Detail = "heartbeat"
+		case *cursorpb.InteractionUpdate_ToolCallStarted:
+			n.Detail = "tool_started"
+		case *cursorpb.InteractionUpdate_ToolCallCompleted:
+			n.Detail = "tool_completed"
+		case *cursorpb.InteractionUpdate_TurnEnded:
+			n.Detail = "turn_ended"
+		default:
+			n.Detail = "interaction"
+		}
+	case *cursorpb.AgentServerMessage_ExecServerMessage:
+		n.Detail = "exec"
+	case *cursorpb.AgentServerMessage_ExecServerControlMessage:
+		n.Detail = "exec_control"
+	}
+	now := time.Now()
+	clientClock.Lock()
+	if clientClock.last == nil {
+		clientClock.last = map[string]time.Time{}
+	}
+	if prev, ok := clientClock.last[id]; ok {
+		n.GapMs = now.Sub(prev).Milliseconds()
+	}
+	clientClock.last[id] = now
+	clientClock.Unlock()
+	runlog.Emit(n)
+}
+
+var clientClock struct {
+	sync.Mutex
+	last map[string]time.Time
 }
 
 func interaction(u *cursorpb.InteractionUpdate) *cursorpb.AgentServerMessage {

@@ -26,29 +26,33 @@ import (
 	"cursor-inner/internal/catalog"
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/procfwd"
 	"cursor-inner/internal/protox"
 	"cursor-inner/internal/provider"
 )
 
 type Server struct {
-	mu        sync.Mutex
-	ln        net.Listener
-	httpSrv   *http.Server
-	url       string
-	warning   i18n.Text
-	proxy     func() config.Proxy
-	entries   func() []catalog.Entry
-	lookup    func(string) (config.Model, bool)
-	hub       *agent.Hub
-	client    *http.Client
-	running   bool
-	selected  string
-	catalogOK bool
-	catalogN  int
-	catalogAt time.Time
-	localN    int
-	officialN int
-	lastError string
+	mu         sync.Mutex
+	ln         net.Listener
+	httpSrv    *http.Server
+	url        string
+	warning    i18n.Text
+	directNote i18n.Text
+	direct     *procfwd.Forwarder
+	proxy      func() config.Proxy
+	entries    func() []catalog.Entry
+	lookup     func(string) (config.Model, bool)
+	hub        *agent.Hub
+	client     *http.Client
+	running    bool
+	selected   string
+	catalogOK  bool
+	catalogN   int
+	catalogAt  time.Time
+	localN     int
+	officialN  int
+	lastError  string
+	wsTLS      *tls.Config
 }
 
 // Traffic 是顶栏要显示的计数。
@@ -63,6 +67,7 @@ type Traffic struct {
 
 func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(string) (config.Model, bool), history *agent.History) *Server {
 	s := &Server{proxy: proxy, entries: entries, lookup: lookup, hub: agent.New(lookup, history)}
+	s.direct = procfwd.New(s.dialContext)
 	s.client = &http.Client{Transport: upstreamTransport(s.dialContext), CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}}
@@ -97,8 +102,14 @@ func (s *Server) Start(ca tls.Certificate) (string, error) {
 				Hijack: s.hijack,
 			}, host
 		}
+		if currentRawOpen() != nil {
+			return &goproxy.ConnectAction{Action: goproxy.ConnectHijack, Hijack: s.recordTunnel}, host
+		}
+		reportTrace(currentTrace(), TraceEvent{Host: host, Tunnel: true})
 		return goproxy.OkConnect, host
 	})
+	proxy.OnRequest().DoFunc(s.capturePlain)
+	proxy.OnResponse().DoFunc(s.finishPlain)
 	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 20 * time.Second}
 	s.ln = ln
 	s.httpSrv = srv
@@ -111,14 +122,64 @@ func (s *Server) Start(ca tls.Certificate) (string, error) {
 func (s *Server) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.running {
+	if s.running {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = s.httpSrv.Shutdown(ctx)
+		s.running = false
+		s.url = ""
+	}
+	s.stopDirectLocked()
+}
+
+// HoldDirect 在系统 hosts 还指着本机、又删不掉时把 443 听上，避免这几个名字中断。
+func (s *Server) HoldDirect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.direct == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	_ = s.httpSrv.Shutdown(ctx)
-	s.running = false
-	s.url = ""
+	if err := s.direct.Listen(); err != nil {
+		s.directNote = i18n.Of(err)
+		slog.Warn(s.directNote.String())
+		return
+	}
+	s.directNote = i18n.T("系统 hosts 里还留着直连转发，本机 443 继续接着，避免这几个名字中断。", "The system hosts file still redirects those names, so local port 443 stays open and they do not go dead.")
+	slog.Warn(s.directNote.String())
+}
+
+func (s *Server) stopDirectLocked() {
+	if s.direct == nil {
+		return
+	}
+	if err := s.direct.Stop(); err != nil {
+		s.directNote = i18n.Of(err)
+		slog.Warn(s.directNote.String())
+	}
+}
+
+// SyncDirect 在接管期间把不读代理设置的子进程直连送进当前自定义代理。代理关掉时撤掉。
+func (s *Server) SyncDirect() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running || s.direct == nil {
+		return
+	}
+	_, on, err := dialer.EffectiveAddress(s.proxy())
+	if err != nil {
+		s.directNote = i18n.Of(err)
+		slog.Warn(s.directNote.String())
+		return
+	}
+	if err := s.direct.Sync(on); err != nil {
+		s.directNote = i18n.Of(err)
+		slog.Warn(s.directNote.String())
+		return
+	}
+	s.directNote = i18n.Text{}
+	if on {
+		slog.Info("Cursor 子进程对 api3.cursor.sh 等的直连已改从自定义代理出去")
+	}
 }
 
 func (s *Server) URL() string {
@@ -136,6 +197,9 @@ func (s *Server) Running() bool {
 func (s *Server) Warning() i18n.Text {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.directNote.IsZero() {
+		return s.directNote
+	}
 	return s.warning
 }
 
@@ -184,6 +248,40 @@ func (s *Server) hijack(req *http.Request, client net.Conn, ctx *goproxy.ProxyCt
 }
 
 func (s *Server) serveCursor(w http.ResponseWriter, r *http.Request) {
+	if websocketUpgrade(r) {
+		s.bridgeWebSocket(w, r)
+		return
+	}
+	fn := currentTrace()
+	if fn == nil {
+		s.route(w, r)
+		return
+	}
+	var tee *bodyTee
+	if r.Body != nil {
+		tee = &bodyTee{rc: r.Body}
+		r.Body = tee
+	}
+	tw := &traceWriter{ResponseWriter: w}
+	s.route(tw, r)
+	var reqBody []byte
+	if tee != nil {
+		reqBody = tee.buf.Bytes()
+	}
+	reportTrace(fn, TraceEvent{
+		Host:       r.Host,
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		RawQuery:   r.URL.RawQuery,
+		Status:     tw.status,
+		ReqHeader:  r.Header,
+		RespHeader: tw.Header(),
+		ReqBody:    reqBody,
+		RespBody:   tw.body.Bytes(),
+	})
+}
+
+func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/aiserver.v1.AiService/AvailableModels":
 		s.catalog(w, r, true)

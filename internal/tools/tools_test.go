@@ -1,11 +1,16 @@
 package tools
 
 import (
+	"bytes"
 	"encoding/base64"
+	"errors"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
@@ -68,6 +73,68 @@ func TestCatalogHasLayerOneTools(t *testing.T) {
 	}
 	if strings.Join(names, ",") != "Glob,Grep,Read,Delete,StrReplace,Write,Shell,ReadLints,TodoWrite,EditNotebook,AskQuestion,SwitchMode,CreatePlan,UpdateCurrentStep,WebSearch,WebFetch,GetMcpTools,CallMcpTool,FetchMcpResource,Task,GenerateImage,SemSearch" {
 		t.Fatal(names)
+	}
+}
+
+func TestReadImageReachesTheModel(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	_, ui, pending, err := Request(1, provider.ToolCall{ID: "c1", Name: "Read", Arguments: `{"path":"/w/E01-D01.png"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, isErr := pending.Result(&cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+		Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/E01-D01.png", Output: &cursorpb.ReadSuccess_Data{Data: buf.Bytes()}}},
+	}}}, ui)
+	if isErr || text != "Read image file: /w/E01-D01.png" || len(pending.Images) != 1 || pending.Images[0].MIME != "image/png" || !bytes.Equal(pending.Images[0].Data, buf.Bytes()) {
+		t.Fatalf("%q %v %+v", text, isErr, pending.Images)
+	}
+	text, isErr = pending.Result(&cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+		Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.bin", Output: &cursorpb.ReadSuccess_Data{Data: []byte{0, 1, 2, 3}}}},
+	}}}, ui)
+	if isErr || text != "/w/a.bin is a binary file (4 bytes)." || pending.Images != nil {
+		t.Fatalf("%q %v", text, pending.Images)
+	}
+	webp := []byte("RIFF????WEBPVP8X")
+	webp = append(webp, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	// RIFF size is the file size minus 8.
+	webp[4], webp[5], webp[6], webp[7] = 22, 0, 0, 0
+	if imageMIME(webp) != "image/webp" {
+		t.Fatal(imageMIME(webp))
+	}
+}
+
+func TestMCPAndResourceImagesReachTheModel(t *testing.T) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	pngBytes := buf.Bytes()
+	text, images, isErr := mcpText(&cursorpb.McpResult{Result: &cursorpb.McpResult_Success{Success: &cursorpb.McpSuccess{
+		Content: []*cursorpb.McpToolResultContentItem{{
+			Content: &cursorpb.McpToolResultContentItem_Image{Image: &cursorpb.McpImageContent{Data: pngBytes, MimeType: "image/png"}},
+		}},
+	}}})
+	if isErr || text != "MCP image: image/png" || len(images) != 1 || !bytes.Equal(images[0].Data, pngBytes) {
+		t.Fatalf("%q %v %+v", text, isErr, images)
+	}
+	text, images, isErr = resourceText(&cursorpb.ReadMcpResourceExecResult{Result: &cursorpb.ReadMcpResourceExecResult_Success{Success: &cursorpb.ReadMcpResourceSuccess{
+		Uri:     "file://map.png",
+		Content: &cursorpb.ReadMcpResourceSuccess_Blob{Blob: pngBytes},
+	}}})
+	if isErr || text != "Read image file: file://map.png" || len(images) != 1 || images[0].MIME != "image/png" {
+		t.Fatalf("%q %v %+v", text, isErr, images)
+	}
+	ui := &cursorpb.ToolCall{Tool: &cursorpb.ToolCall_GenerateImageToolCall{GenerateImageToolCall: &cursorpb.GenerateImageToolCall{
+		Result: &cursorpb.GenerateImageResult{Result: &cursorpb.GenerateImageResult_Success{Success: &cursorpb.GenerateImageSuccess{
+			ImageData: base64.StdEncoding.EncodeToString(pngBytes),
+		}}},
+	}}}
+	got, ok := GeneratedImage(ui)
+	if !ok || got.MIME != "image/png" || !bytes.Equal(got.Data, pngBytes) {
+		t.Fatalf("%v %+v", ok, got)
 	}
 }
 
@@ -346,5 +413,48 @@ func TestGenerateImageDownloadsURL(t *testing.T) {
 	raw, err := base64.StdEncoding.DecodeString(got)
 	if err != nil || string(raw) != string(png) {
 		t.Fatalf("%q %v", got, err)
+	}
+}
+
+func TestBrowserFileURLNeverStarts(t *testing.T) {
+	def := &cursorpb.McpToolDefinition{Name: "cursor-ide-browser-browser_navigate", ToolName: "browser_navigate", ProviderIdentifier: "cursor-ide-browser"}
+	call := provider.ToolCall{ID: "b", Name: "browser_navigate", Arguments: `{"url":"file:///data/map.png"}`}
+	if _, _, _, err := MCPExec(1, call, def); !errors.Is(err, ErrBrowserFileURL) {
+		t.Fatal(err)
+	}
+	web := provider.ToolCall{ID: "w", Name: "browser_navigate", Arguments: `{"url":"https://example.com"}`}
+	if _, _, _, err := MCPExec(2, web, def); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskWaitIsBounded(t *testing.T) {
+	_, _, pending, err := Request(1, provider.ToolCall{ID: "t", Name: "Task", Arguments: `{"description":"look","prompt":"read the file"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.Wait != 10*time.Minute {
+		t.Fatal(pending.Wait)
+	}
+}
+
+func TestLongShellIsBackgroundedNotKilled(t *testing.T) {
+	exec, _, pending, err := Request(1, provider.ToolCall{ID: "s", Name: "Shell", Arguments: `{"command":"sleep 10","block_until_ms":7200000}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := exec.GetShellStreamArgs()
+	if args.HardTimeout != nil || args.GetTimeout() != foregroundMaxMs {
+		t.Fatalf("timeout=%d hard=%v", args.GetTimeout(), args.HardTimeout)
+	}
+	if pending.Wait != time.Duration(foregroundMaxMs)*time.Millisecond+15*time.Second || pending.Note == "" {
+		t.Fatalf("wait=%s note=%q", pending.Wait, pending.Note)
+	}
+	msg := &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ShellStream{ShellStream: &cursorpb.ShellStream{
+		Event: &cursorpb.ShellStream_Backgrounded{Backgrounded: &cursorpb.ShellStreamBackgrounded{ShellId: 7, Command: "sleep 10"}},
+	}}}
+	_, _, text, isErr, done := pending.Feed(msg, nil)
+	if !done || isErr || !strings.Contains(text, "not killed") || !strings.Contains(text, "shell_id=7") {
+		t.Fatalf("done=%v err=%v text=%q", done, isErr, text)
 	}
 }

@@ -2,8 +2,10 @@ package tools
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -50,7 +52,7 @@ func startTask(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServerM
 			SubagentType: &cursorpb.SubagentType{Type: &cursorpb.SubagentType_Custom{Custom: &cursorpb.SubagentTypeCustom{Name: kind}}},
 		},
 	}}}
-	return exec, ui, &Pending{Call: call}, nil
+	return exec, ui, &Pending{Call: call, Wait: 10 * time.Minute}, nil
 }
 
 func startFetchResource(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServerMessage, *cursorpb.ToolCall, *Pending, error) {
@@ -124,10 +126,63 @@ func mcpServerID(def *cursorpb.McpToolDefinition) string {
 	return ""
 }
 
+// ErrBrowserFileURL 是 Cursor 浏览器工具拒绝本地文件时的原因。
+// 界面上的 “Navigated to” 来自调用参数，不表示页面已经打开。
+var ErrBrowserFileURL = errors.New("Security restriction: file:// URLs are not allowed. The browser navigation tool can only access web URLs (http:// or https://). If you need to view local files, use the file reading tools instead.")
+
+func rejectBrowserFileURL(call provider.ToolCall, def *cursorpb.McpToolDefinition, a args) error {
+	names := []string{call.Name}
+	if def != nil {
+		names = append(names, def.GetToolName(), def.GetName())
+	}
+	browser := false
+	for _, name := range names {
+		if strings.Contains(strings.ToLower(name), "browser") {
+			browser = true
+			break
+		}
+	}
+	if !browser {
+		return nil
+	}
+	payload := map[string]any(a)
+	if nested, ok := a["arguments"].(map[string]any); ok {
+		payload = nested
+	}
+	if fileURLIn(payload) {
+		return ErrBrowserFileURL
+	}
+	return nil
+}
+
+func fileURLIn(v any) bool {
+	switch t := v.(type) {
+	case string:
+		s := strings.TrimSpace(t)
+		return len(s) >= 5 && strings.EqualFold(s[:5], "file:")
+	case map[string]any:
+		for _, item := range t {
+			if fileURLIn(item) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range t {
+			if fileURLIn(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // MCPExec 把一次 MCP 调用交给 Cursor 执行。
 func MCPExec(id uint32, call provider.ToolCall, def *cursorpb.McpToolDefinition) (*cursorpb.ExecServerMessage, *cursorpb.ToolCall, *Pending, error) {
 	a, err := parseArgs(call.Arguments)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := rejectBrowserFileURL(call, def, a); err != nil {
 		return nil, nil, nil, err
 	}
 	if def == nil {
@@ -281,31 +336,46 @@ func protoMap(raw map[string]any) (map[string]*structpb.Value, error) {
 	return out, nil
 }
 
-func mcpText(r *cursorpb.McpResult) (string, bool) {
+func mcpText(r *cursorpb.McpResult) (string, []provider.Image, bool) {
 	switch v := r.GetResult().(type) {
 	case *cursorpb.McpResult_Success:
 		var lines []string
+		var images []provider.Image
 		for _, item := range v.Success.GetContent() {
 			if text := item.GetText(); text != nil && text.GetText() != "" {
 				lines = append(lines, text.GetText())
 			}
+			image := item.GetImage()
+			if image == nil || len(image.GetData()) == 0 {
+				continue
+			}
+			if mime := imageMIME(image.GetData()); mime != "" {
+				images = append(images, provider.Image{MIME: mime, Data: append([]byte(nil), image.GetData()...)})
+				lines = append(lines, "MCP image: "+mime)
+				continue
+			}
+			mime := image.GetMimeType()
+			if mime == "" {
+				mime = "unknown"
+			}
+			lines = append(lines, fmt.Sprintf("MCP image: %s (%d bytes)", mime, len(image.GetData())))
 		}
 		if len(lines) == 0 {
-			return "MCP tool returned no text.", v.Success.GetIsError()
+			return "MCP tool returned no text.", nil, v.Success.GetIsError()
 		}
-		return strings.Join(lines, "\n"), v.Success.GetIsError()
+		return strings.Join(lines, "\n"), images, v.Success.GetIsError()
 	case *cursorpb.McpResult_Error:
-		return v.Error.GetError(), true
+		return v.Error.GetError(), nil, true
 	case *cursorpb.McpResult_Rejected:
-		return "The user rejected the MCP call: " + v.Rejected.GetReason(), true
+		return "The user rejected the MCP call: " + v.Rejected.GetReason(), nil, true
 	case *cursorpb.McpResult_PermissionDenied:
-		return v.PermissionDenied.GetError(), true
+		return v.PermissionDenied.GetError(), nil, true
 	case *cursorpb.McpResult_ToolNotFound:
-		return "MCP tool not found: " + v.ToolNotFound.GetName(), true
+		return "MCP tool not found: " + v.ToolNotFound.GetName(), nil, true
 	case *cursorpb.McpResult_ServerNotFound:
-		return "MCP server not found: " + v.ServerNotFound.GetName(), true
+		return "MCP server not found: " + v.ServerNotFound.GetName(), nil, true
 	}
-	return "Cursor returned an empty MCP result", true
+	return "Cursor returned an empty MCP result", nil, true
 }
 
 func mcpUI(r *cursorpb.McpResult) *cursorpb.McpToolResult {
@@ -319,7 +389,7 @@ func mcpUI(r *cursorpb.McpResult) *cursorpb.McpToolResult {
 	case *cursorpb.McpResult_PermissionDenied:
 		return &cursorpb.McpToolResult{Result: &cursorpb.McpToolResult_PermissionDenied{PermissionDenied: v.PermissionDenied}}
 	default:
-		text, _ := mcpText(r)
+		text, _, _ := mcpText(r)
 		return &cursorpb.McpToolResult{Result: &cursorpb.McpToolResult_Error{Error: &cursorpb.McpToolError{Error: text}}}
 	}
 }
@@ -353,22 +423,25 @@ func taskUI(r *cursorpb.SubagentResult) *cursorpb.TaskResult {
 	}
 }
 
-func resourceText(r *cursorpb.ReadMcpResourceExecResult) (string, bool) {
+func resourceText(r *cursorpb.ReadMcpResourceExecResult) (string, []provider.Image, bool) {
 	switch v := r.GetResult().(type) {
 	case *cursorpb.ReadMcpResourceExecResult_Success:
 		if v.Success.GetText() != "" {
-			return v.Success.GetText(), false
+			return v.Success.GetText(), nil, false
 		}
-		if len(v.Success.GetBlob()) > 0 {
-			return fmt.Sprintf("%s is binary (%d bytes).", v.Success.GetUri(), len(v.Success.GetBlob())), false
+		if blob := v.Success.GetBlob(); len(blob) > 0 {
+			if mime := imageMIME(blob); mime != "" {
+				return "Read image file: " + v.Success.GetUri(), []provider.Image{{MIME: mime, Data: append([]byte(nil), blob...)}}, false
+			}
+			return fmt.Sprintf("%s is binary (%d bytes).", v.Success.GetUri(), len(blob)), nil, false
 		}
-		return "Fetched " + v.Success.GetUri(), false
+		return "Fetched " + v.Success.GetUri(), nil, false
 	case *cursorpb.ReadMcpResourceExecResult_Error:
-		return v.Error.GetError(), true
+		return v.Error.GetError(), nil, true
 	case *cursorpb.ReadMcpResourceExecResult_Rejected:
-		return "The user rejected reading " + v.Rejected.GetUri() + ": " + v.Rejected.GetReason(), true
+		return "The user rejected reading " + v.Rejected.GetUri() + ": " + v.Rejected.GetReason(), nil, true
 	case *cursorpb.ReadMcpResourceExecResult_NotFound:
-		return "MCP resource not found: " + v.NotFound.GetUri(), true
+		return "MCP resource not found: " + v.NotFound.GetUri(), nil, true
 	}
-	return "Cursor returned an empty MCP resource result", true
+	return "Cursor returned an empty MCP resource result", nil, true
 }

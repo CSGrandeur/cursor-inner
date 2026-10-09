@@ -10,6 +10,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func TestReadImageSurvivesTheCheckpoint(t *testing.T) {
+	png := []byte{1, 2, 3, 4}
+	messages := []provider.Message{
+		{Role: "user", Content: "look"},
+		{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}},
+		{Role: "tool", ToolCallID: "c1", Content: "Read image file: /w/a.png", Images: []provider.Image{{MIME: "image/png", Data: png}}},
+	}
+	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs := map[string][]byte{}
+	for _, blob := range built.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	got, err := restoreMessages(built.State, blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[2].Content != "Read image file: /w/a.png" || len(got[2].Images) != 1 || string(got[2].Images[0].Data) != string(png) || got[2].Images[0].MIME != "image/png" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestTurnBlobIsACursorTurn(t *testing.T) {
 	messages := []provider.Message{
 		{Role: "user", Content: "第一句问了什么"},

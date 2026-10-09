@@ -49,7 +49,7 @@ cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compat
   <tr>
     <td width="33%" valign="top">
       <b>Outbound proxy</b><br>
-      Route all of Cursor's traffic through a socks5 or http proxy. Each custom model decides on its own whether to use it.
+      One address. A bare host:port is detected as socks5 or http. Empty means a direct connection. Each custom model decides on its own whether to use it.
     </td>
     <td width="33%" valign="top">
       <b>Reliable restore</b><br>
@@ -62,7 +62,7 @@ cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compat
   </tr>
 </table>
 
-During multi-turn tool calls, thinking is handled per API. DeepSeek, Kimi and MiMo send the original reasoning back on the next turn. OpenAI-compatible APIs that reject that field have it removed. Anthropic replays a signed thinking block. Read-only tools can run in parallel. File writes run in order. Oversized tool output is truncated. A trailing comma in tool arguments is repaired before the call runs. Rate limits, 5xx responses and a stalled stream are retried only before any text has been shown. The system prompt does not include the current time. The time is on each user message. A context-cache hit depends on whether the API returns a cache-hit count. Some OpenAI-compatible APIs return only prompt, completion and total tokens.
+During multi-turn tool calls, thinking is handled per API. DeepSeek, Kimi and MiMo send the original reasoning back on the next turn. OpenAI-compatible APIs that reject that field have it removed. Anthropic replays a signed thinking block. Read-only tools can run in parallel. File writes run in order. Oversized tool output is truncated. Tool arguments wrapped in a code fence, ending with a trailing comma, or missing a closing bracket are repaired before the call runs. Rate limits, 5xx responses and a stalled stream are retried only before any text has been shown. The system prompt does not include the current time. The time is on each user message. A context-cache hit depends on whether the API returns a cache-hit count. Some OpenAI-compatible APIs return only prompt, completion and total tokens.
 
 ## Installation
 
@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.1.0` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.2` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -124,7 +124,7 @@ Files downloaded in a browser carry a download mark. On Windows, when SmartScree
 ## Usage
 
 1. Run cursor-inner. It closes any running Cursor and opens the settings page in your browser. Open Cursor on that page starts Cursor again without quitting cursor-inner.
-2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Image.
+2. Add a model: display name, type, model name, endpoint URL and API key. Click Test to check that it works. Context window and max output can be left empty; when set, history compaction uses that window and each request stays under the output cap. Turning on Reasoning adds an effort choice in the model menu. An OpenAI-compatible model can also turn on Fast; that turn then sends `service_tier`. To let Agent generate images, fill in an OpenAI-compatible image endpoint under Images.
 3. Reopen Cursor, start a new chat, and pick the model you added from the model list.
 4. Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon's right-click menu, or click Quit on the settings page. On macOS and Linux, closing the terminal quits as well. Cursor's settings are restored automatically.
 
@@ -144,12 +144,14 @@ On takeover, cursor-inner edits Cursor's `settings.json`: `http.proxy` points at
 
 The local proxy decrypts only connections to `*.cursor.sh`; everything else is tunneled directly. Chat requests are routed by model id: ids that belong to a custom model are handled locally, everything else is forwarded to Cursor unchanged.
 
+Some Cursor child processes ignore that proxy setting and connect on their own to `api3.cursor.sh`, `api4.cursor.sh`, `repo42.cursor.sh`, and `us-only` / `us-eu` / `us-asia.gcpp.cursor.sh`. While takeover is on and the configured proxy is enabled, those connections leave through the configured proxy with the protocol left as the client sent it. This needs permission to edit the system hosts file and to listen on local port 443. If that is not possible, the settings page says so and the rest of the traffic is unchanged. On exit, the hosts entries are removed before port 443 closes. If they cannot be removed, port 443 stays open so those names do not go dead.
+
 ## Console window
 
-The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page; in terminals that support hyperlinks (Windows Terminal, iTerm2, GNOME Terminal and others) you can also Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
+The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.2.0   http://127.0.0.1:52341   press Enter to open settings
+ ▌▐ cursor-inner v0.3.2   http://127.0.0.1:52341   press Enter to open settings
     takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
@@ -261,7 +263,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.1.0 ./build.sh linux      # dist/cursor-inner-v0.1.0-linux-amd64, and stamps that version
+VERSION=v0.3.2 ./build.sh linux      # dist/cursor-inner-v0.3.2-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).
@@ -270,14 +272,16 @@ For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/r
 <summary><b>Project layout</b></summary>
 
 ```text
-cmd/cursor-inner/      Entry point: single instance, flags, dialogs, window icon, exit cleanup
+cmd/cursor-inner/      Entry point
 internal/
+├── program/           Startup: single instance, flags, dialogs, window icon, exit cleanup
 ├── agent/             Custom-model runs: request routing, model and tool loop, checkpoints, compaction, system prompt and mode notes
 ├── app/               Operations behind the settings page
 ├── autostart/         Start at login: Windows logon task, macOS LaunchAgent, Linux XDG autostart
 ├── catalog/           Entries appended to Cursor's model catalog
 ├── config/            Reads and writes config.json
 ├── console/           Pinned console header and log output
+├── cursorlaunch/      Starts the installed Cursor from the settings page
 ├── cursorpb/          Cursor protocol code generated from proto/cursor/agent_v1.proto
 ├── cursorsettings/    Edits and restores Cursor's settings.json
 ├── dialer/            Direct or socks5 / http proxied dialing
@@ -285,6 +289,7 @@ internal/
 ├── i18n/              Bilingual (Chinese / English) text for the settings page
 ├── logx/              Logs: per-turn console summary and inner.log detail
 ├── mitm/              Local proxy: decrypts *.cursor.sh, routes requests, inline edit and terminal Cmd+K
+├── procfwd/           While takeover is on, sends selected child-process connections out through the configured proxy
 ├── protox/            Connect frames and protobuf field encoding
 ├── provider/          Calls OpenAI Chat / Anthropic endpoints, including streamed tool calls
 ├── tools/             Converts between model tool calls and Cursor exec requests and results

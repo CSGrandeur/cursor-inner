@@ -56,6 +56,7 @@ type Backend interface {
 	SetImage(baseURL, apiKey, model string) error
 	SetAutostart(enabled bool) error
 	AddModel(model config.Model) error
+	UpdateModel(id string, model config.Model) error
 	DeleteModel(id string) error
 	SetModelProxy(id string, use bool) error
 	SetModelReasoning(id string, on bool) error

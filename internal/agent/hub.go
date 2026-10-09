@@ -52,22 +52,40 @@ func (h *Hub) Bidi(body []byte) (Route, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sweepLocked()
+	route, _, _ := h.applyLocked(requestID, &msg)
+	return route, nil
+}
+
+// Client 处理 Agents 窗口 WebSocket 里的一条客户端消息。
+// start 只在这一次新建了本地会话时为真，调用方据此开始 Run。
+func (h *Hub) Client(requestID string, msg *cursorpb.AgentClientMessage) (Route, *Session, bool) {
+	if msg == nil || requestID == "" {
+		return Route{}, nil, false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.sweepLocked()
+	return h.applyLocked(requestID, msg)
+}
+
+func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (Route, *Session, bool) {
 	s := h.slotLocked(requestID)
 	route := Route{RequestID: requestID}
+	start := false
 	delivered := false
 	switch m := msg.GetMessage().(type) {
 	case *cursorpb.AgentClientMessage_RunRequest:
 		route.ModelID = modelID(m.RunRequest)
-		if s.decided {
-			break
-		}
-		s.decided = true
-		if route.ModelID != "" {
-			if model, ok := h.lookup(route.ModelID); ok {
-				s.session = newSession(requestID, model, m.RunRequest, h.history)
+		if !s.decided {
+			s.decided = true
+			if route.ModelID != "" && h.lookup != nil {
+				if model, ok := h.lookup(route.ModelID); ok {
+					s.session = newSession(requestID, model, m.RunRequest, h.history)
+					start = true
+				}
 			}
+			close(s.ready)
 		}
-		close(s.ready)
 	case *cursorpb.AgentClientMessage_ExecClientMessage:
 		if s.session != nil {
 			s.session.deliver(m.ExecClientMessage)
@@ -95,7 +113,7 @@ func (h *Hub) Bidi(body []byte) (Route, error) {
 		}
 	}
 	route.Local = s.session != nil || delivered
-	return route, nil
+	return route, s.session, start
 }
 
 func actionRunID(action *cursorpb.ConversationAction) string {

@@ -179,7 +179,7 @@
   },
   {
     "name": "Shell",
-    "description": "Executes a given command in a shell session with optional foreground timeout. Use this for terminal operations. Do not use it for reading, writing, editing, or searching files. block_until_ms is how long to wait before moving the command to the background; it defaults to 30000. Set it to 0 to run in the background immediately. required_permissions may be \"full_network\" or \"all\".",
+    "description": "Executes a given command in a shell session with optional foreground timeout. Use this for terminal operations. Do not use it for reading, writing, editing, or searching files. block_until_ms is how long to wait before moving the command to the background; it defaults to 30000. Set it to 0 to run in the background immediately. A wait longer than 10 minutes is capped there. The command keeps running after that and is not killed. required_permissions may be \"full_network\" or \"all\".",
     "parameters": {
       "type": "object",
       "properties": {

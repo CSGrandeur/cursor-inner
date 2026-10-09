@@ -203,6 +203,23 @@ func (c *Console) drawHeaderLocked(force bool) {
 	fmt.Fprint(c.out, "\x1b7\x1b[1;1H"+header+"\x1b8")
 }
 
+// LinkAt 在点击落在顶栏地址上时返回这个地址。row、col 从 0 计。
+func (c *Console) LinkAt(col, row int) string {
+	if c == nil {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.hidden || c.closed || c.url == "" || row != 0 {
+		return ""
+	}
+	start, end := LinkSpan(c.url, c.version, c.cols)
+	if col >= start && col < end {
+		return c.url
+	}
+	return ""
+}
+
 func (c *Console) size() (int, int) {
 	cols, rows, err := term.GetSize(int(c.out.Fd()))
 	if err != nil || cols < 20 || rows < headerRows+2 {

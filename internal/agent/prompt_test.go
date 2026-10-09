@@ -39,9 +39,6 @@ func TestRequestContextSectionsReachTheSystemPrompt(t *testing.T) {
 	for _, want := range []string{
 		"Is directory a git repo: Yes, at /w",
 		"Terminals folder: /tmp/terminals",
-		"Today's date:",
-		"<git_status>",
-		"## main",
 		"/tmp/transcripts",
 		"<rule>\nbe brief\n</rule>",
 		`fullPath="/w/.cursor/skills/probe/SKILL.md"`,
@@ -56,5 +53,24 @@ func TestRequestContextSectionsReachTheSystemPrompt(t *testing.T) {
 	}
 	if strings.Contains(text, "skill body") || strings.Contains(text, "hidden") {
 		t.Fatal("skill file or disabled skill leaked into the prompt")
+	}
+	if strings.Contains(text, "Today's date:") || strings.Contains(text, "<git_status>") || strings.Contains(text, "## main") {
+		t.Fatal("date or git status leaked into the system prompt")
+	}
+}
+
+func TestGitStatusStaysOnTheCurrentUserMessage(t *testing.T) {
+	ctx := &cursorpb.RequestContext{GitRepos: []*cursorpb.GitRepoInfo{{Path: "/w", Status: "## main"}}}
+	first := userTurn(&cursorpb.UserMessage{Text: "one"}, ctx)
+	ctx.GitRepos[0].Status = "## main\n M a.go"
+	second := userTurn(&cursorpb.UserMessage{Text: "two"}, ctx)
+	if strings.Contains(first.Content, "M a.go") {
+		t.Fatal("later git status rewrote the earlier user message")
+	}
+	if !strings.Contains(first.Content, "## main") || !strings.Contains(second.Content, "M a.go") {
+		t.Fatalf("git status missing\nfirst:\n%s\nsecond:\n%s", first.Content, second.Content)
+	}
+	if strings.Contains(first.Content, "start of the conversation") {
+		t.Fatal("git status still claims to be the conversation start")
 	}
 }
