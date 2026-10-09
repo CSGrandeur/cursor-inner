@@ -44,13 +44,14 @@ func Handler(backend Backend) http.Handler {
 	})
 	mux.HandleFunc("PUT /api/takeover", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Enabled bool `json:"enabled"`
+			Target  string `json:"target"`
+			Enabled bool   `json:"enabled"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := backend.SetTakeover(body.Enabled); err != nil {
+		if err := backend.SetTakeover(body.Target, body.Enabled); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}

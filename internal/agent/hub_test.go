@@ -985,6 +985,21 @@ func TestQuietModelOpensThinkingBeforeTheFirstToken(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			for len(out) > 0 {
+				m := <-out
+				if delta := m.GetInteractionUpdate().GetThinkingDelta(); delta != nil {
+					if delta.GetText() != " " {
+						t.Fatalf("placeholder %q", delta.GetText())
+					}
+					sawThinking = true
+				}
+				if m.GetInteractionUpdate().GetThinkingCompleted() != nil {
+					completed = true
+				}
+				if d := m.GetInteractionUpdate().GetTextDelta(); d != nil {
+					text += d.GetText()
+				}
+			}
 			if !sawThinking || !completed || text != "ok" {
 				t.Fatalf("thinking=%v completed=%v text=%q", sawThinking, completed, text)
 			}

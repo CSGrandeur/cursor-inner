@@ -97,33 +97,7 @@ func readHosts(path string) (bom []byte, content string, err error) {
 
 func writeHostsFile(path string, bom []byte, content string) error {
 	data := append(append([]byte{}, bom...), []byte(content)...)
-	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil && info.Mode().Perm() != 0 {
-		mode = info.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".cursor-inner-hosts-*")
-	if err != nil {
-		return os.WriteFile(path, data, mode)
-	}
-	name := tmp.Name()
-	_, werr := tmp.Write(data)
-	cerr := tmp.Close()
-	if werr != nil || cerr != nil {
-		_ = os.Remove(name)
-		if werr != nil {
-			return werr
-		}
-		return cerr
-	}
-	if err := os.Chmod(name, mode); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	if err := replaceExisting(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	return nil
+	return commitHosts(path, data)
 }
 
 func installHosts(path string) error {

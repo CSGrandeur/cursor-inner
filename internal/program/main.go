@@ -25,7 +25,6 @@ import (
 	"cursor-inner/internal/fsutil"
 	"cursor-inner/internal/logx"
 	"cursor-inner/internal/mitm"
-	"cursor-inner/internal/procfwd"
 	"cursor-inner/internal/takeover"
 	"cursor-inner/internal/web"
 )
@@ -235,15 +234,6 @@ func Main(version string) {
 			slog.Warn(fmt.Sprintf("开机启动清理失败：%v", err))
 		}
 	}
-	// 调试进程不撤系统 hosts。正在接管的那一份还要用，撤掉会让它的子进程直连断掉。
-	if !opt.debug {
-		if err := procfwd.Restore(); err != nil {
-			slog.Warn(fmt.Sprintf("没能清掉上次留下的子进程直连转发：%v", err))
-			if procfwd.MarkerPresent() {
-				proxy.HoldDirect()
-			}
-		}
-	}
 	cfg := store.Get()
 	if opt.debug {
 		if err := life.ProxyOnly(); err != nil {
@@ -275,6 +265,16 @@ func Main(version string) {
 	}
 	if note := mitm.TraceNote(); note != "" {
 		log.Printf("行为记录 %s", note)
+	}
+	if !opt.debug {
+		application.SyncGrok()
+		go func() {
+			tick := time.NewTicker(5 * time.Second)
+			defer tick.Stop()
+			for range tick.C {
+				application.SyncGrok()
+			}
+		}()
 	}
 	select {}
 }

@@ -25,6 +25,7 @@ type ModelView struct {
 type View struct {
 	ListenURL      string          `json:"listen_url"`
 	Takeover       bool            `json:"takeover"`
+	TakeoverGrok   bool            `json:"takeover_grok"`
 	TakeoverActive bool            `json:"takeover_active"`
 	MitmURL        string          `json:"mitm_url"`
 	CA             string          `json:"ca"`
@@ -51,7 +52,7 @@ type ProxyView struct {
 
 type Backend interface {
 	State() (View, error)
-	SetTakeover(enabled bool) error
+	SetTakeover(target string, enabled bool) error
 	SetProxy(enabled bool, address string) error
 	SetImage(baseURL, apiKey, model string) error
 	SetAutostart(enabled bool) error

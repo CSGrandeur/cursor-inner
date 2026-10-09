@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-09
+
+### Changed
+
+- The settings page tightens the Cursor / Grok / proxy copy, lets long explanations wrap to two lines, and softens the page background and motion without adding a UI toolkit.
+
+### Fixed
+
+- On Windows, editing the system hosts file no longer creates a temporary file in `drivers\etc` and then replaces the original. That replacement is denied even for an elevated process. The existing file is updated in place. If it is still denied, the message says whether the process is elevated. This path stays in `procfwd` for cleanup and future use; current takeover does not call it.
+- The system hosts file is not modified, and local port 443 is not used to redirect Cursor host names. Cursor keeps using its own proxy setting, which forwards through the configured proxy.
+- The settings page has separate switches for taking over Cursor and Grok Bot. Both default to on. Cursor's proxy is a settings file, so turning that switch on or off closes a running Cursor and leaves it for you to open again. Grok Bot's proxy is a launch argument, so turning that switch on or off closes a running Grok Bot and opens it again with the current choice. Grok Bot is not started if it is not already running. While Grok takeover is on and a proxy is configured, that process uses the proxy as an HTTP proxy on the same host and port, with Quic disabled.
+- While Grok takeover is on, a Grok Bot that already has the proxy arguments is left running. A second Grok Bot process without those arguments, such as the one opened from the login page, does not close the first. Closing it drops the login poll, so the browser can say it is done while the window stays on the sign-in screen.
+- Analytics, nudge, and similar telemetry requests that still carry a local custom-model id are scrubbed with a same-length placeholder before they leave for Cursor. The selected model is remembered locally first, so Cmd+K can keep using it.
+
 ## [0.3.2] - 2026-10-09
 
 ### Added
@@ -90,7 +104,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.2...v0.3.4
 [0.3.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.2.0...v0.3.0

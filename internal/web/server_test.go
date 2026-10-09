@@ -28,8 +28,15 @@ func (f *fake) State() (View, error) {
 	}
 	return f.view, nil
 }
-func (f *fake) SetTakeover(enabled bool) error { f.takeover = enabled; return nil }
-func (f *fake) SetProxy(bool, string) error    { return nil }
+func (f *fake) SetTakeover(target string, enabled bool) error {
+	if target == "grok" {
+		f.view.TakeoverGrok = enabled
+		return nil
+	}
+	f.takeover = enabled
+	return nil
+}
+func (f *fake) SetProxy(bool, string) error { return nil }
 func (f *fake) SetImage(baseURL, apiKey, model string) error {
 	f.view.Image = ImageView{BaseURL: baseURL, Model: model, KeyHint: apiKey}
 	return nil
@@ -130,7 +137,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))
@@ -142,5 +149,24 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	defer res2.Body.Close()
 	if res2.StatusCode != 200 || !f.autostart {
 		t.Fatalf("status %d enabled %v", res2.StatusCode, f.autostart)
+	}
+	for _, tc := range []struct {
+		body string
+		want bool
+		grok bool
+	}{
+		{`{"target":"cursor","enabled":true}`, true, false},
+		{`{"target":"grok","enabled":false}`, true, false},
+	} {
+		req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/takeover", strings.NewReader(tc.body))
+		req.Header.Set("Content-Type", "application/json")
+		res3, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res3.Body.Close()
+		if res3.StatusCode != 200 || f.takeover != tc.want || f.view.TakeoverGrok != tc.grok {
+			t.Fatalf("%s status %d cursor %v grok %v", tc.body, res3.StatusCode, f.takeover, f.view.TakeoverGrok)
+		}
 	}
 }

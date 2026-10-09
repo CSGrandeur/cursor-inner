@@ -162,6 +162,7 @@ func Recover(dir string) error {
 }
 
 func rollback(dir string) error {
+	// 当前接管不写 hosts；Restore 只清旧版本可能留下的标记。
 	hostErr := procfwd.Restore()
 	err := restoreSettings(dir)
 	killErr := TerminateCursor()

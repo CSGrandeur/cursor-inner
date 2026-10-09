@@ -13,7 +13,7 @@ func TestLoadWritesDefaultAndRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Get()
-	if !got.Takeover || !got.Proxy.Enabled || got.Autostart || got.Proxy.Address != "" {
+	if !got.Takeover || !got.TakeoverGrok || !got.Proxy.Enabled || got.Autostart || got.Proxy.Address != "" {
 		t.Fatalf("%+v", got)
 	}
 	if err := s.Update(func(f *File) error {
@@ -30,6 +30,38 @@ func TestLoadWritesDefaultAndRoundTrips(t *testing.T) {
 	}
 	got = s2.Get()
 	if !got.Autostart || got.Proxy.Address != "127.0.0.1:1080" || len(got.Models) != 1 || got.Models[0].ID != "abc" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestMissingGrokSwitchDefaultsOn(t *testing.T) {
+	dir := t.TempDir()
+	raw := []byte(`{"takeover":false,"autostart":false,"proxy":{"enabled":true,"address":""},"models":[]}`)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.Get()
+	if got.Takeover || !got.TakeoverGrok {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestExplicitGrokSwitchFalseStaysOff(t *testing.T) {
+	dir := t.TempDir()
+	raw := []byte(`{"takeover":true,"takeover_grok":false,"autostart":false,"proxy":{"enabled":true},"models":[]}`)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.Get()
+	if !got.Takeover || got.TakeoverGrok {
 		t.Fatalf("%+v", got)
 	}
 }

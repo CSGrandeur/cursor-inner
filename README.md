@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.3.2`。
+安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.3.4`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -117,7 +117,7 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 | macOS（Apple 芯片 / Intel） | `cursor-inner-<版本>-darwin-arm64.tar.gz` / `darwin-amd64.tar.gz` |
 | Linux（x86_64 / ARM64） | `cursor-inner-<版本>-linux-amd64.tar.gz` / `linux-arm64.tar.gz` |
 
-浏览器下载的文件带有下载标记。Windows 上 SmartScreen 提示时，点「更多信息」→「仍要运行」；macOS 上先执行 `xattr -d com.apple.quarantine cursor-inner` 再运行。每个版本附带 `SHA256SUMS.txt` 和 SPDX 格式的 SBOM。
+浏览器下载的 exe 带有下载标记。Windows 第一次双击会弹出「打开文件 - 安全警告」，写着「无法验证发布者」。这是下载标记，不是程序损坏。安装脚本会去掉这个标记，所以用脚本安装不会弹出这张框。手动下载的文件，在 PowerShell 里对它执行 `Unblock-File .\cursor-inner-<版本>-windows-amd64.exe` 后再打开。程序没有代码签名证书，「未知发布者」这几个字要等有证书才能变成发布者名称。macOS 上先执行 `xattr -d com.apple.quarantine cursor-inner` 再运行。每个版本附带 `SHA256SUMS.txt` 和 SPDX 格式的 SBOM。
 
 </details>
 
@@ -144,14 +144,14 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 
 本机代理只解密发往 `*.cursor.sh` 的连接，其余主机直接隧道转发。对话请求按模型 id 分流：属于自定义模型的由本地处理，其余原样转给官方。
 
-Cursor 有的子进程不读这个代理设置，会自己连接 `api3.cursor.sh`、`api4.cursor.sh`、`repo42.cursor.sh` 和 `us-only` / `us-eu` / `us-asia.gcpp.cursor.sh`。接管并且自定义代理开着时，这些连接也从自定义代理出去，协议保持原样。这需要能改系统 hosts，并在本机 443 端口监听；做不到时配置页会提示，其余流量不受影响。退出时先去掉这段 hosts，再关掉 443。去不掉就继续听着，避免这几个名字中断。
+不改系统 hosts。设置页有「接管 Cursor」和「接管 Grok」，默认都开。Cursor 里会读代理设置的流量进入本机代理，再从你配置的代理出去。这个设置正在运行的 Cursor 读不到，所以开关会关掉它，要自己重新打开。正在运行的 Grok Bot 会按当前选择关掉并重新打开：开着并且配置了代理时，窗口流量走 `--proxy-server`，它自己的官方客户端走 `HTTPS_PROXY`，地址只取主机和端口，按 HTTP 代理连接。没打开的 Grok Bot 不会被拉起。不读代理、自己直连的进程这次不覆盖。
 
 ## 命令行窗口
 
 配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页。在 Windows 上双击打开时，单击顶栏里的地址也会打开。在 Windows Terminal、iTerm2、GNOME Terminal 里，按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.3.2   http://127.0.0.1:52341   按回车打开配置页
+ ▌▐ cursor-inner v0.3.4   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
     模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.2 ./build.sh linux      # dist/cursor-inner-v0.3.2-linux-amd64，并写入版本号
+VERSION=v0.3.4 ./build.sh linux      # dist/cursor-inner-v0.3.4-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。
@@ -289,7 +289,8 @@ internal/
 ├── i18n/              配置页用到的中英双语文本
 ├── logx/              日志：窗口里的每轮摘要、inner.log 明细
 ├── mitm/              本机代理：解密 *.cursor.sh、分流、行内编辑与终端 Cmd+K
-├── procfwd/           接管期间，把指定子进程的直连改从已配置的代理出去
+├── procfwd/           直连子进程转发（保留；当前接管不改 hosts、不听 443）
+├── grokbot/           Windows 上按开关给 Grok Bot 加/清代理启动参数
 ├── protox/            Connect 帧与 protobuf 字段读写
 ├── provider/          调用 OpenAI Chat / Anthropic 接口，含流式工具调用
 ├── tools/             模型工具调用与 Cursor 执行请求、执行结果之间的转换

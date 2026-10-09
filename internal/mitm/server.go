@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/binary"
 	"errors"
 	"io"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -132,55 +134,18 @@ func (s *Server) Stop() {
 	s.stopDirectLocked()
 }
 
-// HoldDirect 在系统 hosts 还指着本机、又删不掉时把 443 听上，避免这几个名字中断。
-func (s *Server) HoldDirect() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.direct == nil {
-		return
-	}
-	if err := s.direct.Listen(); err != nil {
-		s.directNote = i18n.Of(err)
-		slog.Warn(s.directNote.String())
-		return
-	}
-	s.directNote = i18n.T("系统 hosts 里还留着直连转发，本机 443 继续接着，避免这几个名字中断。", "The system hosts file still redirects those names, so local port 443 stays open and they do not go dead.")
-	slog.Warn(s.directNote.String())
-}
+// HoldDirect 曾在删不掉 hosts 标记时继续听 443。当前产品路径不写 hosts，保留空实现以免旧调用方编译失败。
+func (s *Server) HoldDirect() {}
 
 func (s *Server) stopDirectLocked() {
-	if s.direct == nil {
-		return
-	}
-	if err := s.direct.Stop(); err != nil {
-		s.directNote = i18n.Of(err)
-		slog.Warn(s.directNote.String())
-	}
-}
-
-// SyncDirect 在接管期间把不读代理设置的子进程直连送进当前自定义代理。代理关掉时撤掉。
-func (s *Server) SyncDirect() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.running || s.direct == nil {
-		return
-	}
-	_, on, err := dialer.EffectiveAddress(s.proxy())
-	if err != nil {
-		s.directNote = i18n.Of(err)
-		slog.Warn(s.directNote.String())
-		return
-	}
-	if err := s.direct.Sync(on); err != nil {
-		s.directNote = i18n.Of(err)
-		slog.Warn(s.directNote.String())
-		return
+	if s.direct != nil {
+		s.direct.Stop()
 	}
 	s.directNote = i18n.Text{}
-	if on {
-		slog.Info("Cursor 子进程对 api3.cursor.sh 等的直连已改从自定义代理出去")
-	}
 }
+
+// SyncDirect 不再改系统 hosts，也不听 443。Cursor 走 settings.json 里的本机代理，和 0.2.0 一样。
+func (s *Server) SyncDirect() {}
 
 func (s *Server) URL() string {
 	s.mu.Lock()
@@ -448,6 +413,49 @@ func leakedModel(body []byte, entries []catalog.Entry) string {
 	return ""
 }
 
+// scrubCustomIDs 用等长占位替换自定义模型 id，避免改动 protobuf 字段长度。
+func scrubCustomIDs(body []byte, entries []catalog.Entry) []byte {
+	out := body
+	for _, entry := range entries {
+		if len(entry.ID) < 8 {
+			continue
+		}
+		id := []byte(entry.ID)
+		if !bytes.Contains(out, id) {
+			continue
+		}
+		out = bytes.ReplaceAll(out, id, bytes.Repeat([]byte{'0'}, len(entry.ID)))
+	}
+	return out
+}
+
+func connectCompressed(body []byte) bool {
+	if len(body) < 5 || body[0]&0x01 == 0 || body[0]&0x02 != 0 {
+		return false
+	}
+	n := binary.BigEndian.Uint32(body[1:5])
+	return int(n) == len(body)-5
+}
+
+// scrubOutbound 在遥测 / 提示类请求离开本机前去掉自定义模型 id。
+// 先记住选中模型（Cmd+K 等仍要用），再改写出站字节。
+func scrubOutbound(body []byte, encoding string, entries []catalog.Entry) (next []byte, nextEnc string, changed bool) {
+	plain, err := protox.Plain(body, encoding)
+	if err != nil || leakedModel(plain, entries) == "" {
+		return body, encoding, false
+	}
+	scrubbed := scrubCustomIDs(plain, entries)
+	enc := strings.ToLower(strings.TrimSpace(encoding))
+	switch {
+	case enc == "gzip" || enc == "x-gzip":
+		return scrubbed, "", true
+	case connectCompressed(body):
+		return protox.Frame(0, scrubbed), encoding, true
+	default:
+		return scrubCustomIDs(body, entries), encoding, true
+	}
+}
+
 // leakScanLimit 是外发检查读取的请求体上限；更长的请求体只检查开头，其余部分原样流式转发。
 const leakScanLimit = 1 << 20
 
@@ -501,8 +509,25 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 	s.countOfficial()
 	if r.Body != nil {
 		head, _ := io.ReadAll(io.LimitReader(r.Body, leakScanLimit))
-		s.warnCustomModel(r.URL.Path, head, r.Header.Get("Content-Encoding"))
-		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(head), r.Body))
+		enc := r.Header.Get("Content-Encoding")
+		s.warnCustomModel(r.URL.Path, head, enc)
+		if quietLeak(r.URL.Path) {
+			if next, nextEnc, ok := scrubOutbound(head, enc, s.entries()); ok {
+				head = next
+				if nextEnc == "" {
+					r.Header.Del("Content-Encoding")
+				} else {
+					r.Header.Set("Content-Encoding", nextEnc)
+				}
+				r.ContentLength = int64(len(head))
+				r.Header.Set("Content-Length", strconv.Itoa(len(head)))
+				r.Body = io.NopCloser(bytes.NewReader(head))
+			} else {
+				r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(head), r.Body))
+			}
+		} else {
+			r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(head), r.Body))
+		}
 	}
 	resp, err := s.do(r.Context(), r, nil, false)
 	if err != nil {

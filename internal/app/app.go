@@ -12,6 +12,7 @@ import (
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorlaunch"
 	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/provider"
 	"cursor-inner/internal/takeover"
 	"cursor-inner/internal/web"
@@ -99,8 +100,28 @@ func (a *App) OpenCursor() error {
 
 func (a *App) Shutdown() {
 	a.shutdown.Do(func() {
+		_ = grokbot.Apply("")
 		_ = a.life.Restore()
 	})
+}
+
+// SyncGrok 按「接管 Grok」开关处理正在运行的 Grok Bot。代理写在启动参数里，正在运行的进程读不到，所以状态不对时会关掉并按当前选择重新打开。没在运行不拉起。不改系统 hosts。
+func (a *App) SyncGrok() {
+	if !a.store.Get().TakeoverGrok {
+		_ = grokbot.Apply("")
+		return
+	}
+	spec, on, err := dialer.EffectiveAddress(a.store.Get().Proxy)
+	if err != nil || !on {
+		_ = grokbot.Apply("")
+		return
+	}
+	proxyURL, ok := grokbot.HTTPProxyURL(spec)
+	if !ok {
+		_ = grokbot.Apply("")
+		return
+	}
+	_ = grokbot.Apply(proxyURL)
 }
 
 func (a *App) State() (web.View, error) {
@@ -111,6 +132,7 @@ func (a *App) State() (web.View, error) {
 	view := web.View{
 		ListenURL:      a.listenURL(),
 		Takeover:       cfg.Takeover,
+		TakeoverGrok:   cfg.TakeoverGrok,
 		TakeoverActive: snap.Active,
 		MitmURL:        snap.URL,
 		CA:             snap.CA,
@@ -158,11 +180,25 @@ func (a *App) State() (web.View, error) {
 	return view, nil
 }
 
-func (a *App) SetTakeover(enabled bool) error {
-	if enabled {
-		return a.EnableTakeover()
+func (a *App) SetTakeover(target string, enabled bool) error {
+	switch target {
+	case "", "cursor":
+		if enabled {
+			return a.EnableTakeover()
+		}
+		return a.DisableTakeover()
+	case "grok":
+		if err := a.store.Update(func(f *config.File) error {
+			f.TakeoverGrok = enabled
+			return nil
+		}); err != nil {
+			return err
+		}
+		a.SyncGrok()
+		return nil
+	default:
+		return i18n.E("未知的接管目标", "Unknown takeover target")
 	}
-	return a.DisableTakeover()
 }
 
 func (a *App) SetProxy(enabled bool, address string) error {
@@ -180,6 +216,7 @@ func (a *App) SetProxy(enabled bool, address string) error {
 		return err
 	}
 	a.life.SyncDirect()
+	a.SyncGrok()
 	return nil
 }
 

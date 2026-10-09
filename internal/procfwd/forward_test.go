@@ -73,6 +73,7 @@ func TestTapRecordsChildBytes(t *testing.T) {
 	f.port = "0"
 	f.path = path
 	f.flush = false
+	f.target = func(context.Context, string) (string, error) { return "api3.cursor.sh:443", nil }
 	if err := f.Sync(true); err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +134,7 @@ func TestSpliceDialsName(t *testing.T) {
 	f.port = "0"
 	f.path = path
 	f.flush = false
+	f.target = func(context.Context, string) (string, error) { return "api3.cursor.sh:443", nil }
 	if err := f.Sync(true); err != nil {
 		t.Fatal(err)
 	}
@@ -233,6 +235,25 @@ func TestStopKeepsListenerWhenHostsStay(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.Stop(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDialAddrSkipsLoopback(t *testing.T) {
+	addr, err := dialAddr("api3.cursor.sh", []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("203.0.113.9")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if addr != "203.0.113.9:443" {
+		t.Fatalf("addr %s", addr)
+	}
+	if _, err := dialAddr("api3.cursor.sh", []net.IP{net.ParseIP("127.0.0.1")}); err == nil {
+		t.Fatal("expected loopback to be rejected")
+	}
+	if err := rejectLoopback("127.0.0.1:443"); err == nil {
+		t.Fatal("expected dial to loopback to be rejected")
+	}
+	if err := rejectLoopback("api3.cursor.sh:443"); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -58,19 +58,21 @@ type LastTest struct {
 }
 
 type File struct {
-	Takeover  bool     `json:"takeover"`
-	Autostart bool     `json:"autostart"`
-	Proxy     Proxy    `json:"proxy"`
-	Image     ImageAPI `json:"image,omitempty"`
-	Models    []Model  `json:"models"`
+	Takeover     bool     `json:"takeover"`
+	TakeoverGrok bool     `json:"takeover_grok"`
+	Autostart    bool     `json:"autostart"`
+	Proxy        Proxy    `json:"proxy"`
+	Image        ImageAPI `json:"image,omitempty"`
+	Models       []Model  `json:"models"`
 }
 
 func Default() File {
 	return File{
-		Takeover:  true,
-		Autostart: false,
-		Proxy:     Proxy{Enabled: true},
-		Models:    []Model{},
+		Takeover:     true,
+		TakeoverGrok: true,
+		Autostart:    false,
+		Proxy:        Proxy{Enabled: true},
+		Models:       []Model{},
 	}
 }
 
@@ -101,6 +103,7 @@ func Load(dir string) (*Store, error) {
 		if err := json.Unmarshal(raw, &data); err != nil {
 			return nil, err
 		}
+		data.TakeoverGrok = takeoverGrokOrDefault(raw, data.TakeoverGrok)
 	}
 	if data.Models == nil {
 		data.Models = []Model{}
@@ -112,6 +115,18 @@ func Load(dir string) (*Store, error) {
 		}
 	}
 	return s, nil
+}
+
+// takeoverGrokOrDefault 把旧配置里没有的接管 Grok 开关当成开。显式 false 保持关闭。
+func takeoverGrokOrDefault(raw []byte, parsed bool) bool {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return true
+	}
+	if _, ok := probe["takeover_grok"]; !ok {
+		return true
+	}
+	return parsed
 }
 
 func (s *Store) Get() File {

@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.2` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.4` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -117,7 +117,7 @@ Download from [Releases](https://github.com/CSGrandeur/cursor-inner/releases/lat
 | macOS (Apple silicon / Intel) | `cursor-inner-<version>-darwin-arm64.tar.gz` / `darwin-amd64.tar.gz` |
 | Linux (x86_64 / ARM64) | `cursor-inner-<version>-linux-amd64.tar.gz` / `linux-arm64.tar.gz` |
 
-Files downloaded in a browser carry a download mark. On Windows, when SmartScreen appears, click "More info" → "Run anyway"; on macOS, run `xattr -d com.apple.quarantine cursor-inner` before starting it. Every release includes `SHA256SUMS.txt` and an SPDX SBOM.
+A browser download is marked as coming from the internet. The first double-click on Windows opens "Open File - Security Warning" and says the publisher could not be verified. That mark is not a damaged file. The install script removes it, so an install started from the script does not show this dialog. For a manually downloaded file, run `Unblock-File .\cursor-inner-<version>-windows-amd64.exe` in PowerShell before opening it. The executable is not code-signed, so the publisher stays unknown until a signing certificate is added. On macOS, run `xattr -d com.apple.quarantine cursor-inner` before starting it. Every release includes `SHA256SUMS.txt` and an SPDX SBOM.
 
 </details>
 
@@ -144,14 +144,14 @@ On takeover, cursor-inner edits Cursor's `settings.json`: `http.proxy` points at
 
 The local proxy decrypts only connections to `*.cursor.sh`; everything else is tunneled directly. Chat requests are routed by model id: ids that belong to a custom model are handled locally, everything else is forwarded to Cursor unchanged.
 
-Some Cursor child processes ignore that proxy setting and connect on their own to `api3.cursor.sh`, `api4.cursor.sh`, `repo42.cursor.sh`, and `us-only` / `us-eu` / `us-asia.gcpp.cursor.sh`. While takeover is on and the configured proxy is enabled, those connections leave through the configured proxy with the protocol left as the client sent it. This needs permission to edit the system hosts file and to listen on local port 443. If that is not possible, the settings page says so and the rest of the traffic is unchanged. On exit, the hosts entries are removed before port 443 closes. If they cannot be removed, port 443 stays open so those names do not go dead.
+The system hosts file is not modified. The settings page has separate switches, Take over Cursor and Take over Grok, both on by default. Cursor traffic that honors the proxy setting enters the local proxy and then leaves through the configured proxy. A running Cursor does not see that settings change, so the switch closes it and leaves you to open it again. A running Grok Bot is closed and opened again for the current choice: when takeover is on and a proxy is configured, window traffic uses `--proxy-server` and its own official client uses `HTTPS_PROXY`. Only the host and port are kept, and the connection is an HTTP proxy. Grok Bot is not started if it is not already running. Processes that ignore the proxy and connect directly are not covered.
 
 ## Console window
 
 The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.3.2   http://127.0.0.1:52341   press Enter to open settings
+ ▌▐ cursor-inner v0.3.4   http://127.0.0.1:52341   press Enter to open settings
     takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.2 ./build.sh linux      # dist/cursor-inner-v0.3.2-linux-amd64, and stamps that version
+VERSION=v0.3.4 ./build.sh linux      # dist/cursor-inner-v0.3.4-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).
@@ -289,7 +289,8 @@ internal/
 ├── i18n/              Bilingual (Chinese / English) text for the settings page
 ├── logx/              Logs: per-turn console summary and inner.log detail
 ├── mitm/              Local proxy: decrypts *.cursor.sh, routes requests, inline edit and terminal Cmd+K
-├── procfwd/           While takeover is on, sends selected child-process connections out through the configured proxy
+├── procfwd/           Direct child-process forwarder (kept; current takeover does not edit hosts or bind 443)
+├── grokbot/           On Windows, adds or clears Grok Bot proxy launch arguments from the settings switch
 ├── protox/            Connect frames and protobuf field encoding
 ├── provider/          Calls OpenAI Chat / Anthropic endpoints, including streamed tool calls
 ├── tools/             Converts between model tool calls and Cursor exec requests and results
