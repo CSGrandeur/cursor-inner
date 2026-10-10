@@ -11,5 +11,5 @@ func RunWatch(pid int, dir string) {
 	}
 	defer windows.CloseHandle(handle)
 	_, _ = windows.WaitForSingleObject(handle, windows.INFINITE)
-	recoverAfterExit(dir)
+	recoverAfterExit(dir, pid)
 }

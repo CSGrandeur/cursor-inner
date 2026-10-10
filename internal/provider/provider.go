@@ -23,16 +23,17 @@ import (
 const testPrompt = "Output the numbers 1 through 120 separated by a single space. No commas, no newlines, no explanation."
 
 type Result struct {
-	OK                   bool      `json:"ok"`
-	Status               int       `json:"status"`
-	DurationMS           int64     `json:"duration_ms"`
-	FirstValidResponseMS *int64    `json:"first_valid_response_ms,omitempty"`
-	OutputTokens         uint64    `json:"output_tokens"`
-	TokensPerSecond      float64   `json:"tokens_per_second"`
-	TokensEstimated      bool      `json:"tokens_estimated"`
-	Output               string    `json:"output"`
-	At                   string    `json:"at,omitempty"`
-	Error                i18n.Text `json:"error,omitzero"`
+	OK                   bool                 `json:"ok"`
+	Status               int                  `json:"status"`
+	DurationMS           int64                `json:"duration_ms"`
+	FirstValidResponseMS *int64               `json:"first_valid_response_ms,omitempty"`
+	OutputTokens         uint64               `json:"output_tokens"`
+	TokensPerSecond      float64              `json:"tokens_per_second"`
+	TokensEstimated      bool                 `json:"tokens_estimated"`
+	Output               string               `json:"output"`
+	At                   string               `json:"at,omitempty"`
+	Error                i18n.Text            `json:"error,omitzero"`
+	Capabilities         *config.Capabilities `json:"capabilities,omitempty"`
 }
 
 func (r Result) LastTest() config.LastTest {
@@ -46,6 +47,7 @@ func (r Result) LastTest() config.LastTest {
 		TokensEstimated:      r.TokensEstimated,
 		Output:               r.Output,
 		Error:                r.Error,
+		Capabilities:         r.Capabilities,
 	}
 }
 
@@ -58,8 +60,8 @@ func Prepare(m config.Model) (config.Model, error) {
 	if m.DisplayName == "" || m.BaseURL == "" || m.APIKey == "" || m.Model == "" {
 		return m, i18n.E("显示名、接口地址、密钥和模型名都要填", "Display name, endpoint URL, API key and model name are all required")
 	}
-	if m.Type != "openai-chat" && m.Type != "anthropic" {
-		return m, i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
+	if m.Type != "openai-chat" && m.Type != "anthropic" && m.Type != "openai-responses" {
+		return m, i18n.E("接口类型只支持 openai-chat、openai-responses 和 anthropic", "Endpoint type must be openai-chat, openai-responses or anthropic")
 	}
 	if _, err := RequestURL(m); err != nil {
 		return m, err
@@ -90,6 +92,15 @@ func RequestURL(m config.Model) (string, error) {
 		default:
 			return base + "/v1/chat/completions", nil
 		}
+	case "openai-responses":
+		switch {
+		case strings.HasSuffix(path, "/responses"):
+			return base, nil
+		case strings.HasSuffix(path, "/v1"):
+			return base + "/responses", nil
+		default:
+			return base + "/v1/responses", nil
+		}
 	case "anthropic":
 		switch {
 		case strings.HasSuffix(path, "/messages"):
@@ -100,7 +111,7 @@ func RequestURL(m config.Model) (string, error) {
 			return base + "/v1/messages", nil
 		}
 	default:
-		return "", i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
+		return "", i18n.E("接口类型只支持 openai-chat、openai-responses 和 anthropic", "Endpoint type must be openai-chat, openai-responses or anthropic")
 	}
 }
 

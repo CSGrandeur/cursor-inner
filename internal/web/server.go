@@ -1,9 +1,11 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"io"
 	"net/http"
 
@@ -16,17 +18,22 @@ import (
 //go:embed page.html
 var page embed.FS
 
-func Handler(backend Backend) http.Handler {
+// Handler 不带版本号，标题只有程序名。
+func Handler(backend Backend) http.Handler { return HandlerVersion(backend, "") }
+
+// HandlerVersion 和 Handler 相同，页面 <title> 用 Title(version)，与窗口标题一致。
+func HandlerVersion(backend Backend, version string) http.Handler {
+	raw, _ := page.ReadFile("page.html")
+	html := bytes.Replace(raw, []byte("<title>cursor-inner</title>"), []byte("<title>"+template.HTMLEscapeString(Title(version))+"</title>"), 1)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		raw, _ := page.ReadFile("page.html")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write(raw)
+		_, _ = w.Write(html)
 	})
 	mux.HandleFunc("GET /icon.svg", func(w http.ResponseWriter, r *http.Request) {
 		raw := assets.IconSVG
@@ -34,6 +41,12 @@ func Handler(backend Backend) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(raw)
 	})
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"version": version})
+	})
+	if up, ok := backend.(UpdateBackend); ok {
+		registerUpdate(mux, up)
+	}
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		view, err := backend.State()
 		if err != nil {
@@ -218,9 +231,51 @@ func Handler(backend Backend) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("PUT /api/strict", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetStrictEgress(body.Enabled); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("PUT /api/tunnel", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Enabled bool `json:"enabled"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetTunnel(body.Enabled); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("POST /api/grok", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.OpenGrok(); err != nil {
 			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("POST /api/logs", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.OpenLogs(); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("POST /api/leakcheck", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.RunLeakCheck(); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -232,7 +287,7 @@ func Handler(backend Backend) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	return mux
+	return guard(mux)
 }
 
 func writeState(w http.ResponseWriter, backend Backend) {

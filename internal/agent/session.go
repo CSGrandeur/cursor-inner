@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -49,7 +50,9 @@ var quietThinkingAfter = 2 * time.Second
 type Session struct {
 	RequestID        string
 	Model            config.Model
-	Web              dialer.Func // 联网工具（WebFetch、WebSearch、出图）按全局出站代理拨号
+	Proxy            config.Proxy   // 出站代理设置，供备用模型按各自「走代理」开关拨号
+	Fallbacks        []config.Model // 流式前失败时的备用模型
+	Web              dialer.Func    // 联网工具（WebFetch、WebSearch、出图）按全局出站代理拨号
 	run              *cursorpb.AgentRunRequest
 	history          *History
 	inbox            chan *cursorpb.ExecClientMessage
@@ -84,6 +87,9 @@ type Session struct {
 	summaryText      string
 	notifyMu         sync.Mutex
 	notify           Emit
+	loops            *loopTracker
+	editedPaths      []string
+	fallbackUsed     []string
 }
 
 func newSession(requestID string, model config.Model, run *cursorpb.AgentRunRequest, history *History) *Session {
@@ -99,6 +105,7 @@ func newSession(requestID string, model config.Model, run *cursorpb.AgentRunRequ
 		argFails:  map[string]int{},
 		early:     map[uint32]*cursorpb.ExecClientMessage{},
 		steer:     make(chan steer, 8),
+		loops:     newLoopTracker(),
 	}
 }
 
@@ -359,8 +366,11 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	s.mcp = tools.MCPDefs(reqCtx)
 	slog.Debug("mcp 工具", "count", len(s.mcp))
 	mode := user.GetMode()
-	system := systemPrompt(s.Model.DisplayName, reqCtx) + mcpNote(s.mcp) + modeNote(mode, reqCtx) + s.roleNote()
+	system := systemPrompt(s.Model.DisplayName, reqCtx) + mcpNote(s.mcp) + modeNote(mode, reqCtx) + s.roleNote() + familyNote(s.Model)
 	model := s.Model
+	if model.LastTest != nil && model.LastTest.Capabilities != nil && model.LastTest.Capabilities.TextToolMode {
+		model.TextToolMode = true
+	}
 	params := turnParams(s.run)
 	if model.Reasoning && params.Effort != "" {
 		model.Effort = params.Effort
@@ -442,16 +452,25 @@ next:
 				return err
 			}
 		}
+		s.loops.resetText()
 		stopQuiet, waitQuiet := startQuietThinking(ctx, send, &thought)
 		var reply provider.Message
-		messages, reply, err = chatOrCompact(ctx, model, dial, system, messages, catalog, func(text string) error {
+		messages, model, reply, err = s.chatOrCompactSession(ctx, model, dial, system, messages, catalog, func(text string) error {
 			stopQuiet()
-			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: text}}}))
+			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: text}}})); err != nil {
+				return err
+			}
+			if s.loops.feedText(text) {
+				slog.Debug("正文复读，提前收尾本次生成", "conversation", short)
+				return provider.ErrStopStream
+			}
+			return nil
 		}, func(text string) error {
 			thought.Store(true)
 			stopQuiet()
 			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ThinkingDelta{ThinkingDelta: &cursorpb.ThinkingDeltaUpdate{Text: text}}}))
 		})
+		s.Model = model
 		stopQuiet()
 		waitQuiet()
 		if thought.Load() {
@@ -467,6 +486,11 @@ next:
 		s.completionTokens = reply.CompletionTokens
 		s.cacheTokens = reply.CacheTokens
 		messages = append(messages, reply)
+		if warn, stop := s.loops.observe(reply.ToolCalls); stop {
+			return fmt.Errorf("相同工具调用重复 %d 次，已停止", loopStopAt)
+		} else if warn != "" {
+			messages = append(messages, provider.Message{Role: "user", Content: warn})
+		}
 		for i := 0; i < len(reply.ToolCalls); {
 			end := i + 1
 			if tools.ReadOnly(reply.ToolCalls[i].Name) {
@@ -507,7 +531,7 @@ next:
 				if outcome.mode != "" {
 					mode = modeFromID(outcome.mode)
 					catalog = s.catalogFor(mode)
-					system = systemPrompt(s.Model.DisplayName, reqCtx) + mcpNote(s.mcp) + modeNote(mode, reqCtx) + s.roleNote()
+					system = systemPrompt(s.Model.DisplayName, reqCtx) + mcpNote(s.mcp) + modeNote(mode, reqCtx) + s.roleNote() + familyNote(s.Model)
 				}
 			}
 			if err != nil {
@@ -684,7 +708,26 @@ func (s *Session) card(send Emit, call provider.ToolCall, text string, isErr boo
 		return out, nil
 	}
 	s.argFails[call.Name] = 0
+	s.noteEdited(call)
 	return toolOutcome{call: call, text: text, mode: mode, card: ui}, nil
+}
+
+func (s *Session) noteEdited(call provider.ToolCall) {
+	switch strings.ToLower(call.Name) {
+	case "strreplace", "write", "editnotebook":
+	default:
+		return
+	}
+	var raw map[string]any
+	if json.Unmarshal([]byte(call.Arguments), &raw) != nil {
+		return
+	}
+	for _, key := range []string{"path", "file_path", "filePath", "target_notebook"} {
+		if v, ok := raw[key].(string); ok && strings.TrimSpace(v) != "" {
+			s.editedPaths = uniquePaths(append(s.editedPaths, strings.TrimSpace(v)))
+			return
+		}
+	}
 }
 
 func (s *Session) ask(ctx context.Context, send Emit, call provider.ToolCall, query *cursorpb.InteractionQuery, ui *cursorpb.ToolCall) (toolOutcome, error) {

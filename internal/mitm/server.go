@@ -31,6 +31,7 @@ import (
 	"cursor-inner/internal/procfwd"
 	"cursor-inner/internal/protox"
 	"cursor-inner/internal/provider"
+	"cursor-inner/internal/selfupdate"
 )
 
 type Server struct {
@@ -55,6 +56,8 @@ type Server struct {
 	officialN  int
 	lastError  string
 	wsTLS      *tls.Config
+	conns      connCounter
+	released   string
 }
 
 // Traffic 是顶栏要显示的计数。
@@ -77,6 +80,11 @@ func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(
 }
 
 func (s *Server) Start(ca tls.Certificate) (string, error) {
+	return s.StartAt(ca, "127.0.0.1:0")
+}
+
+// StartAt 在指定地址上启动；自更新交接用它接回上一个进程的端口（短暂重试，等对方释放）。
+func (s *Server) StartAt(ca tls.Certificate, addr string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.running {
@@ -86,10 +94,18 @@ func (s *Server) Start(ca tls.Certificate) (string, error) {
 		return "", i18n.E("接管证书缺少解析结果", "Takeover certificate is missing its parsed form")
 	}
 	goproxy.GoproxyCa = ca
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var ln net.Listener
+	err := selfupdate.Rebind(context.Background(), func() error {
+		l, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln = l
+		}
+		return err
+	})
 	if err != nil {
 		return "", err
 	}
+	ln = s.conns.wrap(ln)
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = false
 	proxy.Logger = log.New(io.Discard, "", 0)
@@ -146,6 +162,50 @@ func (s *Server) stopDirectLocked() {
 
 // SyncDirect 不再改系统 hosts，也不听 443。Cursor 走 settings.json 里的本机代理，和 0.2.0 一样。
 func (s *Server) SyncDirect() {}
+
+// Release 停止接受新连接，已建立的连接（包括正在流式返回的回合）继续由本进程服务。自更新交接用。
+func (s *Server) Release() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.running || s.ln == nil {
+		return nil
+	}
+	s.released = s.ln.Addr().String()
+	return s.ln.Close()
+}
+
+// Reclaim 在 Release 交出的地址上重新监听（交接失败回滚）。
+func (s *Server) Reclaim() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.released == "" {
+		return nil
+	}
+	addr := s.released
+	var ln net.Listener
+	err := selfupdate.Rebind(context.Background(), func() error {
+		l, err := net.Listen("tcp", addr)
+		if err == nil {
+			ln = l
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	ln = s.conns.wrap(ln)
+	s.ln = ln
+	s.released = ""
+	srv := s.httpSrv
+	go func() { _ = srv.Serve(ln) }()
+	return nil
+}
+
+// ActiveConns 是本进程仍在服务的连接数。交接后旧进程等它归零再退出。
+func (s *Server) ActiveConns() int64 { return s.conns.n.Load() }
+
+// LocalBusy 表示有自定义模型回合在本进程里跑。它的后续消息会走新连接，不能交接到新进程。
+func (s *Server) LocalBusy() bool { return s.hub.Active() > 0 }
 
 func (s *Server) URL() string {
 	s.mu.Lock()
@@ -364,6 +424,7 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 	flush(w)
 	d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
 	session.Web = s.dialContext
+	session.Proxy = s.proxy()
 	if err == nil {
 		err = session.Run(r.Context(), d, func(m *cursorpb.AgentServerMessage) error {
 			raw, err := proto.Marshal(m)

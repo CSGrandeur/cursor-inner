@@ -39,6 +39,7 @@ func (s *split) Handle(_ context.Context, r slog.Record) error {
 	if s.file != nil {
 		fmt.Fprintln(s.file, line)
 	}
+	emitSinks(r)
 	show := r.Level >= slog.LevelInfo || s.verbose
 	if r.Level == slog.LevelWarn {
 		show = s.admitWarn(r.Message, show)
@@ -203,4 +204,32 @@ func Rotate(path string) error {
 	}
 	_ = os.Remove(path + ".1")
 	return os.Rename(path, path+".1")
+}
+
+var (
+	sinkMu sync.Mutex
+	sinks  []func(slog.Record)
+)
+
+// AddSink 让额外的记录者也收到每一条日志。只有个人记录版会挂上；发版不调用，保持精简。
+func AddSink(fn func(slog.Record)) {
+	if fn == nil {
+		return
+	}
+	sinkMu.Lock()
+	sinks = append(sinks, fn)
+	sinkMu.Unlock()
+}
+
+func emitSinks(r slog.Record) {
+	sinkMu.Lock()
+	fns := make([]func(slog.Record), len(sinks))
+	copy(fns, sinks)
+	sinkMu.Unlock()
+	for _, fn := range fns {
+		func() {
+			defer func() { _ = recover() }()
+			fn(r.Clone())
+		}()
+	}
 }

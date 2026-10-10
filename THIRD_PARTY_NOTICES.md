@@ -4,6 +4,15 @@ cursor-inner 的发布版本包含以下第三方软件。各自的许可证原�
 
 Release builds of cursor-inner include the third-party software listed below. Their license texts follow.
 
+## qwen-code
+
+cursor-inner 的 Qwen 家族适配（Qwen3-Coder 的 <function=...> / <invoke> 工具调用解析、XML 实体解码、代码围栏内示例的跳过、提示词与分模型 token 上限、enable_thinking 行为）参考了 qwen-code 的设计。仅借鉴设计，未直接拷贝其源码。qwen-code 以 Apache License 2.0 发布。
+
+cursor-inner's support for the Qwen model family (Qwen3-Coder `<function=...>` / `<invoke>` tool-call parsing, XML entity decoding, skipping format examples inside code fences, prompt tuning and per-model token limits, and the `enable_thinking` behaviour) is informed by the design of qwen-code. Only the design was studied; no source code was copied. cursor-inner's consecutive/cumulative tool-call loop guard and streamed-content repetition guard are likewise informed by qwen-code's loopDetectionService. qwen-code is released under the Apache License 2.0.
+
+Source: https://github.com/QwenLM/qwen-code
+License: Apache-2.0 (https://github.com/QwenLM/qwen-code/blob/main/LICENSE)
+
 ## cursor-byok
 
 cursor-inner 的 Cursor 协议处理参考了 cursor-byok 的设计；proto/cursor/agent_v1.proto、internal/tools/tools.json 和 internal/agent/prompt.md 取自 cursor-byok。

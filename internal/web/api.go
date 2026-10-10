@@ -18,6 +18,8 @@ type ModelView struct {
 	Fast            bool             `json:"fast"`
 	ContextWindow   int              `json:"context_window"`
 	MaxOutputTokens int              `json:"max_output_tokens"`
+	PromptCacheKey  string           `json:"prompt_cache_key,omitempty"`
+	Fallback        []string         `json:"fallback,omitempty"`
 	KeyHint         string           `json:"key_hint"`
 	LastTest        *config.LastTest `json:"last_test,omitempty"`
 }
@@ -35,6 +37,7 @@ type View struct {
 	Proxy          ProxyView       `json:"proxy"`
 	Image          ImageView       `json:"image"`
 	Autostart      autostart.State `json:"autostart"`
+	Tunnel         TunnelView      `json:"tunnel"`
 	Models         []ModelView     `json:"models"`
 }
 
@@ -48,6 +51,11 @@ type ProxyView struct {
 	Enabled   bool   `json:"enabled"`
 	Address   string `json:"address"`
 	Effective bool   `json:"effective"`
+}
+
+type TunnelView struct {
+	Status int       `json:"status"`
+	Detail i18n.Text `json:"detail"`
 }
 
 type Backend interface {
@@ -68,4 +76,8 @@ type Backend interface {
 	Quit() error
 	OpenCursor() error
 	OpenGrok() error
+	SetStrictEgress(enabled bool) error
+	SetTunnel(enabled bool) error
+	OpenLogs() error
+	RunLeakCheck() error
 }

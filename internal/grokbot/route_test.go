@@ -24,11 +24,13 @@ func TestHTTPProxyURL(t *testing.T) {
 
 func TestRouted(t *testing.T) {
 	proxy := "http://127.0.0.1:1080"
-	cmd := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic ` + EnvProxyMark
+	args := ProxyArgs(proxy)
+	cmd := `"Grok Bot.exe" ` + joinArgs(args)
 	if !Routed(cmd, proxy) {
 		t.Fatal("expected routed")
 	}
-	if Routed(`"Grok Bot.exe" --proxy-server=`+proxy+` --disable-quic`, proxy) {
+	old := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic`
+	if Routed(old, proxy) {
 		t.Fatal("old launch without undici env-proxy mark is not routed")
 	}
 	if Routed(`"Grok Bot.exe"`, proxy) {
@@ -37,11 +39,20 @@ func TestRouted(t *testing.T) {
 	if Routed(cmd, "") {
 		t.Fatal("empty proxy is not routed")
 	}
+	if Routed(cmd+` --no-proxy-server`, proxy) {
+		t.Fatal("--no-proxy-server must not count as routed")
+	}
+	if Routed(cmd+` --proxy-auto-detect`, proxy) {
+		t.Fatal("--proxy-auto-detect must not count as routed")
+	}
+	if Routed(`"Grok Bot.exe" --proxy-server=`+proxy+`,direct:// --disable-quic `+EnvProxyMark+` --proxy-bypass-list=localhost;127.0.0.1;[::1]`, proxy) {
+		t.Fatal("direct:// fallback must not count as routed")
+	}
 }
 
 func TestShouldRestartLeavesLoginReturnAlone(t *testing.T) {
 	proxy := "http://127.0.0.1:1080"
-	routed := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic ` + EnvProxyMark
+	routed := `"Grok Bot.exe" ` + joinArgs(ProxyArgs(proxy))
 	returned := `"Grok Bot.exe" sand://login`
 	if ShouldRestart([]string{routed, returned}, proxy) {
 		t.Fatal("a second process without the proxy must not close the one that is already polling")
@@ -66,8 +77,30 @@ func TestShouldRestartUpgradesOldProxyLaunch(t *testing.T) {
 	if !ShouldRestart([]string{old}, proxy) {
 		t.Fatal("process missing undici env-proxy mark must restart so NODE_USE_ENV_PROXY can apply")
 	}
-	upgraded := old + ` ` + EnvProxyMark
+	upgraded := `"Grok Bot.exe" ` + joinArgs(ProxyArgs(proxy))
 	if ShouldRestart([]string{upgraded, `"Grok Bot.exe" sand://login`}, proxy) {
 		t.Fatal("upgraded process plus login return must not restart")
+	}
+	merged := `"Grok Bot.exe" --proxy-server=` + proxy + ` --disable-quic ` + EnvProxyMark + ` --proxy-bypass-list=localhost;127.0.0.1;[::1];alpha.example`
+	if !ShouldRestart([]string{merged}, proxy) {
+		t.Fatal("launch that still carries an extra bypass entry beyond loopback must restart")
+	}
+}
+
+func joinArgs(args []string) string {
+	out := ""
+	for i, a := range args {
+		if i > 0 {
+			out += " "
+		}
+		out += a
+	}
+	return out
+}
+
+func TestHTTPProxyURLKeepsIPv6Brackets(t *testing.T) {
+	got, ok := HTTPProxyURL("socks5://[::1]:1080")
+	if !ok || got != "http://[::1]:1080" {
+		t.Fatalf("got %q %v", got, ok)
 	}
 }

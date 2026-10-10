@@ -1,6 +1,7 @@
 package grokbot
 
 import (
+	"net"
 	"net/url"
 	"strings"
 )
@@ -20,20 +21,77 @@ func HTTPProxyURL(spec string) (string, bool) {
 	if err != nil || u.Hostname() == "" || u.Port() == "" {
 		return "", false
 	}
-	return "http://" + u.Hostname() + ":" + u.Port(), true
+	return "http://" + net.JoinHostPort(u.Hostname(), u.Port()), true
 }
 
-// Routed 报告这条命令行是不是已经带上我们加上的代理参数。
+// proxyConflict 报告命令行是否带有会拆掉固定代理的 Chromium 开关。
+// --no-proxy-server 会覆盖 --proxy-server；PAC / 自动检测会回到系统 PAC（v2rayN PAC 模式下部分域名 DIRECT）。
+func proxyConflict(cmdline string) bool {
+	lower := strings.ToLower(cmdline)
+	for _, bad := range []string{
+		"--no-proxy-server",
+		"--proxy-auto-detect",
+		"--proxy-pac-url=",
+	} {
+		if strings.Contains(lower, bad) {
+			return true
+		}
+	}
+	// --proxy-server=...direct:// 或 "http://p,direct://" 会在代理失败时直连。
+	if i := strings.Index(lower, "--proxy-server="); i >= 0 {
+		rest := lower[i+len("--proxy-server="):]
+		end := strings.IndexAny(rest, " \t\"'")
+		if end >= 0 {
+			rest = rest[:end]
+		}
+		if strings.Contains(rest, "direct://") || strings.Contains(rest, ",direct") {
+			return true
+		}
+	}
+	return false
+}
+
+// Routed 报告这条命令行是不是已经带上我们加上的代理参数，且没有冲突开关。
+// 参数按完整 token 比对，避免回环 --proxy-bypass-list 被旧版带额外条目的更长名单子串误匹配。
 func Routed(cmdline, proxyURL string) bool {
-	if proxyURL == "" {
+	if proxyURL == "" || proxyConflict(cmdline) {
 		return false
 	}
 	for _, arg := range ProxyArgs(proxyURL) {
-		if !strings.Contains(cmdline, arg) {
+		if !hasArg(cmdline, arg) {
 			return false
 		}
 	}
 	return true
+}
+
+func hasArg(cmdline, arg string) bool {
+	for idx := 0; idx <= len(cmdline); {
+		i := strings.Index(cmdline[idx:], arg)
+		if i < 0 {
+			return false
+		}
+		i += idx
+		end := i + len(arg)
+		if i > 0 {
+			switch cmdline[i-1] {
+			case ' ', '\t', '"', '\'':
+			default:
+				idx = i + 1
+				continue
+			}
+		}
+		if end < len(cmdline) {
+			switch cmdline[end] {
+			case ' ', '\t', '"', '\'':
+			default:
+				idx = i + 1
+				continue
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // ShouldRestart 判断正在运行的 Grok Bot 要不要关掉再开。

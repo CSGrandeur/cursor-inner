@@ -44,6 +44,7 @@ jobs:
       - name: Build and package
         env:
           VERSION: ${{ github.ref_name }}
+          UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
         run: |
           set -eu
           mkdir -p out
@@ -57,6 +58,7 @@ jobs:
           (cd out && zip -qr "${name}.zip" "${name}" && rm -r "${name}")
           cp "dist/${name}.exe" "out/${name}.exe"
 
+          # Self-update needs the bare executables next to manifest.json.
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             os=${target%/*}; arch=${target#*/}
             ./build.sh "$os" "$arch"
@@ -66,6 +68,7 @@ jobs:
             cp assets/icon.svg "out/${name}/cursor-inner.svg"
             cp $docs "out/${name}/"
             tar -C out -czf "out/${name}.tar.gz" "${name}"
+            cp "dist/${name}" "out/${name}"
             rm -r "out/${name}"
           done
 
@@ -77,6 +80,12 @@ jobs:
           output-file: out/cursor-inner-${{ github.ref_name }}.spdx.json
           upload-artifact: false
           upload-release-assets: false
+
+      - name: Update manifest
+        env:
+          VERSION: ${{ github.ref_name }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: ./scripts/release_manifest.sh out "$VERSION" release-notes.md
 
       - name: Checksums
         run: |

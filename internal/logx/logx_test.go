@@ -3,6 +3,7 @@ package logx
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -84,3 +85,14 @@ func TestRotateMovesALargeFile(t *testing.T) {
 type ioDiscard struct{}
 
 func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }
+
+func TestAddSinkReceivesRecords(t *testing.T) {
+	var got []string
+	AddSink(func(r slog.Record) { got = append(got, r.Message) })
+	defer func() { sinkMu.Lock(); sinks = nil; sinkMu.Unlock() }()
+	Setup(io.Discard, io.Discard, false)
+	slog.Info("hello sink")
+	if len(got) == 0 || got[len(got)-1] != "hello sink" {
+		t.Fatalf("sink did not receive record: %v", got)
+	}
+}

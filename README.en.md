@@ -5,8 +5,12 @@
   </picture>
 </p>
 
+<p align="center"><sub>Bring your own models into Cursor · official models untouched · zero-leak proxy takeover · hot self-update</sub></p>
+
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total?style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner?style=flat-square&color=151514&label=stars" alt="Stars"></a>
   <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514?style=flat-square" alt="Platform"></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514?style=flat-square&logo=go&logoColor=white" alt="Go"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner?style=flat-square&color=151514" alt="License"></a>
@@ -23,10 +27,7 @@
 cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compatible endpoints you configure to Cursor's model list. When you pick one of them, your machine calls your endpoint directly; when you pick an official model, the request goes to Cursor unchanged. It works with Cursor on Windows, macOS and Linux, and the settings page is available in English and Chinese.
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-en-dark.png">
-    <img src="docs/images/window-en-light.png" alt="cursor-inner settings page" width="92%">
-  </picture>
+  <img src="docs/images/window-en-light.png" alt="cursor-inner settings page" width="92%">
 </p>
 
 ## Features
@@ -34,30 +35,44 @@ cursor-inner is a small local tool that adds the OpenAI Chat or Anthropic compat
 <table>
   <tr>
     <td width="33%" valign="top">
-      <b>Custom models</b><br>
+      <b>🧩 Custom models</b><br>
       OpenAI Chat Completions and Anthropic Messages endpoints, added, tested and removed on the settings page, and appended to Cursor's model list.
     </td>
     <td width="33%" valign="top">
-      <b>Official models untouched</b><br>
+      <b>🛡️ Official models untouched</b><br>
       The catalog is only appended to, never replaced. Official-model requests are not modified, apart from going through your outbound proxy.
     </td>
     <td width="33%" valign="top">
-      <b>Connectivity tests</b><br>
+      <b>📊 Connectivity tests</b><br>
       Streams the numbers 1 to 120 and records tokens/s, time to first token, total duration and output tokens. Results are saved with the model.
     </td>
   </tr>
   <tr>
     <td width="33%" valign="top">
-      <b>Outbound proxy</b><br>
+      <b>🌐 Outbound proxy</b><br>
       One address. A bare host:port is detected as socks5 or http. Empty means a direct connection. Each custom model decides on its own whether to use it.
     </td>
     <td width="33%" valign="top">
-      <b>Reliable restore</b><br>
+      <b>♻️ Reliable restore</b><br>
       On Windows, the close button hides the window to the notification area and the process keeps running. Quit from the icon's right-click menu or the settings page. A crash or a forced kill still removes the takeover settings and writes your own <code>http.proxy</code> and related settings back.
     </td>
     <td width="33%" valign="top">
-      <b>Three platforms</b><br>
+      <b>💻 Three platforms</b><br>
       Takeover, certificate trust and start at login on Windows, macOS and Linux. Single instance, with an English or Chinese settings page.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <b>⬆️ Self-update</b><br>
+      Checks for new releases and updates in one click: the new process hot-takes the same local ports, Grok and Cursor keep running, verified by sha256, with automatic rollback and never a direct-connection fallback.
+    </td>
+    <td width="33%" valign="top">
+      <b>🔒 Zero-leak egress</b><br>
+      Optional TUN or Strict mode forces official endpoints (grok, x.ai, Cursor, cursorvm) through the proxy at the network layer, catching even the apps' hardcoded HTTP/2 direct connections.
+    </td>
+    <td width="33%" valign="top">
+      <b>🛠️ Agent toolchain</b><br>
+      Custom models read and write files, run commands, search, call in-conversation MCP and subagents, with diff review, loop guards, context compaction and fallback-model switching.
     </td>
   </tr>
 </table>
@@ -78,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.3.7` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.4.0` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -133,26 +148,59 @@ A browser download is marked as coming from the internet. The first double-click
 
 ## How it works
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-en-dark.svg">
-    <img src="docs/images/flow-en-light.svg" alt="Cursor goes through the local cursor-inner proxy: custom models go to your endpoint, official models go to Cursor unchanged, other hosts are tunneled" width="100%">
-  </picture>
-</p>
+```mermaid
+flowchart LR
+    Cursor -->|http.proxy| CI["cursor-inner local proxy"]
+    CI -->|custom model| YourAPI["your OpenAI / Anthropic endpoint"]
+    CI -->|official model| Official["Cursor official service"]
+    CI -. other hosts .-> Tunnel["direct tunnel"]
+    Grok["Grok Bot"] -->|HTTPS_PROXY / --proxy-server| Proxy["your outbound proxy"]
+    CI -. optional TUN / Strict .-> Proxy
+```
 
 On takeover, cursor-inner edits Cursor's `settings.json`: `http.proxy` points at the local proxy, `http.proxySupport` is set to `override`, and HTTP/2 is disabled. Existing values of these keys are backed up first and written back on restore.
 
 The local proxy decrypts only connections to `*.cursor.sh`; everything else is tunneled directly. Chat requests are routed by model id: ids that belong to a custom model are handled locally, everything else is forwarded to Cursor unchanged.
 
-The system hosts file is not modified. The settings page has separate switches, Take over Cursor and Take over Grok, both on by default. Cursor traffic that honors the proxy setting enters the local proxy and then leaves through the configured proxy. A running Cursor does not see that settings change, so the switch closes it and leaves you to open it again, or use Open Cursor in the top bar. A running Grok Bot is closed and opened again for the current choice: when takeover is on and a proxy is configured, window traffic uses `--proxy-server`, and the main-process undici client (including the login poll) uses `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` and `--use-env-proxy`. Only the host and port are kept, and the connection is an HTTP proxy. Grok Bot is not started if it is not already running; Open Grok on the settings page is the cold start, and uses the same arguments when takeover is on. Processes that ignore the proxy and connect directly are not covered. Analytics, nudge, and similar requests that still carry a local custom-model id are replaced with a same-length placeholder before they leave; the selected model is remembered locally so Cmd+K can keep using it.
+With Grok takeover on, Grok Bot always uses the configured HTTP proxy: the window gets `--proxy-server` (never `--proxy-pac-url`, `--proxy-auto-detect`, `--no-proxy-server`, or a `direct://` fallback) plus `--disable-quic`; the main-process undici client (including the login poll) gets `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` / `GRPC_PROXY` in both cases, with `NODE_USE_ENV_PROXY=1` and `--use-env-proxy`. `NO_PROXY`/`no_proxy` and `--proxy-bypass-list` contain only loopback addresses. They do **not** inherit process or system `no_proxy` values — a broad system bypass under PAC mode sends some requests direct and can show a false “usage exhausted” error.
+
+The system hosts file is not modified. The settings page has separate switches, Take over Cursor and Take over Grok, both on by default. Cursor traffic that honors the proxy setting enters the local proxy and then leaves through the configured proxy. A running Cursor does not see that settings change, so the switch closes it and leaves you to open it again, or use Open Cursor in the top bar. A running Grok Bot is closed and opened again for the current choice. Only the host and port are kept, and the connection is an HTTP proxy. Grok Bot is not started if it is not already running; Open Grok on the settings page is the cold start, and uses the same arguments when takeover is on. Processes that ignore the proxy and connect directly are not covered. Analytics, nudge, and similar requests that still carry a local custom-model id are replaced with a same-length placeholder before they leave; the selected model is remembered locally so Cmd+K can keep using it.
+
+To verify Grok egress goes through the configured proxy: set the system proxy to PAC (for example v2rayN PAC mode, not global), turn on Grok takeover with an outbound proxy filled in, and cold-start with Open Grok or let takeover restart the process once. The proxy app's connection log should show CONNECT for Grok / xAI / Cursor hosts, not direct dials. The automated check is `TestProxyEnvForcesCONNECTThroughProxy` in `internal/grokbot` (it still issues CONNECT when the inherited environment has `NO_PROXY=*`). A custom model with “use proxy” off still connects directly, including in debug mode; that is intentional.
+
+Quitting cursor-inner leaves Grok Bot alone: it connects to your configured proxy directly, not through cursor-inner, so it keeps using the proxy after you quit. To remove the proxy, turn off Take over Grok. WebRTC does not send UDP unless it goes through the proxy (`--force-webrtc-ip-handling-policy=disable_non_proxied_udp`).
+
+If the proxy needs a username and password, or is a socks proxy, Grok Bot cannot use it by itself. cursor-inner then runs a loopback-only bridge that forwards through your configured proxy, including its authentication. If the upstream proxy fails, the bridge answers 502 and never connects directly. While cursor-inner is not running, such a Grok Bot cannot connect at all instead of going direct.
+
+To check for leaks, `scripts/grok-leak-check.ps1` samples the outbound connections of every Grok Bot and Cursor process. At run time it resolves the official domains (grok, x.ai, Cursor, cursorvm and so on) with DoH through the proxy, and also checks TLS certificate names and reverse DNS. Direct connections to official endpoints are FAIL; direct connections to third parties such as GitHub and Google are INFO. The Electron main process and some Cursor Node services use raw sockets and ignore the proxy flags. To stop every direct connection to official endpoints, use Strict mode on the settings page (a UAC prompt), or run `scripts/strict-egress.ps1 -Enable` as administrator. Windows Firewall then blocks Grok Bot.exe and Cursor.exe from connecting directly to the official IPs, and a scheduled task resolves them again at startup and every 30 minutes. Limits: blocking is by IP, so other sites on the same shared CDN IPs (such as Cloudflare) are also blocked for direct connections from these two apps; traffic through the proxy is not affected. New domains not on the list, and IPs that change between refreshes, can slip through. The hosts file is not changed. `-Disable` removes it and `-Status` shows it.
+
+About the two connections that still reach official endpoints directly (Cursor's `api3.cursor.sh` and Grok's `us*.cursorvm.com`): forcing them through the proxy from outside the apps turned out not to be possible. With `cursor.general.disableHttp2` on (set by Cursor takeover) Cursor's main API traffic already goes through the proxy; the leftover api3 connection is Cursor's metrics/telemetry client and Grok's is its cloud-agent gateway probe. Both are hardcoded HTTP/2 clients with no proxy support, running in isolated Electron Node processes: a bundled UI extension loads into a different extension host than the one making these calls, and `NODE_OPTIONS=--require` is stripped by Electron's `nodeOptions` fuse, so neither a `tls.connect` shim nor `HTTPS_PROXY`/`NODE_USE_ENV_PROXY` reaches them (verified on test instances). Routing them would require patching the vendor bundles. Strict mode (the official-IP firewall) stays the zero-leak guarantee for these two.
+
+TUN mode (the "TUN mode" button on the settings page, with a UAC prompt): cursor-inner manages a minimal bundled sing-box TUN that captures only the official domains (grok, x.ai, Cursor, cursorvm and so on) at the network layer and forwards them to your configured proxy, so even the apps' hardcoded HTTP/2 and the two leftover `api3.cursor.sh` / `cursorvm` connections are proxied with no leaks. All other traffic is untouched: only the fake-ip range and your real DNS servers are routed into the TUN, so every other domain still resolves through your real DNS to real IPs and connects directly (LAN, WSL and v2rayN unaffected). Admin rights are requested only after you confirm, via UAC. If you decline, UAC fails, sing-box fails to start, or the TUN dies, cursor-inner keeps working with the normal proxy takeover (env, flags, bridge), shows a "TUN off, official endpoints may leak" status, and still offers Strict mode: it never blocks startup or breaks networking. The config is generated by `internal/tunnel` and validated against sing-box 1.14.3; the binary is downloaded (sha256-checked) into the cursor-inner data dir on first use.
+
+The settings page only accepts loopback hosts and refuses changes coming from other sites, so a web page cannot use your browser to change local settings.
+
+
+<details>
+<summary><b>Settings reference</b></summary>
+
+The switches and buttons on the settings page, top to bottom; each can be toggled at any time without affecting the others:
+
+- **Update** — Checks GitHub Releases once at startup. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check. Buttons: "Check for updates" / "Update".
+- **TUN mode** — Uses a sing-box TUN to route only official endpoints (grok, x.ai, Cursor, cursorvm, etc.) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure. "Turn on" / "Turn off".
+- **Strict mode** — Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (grok, x.ai, Cursor). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps. "Turn on" / "Turn off".
+- **Logs & diagnostics** — "Open logs" opens the log folder; "Leak check" runs a one-off proxy-leak check in the developer build.
+- **Per model** — a "Cache key" and a "Fallback" model; the capability panel closes with "Close".
+
+</details>
 
 ## Console window
 
 The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.3.7   http://127.0.0.1:52341   press Enter to open settings
-    takeover ● on    outbound socks5://127.0.0.1:1080    custom models 3
+ ▌▐ cursor-inner v0.4.0   http://127.0.0.1:52341   press Enter to open settings
+    takeover ● on    outbound proxy socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
 20:31:07  takeover proxy http://127.0.0.1:61022
@@ -188,7 +236,7 @@ Auto lets Cursor's servers choose a model, and they only choose among official m
 <details>
 <summary><b>Can custom models edit files or run commands?</b></summary>
 
-Models that support tool calls (OpenAI function calling or Anthropic tool use) can already read, search, edit and delete files, edit notebooks, run commands, update todos, ask questions, switch mode, present a plan, search or open the web after approval, call MCP tools from the current conversation, and start a subagent in Agent mode. GenerateImage is offered only after an image endpoint is saved on the settings page. Workspace search collects term matches, then the current custom model keeps the hits that match the query. Edits show a diff on the tool card and are written after you accept them. Command output updates on the tool card, and a command that reaches its time limit moves to the background. Past about 70% of the context window, earlier tool output is shortened, and if that is not enough the model writes a summary before answering. Ask, Plan, Debug and Multitask include that mode's instructions. An explore subagent only reads and searches; other subagents can edit files. Stop aborts a tool that has not finished. A message sent while a tool is still running joins the current turn: that tool finishes, tools that have not started are skipped, and the next model call sees the message. `/summarize` replaces earlier history with a summary. Each turn writes a checkpoint, and a later turn can resume from an earlier one. Inline edit and terminal Cmd+K are answered here when a custom model is selected. Commit messages and chat titles do not carry a model id, so Cursor still generates them. Tab completion and other features are still served by Cursor.
+Models that support tool calls (OpenAI Chat / OpenAI Responses / Anthropic tool use) can already read, search, edit and delete files, edit notebooks, run commands, update todos, ask questions, switch mode, present a plan, search or open the web after approval, call MCP tools from the current conversation, and start a subagent in Agent mode. GenerateImage is offered only after an image endpoint is saved on the settings page. Workspace search collects term matches, then the current custom model keeps the hits that match the query. Edits show a diff on the tool card and are written after you accept them; StrReplace falls back to whitespace-insensitive then unique high-similarity matches. Tool calls written into plain text (`<tool_call>`, DSML, JSON fences) are rescued. The same tool with the same arguments warns on the third repeat and stops on the fourth. Command output updates on the tool card, and a command that reaches its time limit moves to the background. Past about 70% of the context window, earlier tool output is shortened, and if that is not enough the model writes a structured summary and is told to re-read edited files. Each model can list fallback model ids; before any text has streamed, auth failures, persistent 5xx, rate-limit timeouts, or context overflow switch to the next. The Test button runs a capability probe (tools, reasoning, images, cache) and can auto-fill settings. Ask, Plan, Debug and Multitask include that mode's instructions. An explore subagent only reads and searches; other subagents can edit files. Stop aborts a tool that has not finished. A message sent while a tool is still running joins the current turn: that tool finishes, tools that have not started are skipped, and the next model call sees the message. `/summarize` replaces earlier history with a summary. Each turn writes a checkpoint, and a later turn can resume from an earlier one. Inline edit and terminal Cmd+K are answered here when a custom model is selected. Commit messages and chat titles do not carry a model id, so Cursor still generates them. Tab completion and other features are still served by Cursor.
 
 </details>
 
@@ -230,6 +278,13 @@ Official models are not affected. If a Cursor update changes its internal protoc
 </details>
 
 <details>
+<summary><b>Does cursor-inner update itself?</b></summary>
+
+Yes. It checks GitHub Releases once at startup, and on demand from the settings page. The new version takes over the same local ports, so Grok and Cursor keep running; the download is verified against the manifest's sha256, and the new version rolls back automatically if it fails its health check — never falling back to a direct connection. Manifests can be ed25519-signed; with a public key built in, unsigned or tampered manifests are rejected.
+
+</details>
+
+<details>
 <summary><b>How do I uninstall it?</b></summary>
 
 1. If you enabled start at login, turn it off on the settings page. Then click Quit; Cursor's settings are restored automatically.
@@ -263,7 +318,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.7 ./build.sh linux      # dist/cursor-inner-v0.3.7-linux-amd64, and stamps that version
+VERSION=v0.4.0 ./build.sh linux      # dist/cursor-inner-v0.4.0-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).

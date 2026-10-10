@@ -150,7 +150,7 @@ func launchDetached(argv []string, flags uint32) error {
 }
 
 func brandConsoleWindow() {
-	if title, err := windows.UTF16PtrFromString("cursor-inner"); err == nil {
+	if title, err := windows.UTF16PtrFromString(windowTitle); err == nil {
 		_, _, _ = procSetConsoleTitleW.Call(uintptr(unsafe.Pointer(title)))
 	}
 	hwnd := consoleWindow()

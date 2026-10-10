@@ -43,7 +43,7 @@ func renderHeader(url, version string, st Status, cols int) string {
 	}
 	proxy := segment{text: "直连", style: muted}
 	if st.Proxy != "" {
-		proxy = segment{text: st.Proxy, style: cream}
+		proxy = segment{text: "代理 " + st.Proxy, style: cream}
 	}
 	second := []segment{
 		{text: "    接管 ", style: faint}, takeover,

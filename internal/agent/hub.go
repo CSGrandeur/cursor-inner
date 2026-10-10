@@ -81,6 +81,11 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 			if route.ModelID != "" && h.lookup != nil {
 				if model, ok := h.lookup(route.ModelID); ok {
 					s.session = newSession(requestID, model, m.RunRequest, h.history)
+					for _, id := range model.Fallback {
+						if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
+							s.session.Fallbacks = append(s.session.Fallbacks, fb)
+						}
+					}
 					start = true
 				}
 			}
@@ -137,6 +142,19 @@ func (h *Hub) Wait(ctx context.Context, requestID string) (*Session, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return s.session, nil
+}
+
+// Active 是正在本进程里跑的自定义模型会话数。
+func (h *Hub) Active() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	for _, s := range h.slots {
+		if s.session != nil && time.Since(s.born) < 2*time.Hour {
+			n++
+		}
+	}
+	return n
 }
 
 func (h *Hub) Done(requestID string) {

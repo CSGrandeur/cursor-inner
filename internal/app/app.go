@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cursor-inner/internal/i18n"
@@ -14,7 +17,9 @@ import (
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/provider"
+	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
+	"cursor-inner/internal/tunnel"
 	"cursor-inner/internal/web"
 )
 
@@ -33,6 +38,10 @@ type App struct {
 	bootErr  i18n.Text
 	quit     func()
 	shutdown sync.Once
+	bridge   grokbot.Bridge
+	tun      *tunnel.Manager
+	upd      *selfupdate.Updater
+	frozen   atomic.Bool
 }
 
 func (a *App) OnQuit(fn func()) {
@@ -53,7 +62,8 @@ func (a *App) Quit() error {
 }
 
 func New(store *config.Store, life *takeover.Service, boot starter, exe string) *App {
-	return &App{store: store, life: life, boot: boot, exe: exe}
+	return &App{store: store, life: life, boot: boot, exe: exe,
+		tun: tunnel.NewManager(filepath.Join(config.DefaultDir(), "tun"))}
 }
 
 func (a *App) SetListen(url string) {
@@ -98,44 +108,12 @@ func (a *App) OpenCursor() error {
 	return cursorlaunch.Start()
 }
 
-func (a *App) OpenGrok() error {
-	proxyURL := ""
-	cfg := a.store.Get()
-	if cfg.TakeoverGrok {
-		spec, on, err := dialer.EffectiveAddress(cfg.Proxy)
-		if err == nil && on {
-			if u, ok := grokbot.HTTPProxyURL(spec); ok {
-				proxyURL = u
-			}
-		}
-	}
-	return grokbot.Launch(proxyURL)
-}
-
+// Shutdown 只还原 Cursor。Grok Bot 保持原样：它直连用户配置的代理，不经过本程序，
+// 退出时若改回无代理重开，流量会直连出去。要撤掉 Grok 的代理，请在配置页关掉「接管 Grok」。
 func (a *App) Shutdown() {
 	a.shutdown.Do(func() {
-		_ = grokbot.Apply("")
 		_ = a.life.Restore()
 	})
-}
-
-// SyncGrok 按「接管 Grok」开关处理正在运行的 Grok Bot。代理写在启动参数里，正在运行的进程读不到，所以状态不对时会关掉并按当前选择重新打开。没在运行不拉起。不改系统 hosts。
-func (a *App) SyncGrok() {
-	if !a.store.Get().TakeoverGrok {
-		_ = grokbot.Apply("")
-		return
-	}
-	spec, on, err := dialer.EffectiveAddress(a.store.Get().Proxy)
-	if err != nil || !on {
-		_ = grokbot.Apply("")
-		return
-	}
-	proxyURL, ok := grokbot.HTTPProxyURL(spec)
-	if !ok {
-		_ = grokbot.Apply("")
-		return
-	}
-	_ = grokbot.Apply(proxyURL)
 }
 
 func (a *App) State() (web.View, error) {
@@ -169,6 +147,9 @@ func (a *App) State() (web.View, error) {
 		view.LastError = a.bootErr
 	}
 	a.mu.Unlock()
+	tstate, tdetail := a.tun.Status()
+	view.Tunnel.Status = int(tstate)
+	view.Tunnel.Detail = tdetail
 	for _, model := range cfg.Models {
 		view.Models = append(view.Models, web.ModelView{
 			ID:              model.ID,
@@ -181,6 +162,8 @@ func (a *App) State() (web.View, error) {
 			Fast:            model.FastSupport,
 			ContextWindow:   model.ContextWindow,
 			MaxOutputTokens: model.MaxOutputTokens,
+			PromptCacheKey:  model.PromptCacheKey,
+			Fallback:        append([]string(nil), model.Fallback...),
 			KeyHint:         model.KeyHint(),
 			LastTest:        model.LastTest,
 		})
@@ -291,6 +274,9 @@ func (a *App) UpdateModel(id string, model config.Model) error {
 			}
 			prev := f.Models[i]
 			if strings.TrimSpace(model.APIKey) == "" {
+				if !sameEndpoint(prev, model) {
+					return i18n.E("换了服务器地址，请重新填写 API Key", "The server host changed; enter the API key again")
+				}
 				model.APIKey = prev.APIKey
 			}
 			prepared, err := provider.Prepare(model)
@@ -419,7 +405,10 @@ func (a *App) TestDraft(model config.Model) provider.Result {
 	if strings.TrimSpace(model.APIKey) == "" && model.ID != "" {
 		for _, existing := range a.store.Get().Models {
 			if existing.ID == model.ID {
-				model.APIKey = existing.APIKey
+				// 只在地址和类型都没变时沿用已存的 Key，免得把 Key 发给新填的地址。
+				if sameEndpoint(existing, model) {
+					model.APIKey = existing.APIKey
+				}
 				break
 			}
 		}
@@ -436,9 +425,29 @@ func (a *App) probe(model config.Model) provider.Result {
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	return provider.Test(ctx, model, d)
+	model = provider.ApplyModelsDevDefaults(ctx, model, d, config.DefaultDir())
+	result, updated := provider.Probe(ctx, model, d)
+	if result.OK {
+		_ = a.store.Update(func(f *config.File) error {
+			for i := range f.Models {
+				if f.Models[i].ID != updated.ID {
+					continue
+				}
+				f.Models[i].Reasoning = updated.Reasoning
+				if f.Models[i].ContextWindow <= 0 {
+					f.Models[i].ContextWindow = updated.ContextWindow
+				}
+				if f.Models[i].MaxOutputTokens <= 0 {
+					f.Models[i].MaxOutputTokens = updated.MaxOutputTokens
+				}
+				return nil
+			}
+			return nil
+		})
+	}
+	return result
 }
 
 func (a *App) listenURL() string {
@@ -453,4 +462,18 @@ func mustSpec(p config.Proxy) string {
 		return ""
 	}
 	return spec
+}
+
+// sameEndpoint 报告两份配置的 Key 会不会发到同一台服务器（协议 + 主机 + 端口，不分大小写）。
+// 只改路径或接口类型时沿用旧 Key；换了主机必须重新填写，免得把已存的 Key 发给别处。
+func sameEndpoint(a, b config.Model) bool {
+	origin := func(raw string) string {
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || u.Host == "" {
+			return ""
+		}
+		return strings.ToLower(u.Scheme + "://" + u.Host)
+	}
+	oa := origin(a.BaseURL)
+	return oa != "" && oa == origin(b.BaseURL)
 }

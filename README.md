@@ -5,8 +5,12 @@
   </picture>
 </p>
 
+<p align="center"><sub>在 Cursor 里用上你自己的模型 · 官方模型照常 · 代理接管零泄漏 · 自更新热交接</sub></p>
+
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total?style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner?style=flat-square&color=151514&label=stars" alt="Stars"></a>
   <a href="#安装"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514?style=flat-square" alt="Platform"></a>
   <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514?style=flat-square&logo=go&logoColor=white" alt="Go"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner?style=flat-square&color=151514" alt="License"></a>
@@ -23,10 +27,7 @@
 cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthropic 兼容接口加进 Cursor 的模型列表：选中这些模型时，对话由本机直接调用你的接口；选官方模型时，请求原样发往 Cursor。支持 Windows、macOS 和 Linux 版的 Cursor，配置页提供中文和英文界面。
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-zh-dark.png">
-    <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
-  </picture>
+  <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
 </p>
 
 ## 功能
@@ -34,30 +35,44 @@ cursor-inner 是一个本地小工具。它把你配置的 OpenAI Chat 或 Anthr
 <table>
   <tr>
     <td width="33%" valign="top">
-      <b>自定义模型</b><br>
+      <b>🧩 自定义模型</b><br>
       OpenAI Chat Completions 和 Anthropic Messages 两种接口，在网页上添加、测试、删除，追加在 Cursor 模型列表末尾。
     </td>
     <td width="33%" valign="top">
-      <b>官方模型照常</b><br>
+      <b>🛡️ 官方模型照常</b><br>
       模型目录只追加、不替换。官方模型的请求除了经过出站代理，不做任何改写。
     </td>
     <td width="33%" valign="top">
-      <b>连通性测试</b><br>
+      <b>📊 连通性测试</b><br>
       流式请求 1 到 120 的数字，记录 tokens/s、首字延迟、总耗时和输出 token 数，结果随配置保存。
     </td>
   </tr>
   <tr>
     <td width="33%" valign="top">
-      <b>出站代理</b><br>
+      <b>🌐 出站代理</b><br>
       只填一个地址。没写协议时自动识别 socks5 或 http，留空则直连。每个自定义模型单独决定是否走它。
     </td>
     <td width="33%" valign="top">
-      <b>可靠还原</b><br>
+      <b>♻️ 可靠还原</b><br>
       Windows 上点窗口关闭按钮会把窗口收回通知区域，进程继续运行。右键图标选「退出」，或在配置页点「退出」，才会结束并还原设置。崩溃或被强制结束时，也会撤掉接管设置，并把你原有的 <code>http.proxy</code> 等设置写回。
     </td>
     <td width="33%" valign="top">
-      <b>三个平台</b><br>
+      <b>💻 三个平台</b><br>
       Windows、macOS、Linux 都能接管、信任证书和开机启动；单实例运行，配置页可切换中文和英文。
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <b>⬆️ 自动更新</b><br>
+      启动时检查新版本，一键更新：新进程热接过同一组本机端口，Grok 和 Cursor 不重启，按 sha256 校验，失败自动回滚，绝不回退成直连。
+    </td>
+    <td width="33%" valign="top">
+      <b>🔒 零泄漏出口</b><br>
+      可选 TUN 模式或严格模式，把官方端点（grok、x.ai、Cursor、cursorvm）在网络层强制走代理，连应用写死的 HTTP/2 直连也拦得住。
+    </td>
+    <td width="33%" valign="top">
+      <b>🛠️ Agent 工具链</b><br>
+      自定义模型可读写文件、运行命令、搜索、调用本轮 MCP 与子代理，带 diff 审阅、循环防护、上下文压缩与备用模型切换。
     </td>
   </tr>
 </table>
@@ -78,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.3.7`。
+安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.4.0`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -133,26 +148,59 @@ Linux 上证书写入两处：系统证书库，以及 NSS 用户库 `~/.pki/nss
 
 ## 工作原理
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-zh-dark.svg">
-    <img src="docs/images/flow-zh-light.svg" alt="Cursor 经本机代理 cursor-inner 分流：自定义模型发往你的接口，官方模型原样发往 Cursor，其他主机直接隧道转发" width="100%">
-  </picture>
-</p>
+```mermaid
+flowchart LR
+    Cursor -->|http.proxy| CI["cursor-inner 本机代理"]
+    CI -->|自定义模型| YourAPI["你的 OpenAI / Anthropic 接口"]
+    CI -->|官方模型| Official["Cursor 官方服务"]
+    CI -. 其他主机 .-> Tunnel["直接隧道转发"]
+    Grok["Grok Bot"] -->|HTTPS_PROXY / --proxy-server| Proxy["你配置的出站代理"]
+    CI -. 可选 TUN / 严格模式 .-> Proxy
+```
 
 接管时，cursor-inner 修改 Cursor 的 `settings.json`：`http.proxy` 指向本机代理，`http.proxySupport` 设为 `override`，并关闭 HTTP/2。原有的同名设置先备份，还原时写回。
 
 本机代理只解密发往 `*.cursor.sh` 的连接，其余主机直接隧道转发。对话请求按模型 id 分流：属于自定义模型的由本地处理，其余原样转给官方。
 
-不改系统 hosts。设置页有「接管 Cursor」和「接管 Grok」，默认都开。Cursor 里会读代理设置的流量进入本机代理，再从你配置的代理出去。这个设置正在运行的 Cursor 读不到，所以开关会关掉它，要自己重新打开，或用顶栏的「启动 Cursor」。正在运行的 Grok Bot 会按当前选择关掉并重新打开：开着并且配置了代理时，窗口流量走 `--proxy-server`，主进程 undici（含登录轮询）走 `HTTPS_PROXY`，并设 `NODE_USE_ENV_PROXY=1` 与 `--use-env-proxy`。地址只取主机和端口，按 HTTP 代理连接。没打开的 Grok Bot 不会被拉起；配置页的「启动 Grok」才会冷启动，接管开着时带上同一套参数。不读代理、自己直连的进程这次不覆盖。选中自定义模型时，Analytics、Nudge 一类请求里若仍带着本地模型 id，转发前会换成等长占位，本机先记住当前模型，Cmd+K 仍能用。
+接管 Grok 时，Grok Bot 固定走配置的 HTTP 代理：窗口用 `--proxy-server`（不加 `--proxy-pac-url` / `--proxy-auto-detect` / `--no-proxy-server`，也不带 `direct://` 回退），并 `--disable-quic`；主进程 undici（含登录轮询）用 `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` / `GRPC_PROXY`（大小写两份），并设 `NODE_USE_ENV_PROXY=1` 与 `--use-env-proxy`。`NO_PROXY`/`no_proxy` 与 `--proxy-bypass-list` 只含回环地址，**不**继承进程或系统里已有的 `no_proxy`（PAC 模式下宽泛的系统绕过会让部分请求直连，云功能可能误报额度用尽）。
+
+不改系统 hosts。设置页有「接管 Cursor」和「接管 Grok」，默认都开。Cursor 里会读代理设置的流量进入本机代理，再从你配置的代理出去。这个设置正在运行的 Cursor 读不到，所以开关会关掉它，要自己重新打开，或用顶栏的「启动 Cursor」。正在运行的 Grok Bot 会按当前选择关掉并重新打开。地址只取主机和端口，按 HTTP 代理连接。没打开的 Grok Bot 不会被拉起；配置页的「启动 Grok」才会冷启动，接管开着时带上同一套参数。不读代理、自己直连的进程这次不覆盖。选中自定义模型时，Analytics、Nudge 一类请求里若仍带着本地模型 id，转发前会换成等长占位，本机先记住当前模型，Cmd+K 仍能用。
+
+验证 Grok 出口是否走配置代理：把系统代理设成 PAC（例如 v2rayN 的 PAC 模式，不要用全局），在 cursor-inner 里打开接管 Grok 并填好出站代理，用配置页「启动 Grok」冷启动或让接管重开一次。在代理软件的连接日志里应看到 Grok / xAI / Cursor 相关域名的 CONNECT，而不是直连。自动化对照见仓库内 `internal/grokbot` 的 `TestProxyEnvForcesCONNECTThroughProxy`（在继承 `NO_PROXY=*` 时仍对目标发 CONNECT）。自定义模型若关闭了「走代理」，调试模式下也仍直连，这是刻意行为。
+
+退出 cursor-inner 时不会改动 Grok Bot：它直接连你配置的代理，不经过 cursor-inner，所以退出后照样走代理。要撤掉 Grok 的代理，在配置页关掉「接管 Grok」。WebRTC 不走代理时就不发 UDP（`--force-webrtc-ip-handling-policy=disable_non_proxied_udp`）。
+
+代理带用户名和密码、或是 socks 代理时，Grok Bot 自己用不了。这时 cursor-inner 在本机回环地址上开一个代理桥，经你配置的代理（含认证）转发。上游代理不通时代理桥返回 502，不会直连。cursor-inner 没在运行时，这种情况下的 Grok Bot 会连不上，而不是改成直连。
+
+检查是否有遗漏：`scripts/grok-leak-check.ps1` 采样 Grok Bot 与 Cursor 所有进程的出站连接。它在运行时经代理用 DoH 解析官方域名（grok、x.ai、Cursor 及 cursorvm 等），再结合 TLS 证书名和反向解析，把直连官方端点标为 FAIL，GitHub、Google 等第三方直连标为 INFO。Electron 主进程和 Cursor 的部分 Node 服务直接用 socket，不认代理参数。要让官方端点一条不漏，可在配置页「严格模式」点开启（弹 UAC），或以管理员身份运行 `scripts/strict-egress.ps1 -Enable`：防火墙为 Grok Bot.exe 和 Cursor.exe 阻止到官方 IP 的直连，计划任务开机时和每 30 分钟重新解析。局限：按 IP 拦截，Cloudflare 等共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下（走代理不受影响）；清单外的新域名、两次刷新之间换的新 IP 会漏；不改 hosts。`-Disable` 撤销，`-Status` 查看。
+
+关于仍然直连官方端点的两条连接（Cursor 的 `api3.cursor.sh`、Grok 的 `us*.cursorvm.com`）：已查明无法从应用外部把它们逼进代理。开启 `cursor.general.disableHttp2`（接管 Cursor 时已设）后，Cursor 的主 API 流量已经走代理；剩下这条 api3 直连是 Cursor 的指标/遥测客户端，Grok 那条是它连云端 agent 网关的探测。两者都是写死的 HTTP/2 客户端、不支持代理，且跑在各自独立的 Electron Node 进程里：外挂的 UI 扩展加载到的扩展宿主和发起这些请求的宿主不是同一个，`NODE_OPTIONS=--require` 又被 Electron 的 `nodeOptions` fuse 清掉，所以 `tls.connect` 注入和 `HTTPS_PROXY`/`NODE_USE_ENV_PROXY` 都够不到它们（已在测试实例上验证）。要接管只能改厂商自带的程序包。这两条的「零泄漏」保证仍然靠严格模式（上一轮的官方 IP 防火墙）。
+
+TUN 模式（配置页「TUN 模式」点开启，弹 UAC）：cursor-inner 管理一个最小化的 sing-box TUN，只在网络层捕获官方域名（grok、x.ai、Cursor、cursorvm 等）并转进你配置的代理，连应用写死的 HTTP/2、以及上面那两条 `api3.cursor.sh` / `cursorvm` 直连也会被拦进代理，做到零泄漏。其它流量完全不碰：只有 fake-ip 段和你的真实 DNS 被路由进 TUN，其余域名照旧用真实 DNS 解析成真实 IP 并直连，LAN、WSL、v2rayN 均不受影响。管理员权限只在你确认后经 UAC 申请。若你拒绝授权、UAC 失败、sing-box 起不来或 TUN 中途退出，cursor-inner 继续用普通代理接管（env、flags、桥）工作，状态栏显示「TUN 未开启，官方端点可能泄漏」，并仍提供严格模式——绝不阻断启动或改坏网络。配置由 internal/tunnel 生成并通过 sing-box 1.14.3 校验；首次使用时把校验过哈希的 sing-box 下载到 cursor-inner 数据目录。
+
+配置页只接受本机地址访问，并拒绝来自其他网站的改动请求，防止网页借浏览器操作本机配置。
+
+
+<details>
+<summary><b>设置项速览</b></summary>
+
+配置页从上到下的开关与按钮，均可随时开关、互不影响：
+
+- **更新** — 启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。 按钮「检查更新」/「更新」。
+- **TUN 模式** — 用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。 「开启」/「关闭」。
+- **严格模式** — 用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。 「开启」/「关闭」。
+- **日志与诊断** — 「打开日志」打开日志文件夹，「泄漏检查」在开发者版本里跑一次代理泄漏检查。
+- **每个模型** — 可填「缓存键」与「备用模型」；能力面板右上角「关闭」关闭。
+
+</details>
 
 ## 命令行窗口
 
 配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页。在 Windows 上双击打开时，单击顶栏里的地址也会打开。在 Windows Terminal、iTerm2、GNOME Terminal 里，按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.3.7   http://127.0.0.1:52341   按回车打开配置页
-    接管 ● 接管中    出站 socks5://127.0.0.1:1080    自定义模型 3
+ ▌▐ cursor-inner v0.4.0   http://127.0.0.1:52341   按回车打开配置页
+    接管 ● 接管中    出站 代理 socks5://127.0.0.1:1080    自定义模型 3
     模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
 20:31:07  接管代理 http://127.0.0.1:61022
@@ -188,7 +236,7 @@ Auto 由 Cursor 官方服务决定用哪个模型，只会在官方模型中选�
 <details>
 <summary><b>自定义模型能读写文件、运行命令吗？</b></summary>
 
-支持工具调用的模型（OpenAI function calling 或 Anthropic tool use）已经可以在 Agent 模式下读文件、搜索、修改和删除文件、编辑笔记本、运行命令、更新待办、提问、切换模式、提交计划、在批准后搜索或打开网页、调用本轮对话里的 MCP 工具，以及启动子代理。设置页填了出图接口之后才会出现 GenerateImage。工作区搜索先按词找出候选，再由当前自定义模型筛选。修改会在对话里显示带 diff 的工具卡片，接受之后才会写入。命令的输出会跟着工具卡片更新；超时后命令转到后台。对话超过上下文窗口大约七成时，会先缩短较早的工具输出，仍然放不下就先写摘要再回答。Ask、Plan、Debug、Multitask 会带上各自的模式说明。explore 子代理只做阅读和搜索，其他子代理可以改文件。点停止会中止还没结束的工具。工具还在执行时发来的消息会并进当前这一轮：当前这个工具会做完，后面还没开始的工具先跳过，下一次模型调用就能看到这条消息。`/summarize` 会把更早的历史收成摘要，每一轮结束留下检查点，之后可以回到较早的检查点。选了自定义模型的行内编辑和终端 Cmd+K 也由这里回答。提交说明和聊天标题的请求里没有模型，仍由 Cursor 生成。Tab 补全等其余功能仍由 Cursor 官方服务提供。
+支持工具调用的模型（OpenAI Chat / OpenAI Responses / Anthropic tool use）已经可以在 Agent 模式下读文件、搜索、修改和删除文件、编辑笔记本、运行命令、更新待办、提问、切换模式、提交计划、在批准后搜索或打开网页、调用本轮对话里的 MCP 工具，以及启动子代理。设置页填了出图接口之后才会出现 GenerateImage。工作区搜索先按词找出候选，再由当前自定义模型筛选。修改会在对话里显示带 diff 的工具卡片，接受之后才会写入；StrReplace 在精确匹配失败后会尝试忽略缩进/空白，再尝试唯一高相似度片段。模型把工具调用写进正文（`<tool_call>`、DSML、JSON 代码块）时会捞出来执行。同一工具同一参数连续出现会先警告再停止。命令的输出会跟着工具卡片更新；超时后命令转到后台。对话超过上下文窗口大约七成时，会先缩短较早的工具输出，仍然放不下就先写结构化摘要再回答，并提示重读刚改过的文件。每个模型可填备用模型 id：在还没流出任何字之前，鉴权失败、持续 5xx、限流超时或上下文溢出会切到下一个。测试按钮会做能力探测（工具、推理、图片、缓存）并尽量自动勾选设置。Ask、Plan、Debug、Multitask 会带上各自的模式说明。explore 子代理只做阅读和搜索，其他子代理可以改文件。点停止会中止还没结束的工具。工具还在执行时发来的消息会并进当前这一轮：当前这个工具会做完，后面还没开始的工具先跳过，下一次模型调用就能看到这条消息。`/summarize` 会把更早的历史收成摘要，每一轮结束留下检查点，之后可以回到较早的检查点。选了自定义模型的行内编辑和终端 Cmd+K 也由这里回答。提交说明和聊天标题的请求里没有模型，仍由 Cursor 生成。Tab 补全等其余功能仍由 Cursor 官方服务提供。
 
 </details>
 
@@ -230,6 +278,13 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 </details>
 
 <details>
+<summary><b>cursor-inner 会自动更新吗？</b></summary>
+
+会。启动时检查一次 GitHub Release，也可在配置页手动检查。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；下载按清单里的 sha256 校验，新版本没通过健康检查会自动回滚，且绝不回退成直连。清单可用 ed25519 签名；内置公钥后，未签名或被篡改的清单会被拒绝。
+
+</details>
+
+<details>
 <summary><b>怎么卸载？</b></summary>
 
 1. 如果开过开机启动，先在配置页关掉。然后点「退出」，Cursor 的设置会自动还原。
@@ -263,7 +318,7 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.3.7 ./build.sh linux      # dist/cursor-inner-v0.3.7-linux-amd64，并写入版本号
+VERSION=v0.4.0 ./build.sh linux      # dist/cursor-inner-v0.4.0-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。

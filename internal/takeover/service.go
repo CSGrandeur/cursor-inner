@@ -76,6 +76,22 @@ func (s *Service) ProxyOnly() error {
 	return nil
 }
 
+// ProxyOnlyAt 和 ProxyOnly 相同，但在指定地址上监听（调试实例的自更新交接用）。
+func (s *Service) ProxyOnlyAt(addr string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cert, err := EnsureCA(s.dir)
+	if err != nil {
+		return err
+	}
+	url, err := s.mitm.StartAt(cert, addr)
+	if err != nil {
+		return err
+	}
+	s.active, s.url, s.ca, s.problem = true, url, "debug", i18n.Text{}
+	return nil
+}
+
 func (s *Service) Enable() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -116,6 +132,55 @@ func (s *Service) Enable() error {
 		s.problem = i18n.Of(i18n.Wrap("设置已写入，但没能结束 Cursor：", "Settings were written, but Cursor could not be closed: ", err))
 	}
 	return nil
+}
+
+// Adopt 在自更新交接中接回上一个进程的接管：在同一地址上启动本机代理，
+// 不改 Cursor 设置、不结束 Cursor（设置里写的就是这个地址）。地址被占用或设置对不上时报错，
+// 交给旧进程回滚，绝不留下一个指向空端口的接管。
+func (s *Service) Adopt(addr string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !Marked(s.dir) {
+		return i18n.E("上一个进程没有处于接管状态", "The previous process was not in takeover")
+	}
+	cert, err := EnsureCA(s.dir)
+	if err != nil {
+		s.problem = i18n.Of(err)
+		return err
+	}
+	certPath, _ := CertPaths(s.dir)
+	s.ca, s.detail = InstallCA(certPath, cert.Leaf)
+	url, err := s.mitm.StartAt(cert, addr)
+	if err != nil {
+		s.problem = i18n.Of(err)
+		return err
+	}
+	if want := currentSettingsProxy(); want != "" && want != url {
+		s.mitm.Stop()
+		return i18n.E("Cursor 设置里的代理地址与交接地址不一致："+want, "Cursor's proxy setting does not match the handover address: "+want)
+	}
+	s.active = true
+	s.catchDirect = true
+	s.url = url
+	s.problem = i18n.Text{}
+	return nil
+}
+
+func currentSettingsProxy() string {
+	path, err := settingsPath()
+	if err != nil {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var doc map[string]any
+	if json.Unmarshal(raw, &doc) != nil {
+		return ""
+	}
+	proxy, _ := doc["http.proxy"].(string)
+	return proxy
 }
 
 func (s *Service) SyncDirect() {

@@ -16,6 +16,8 @@ type options struct {
 	verbose    bool
 	dataDir    string
 	watch      int
+	handover   string
+	version    bool
 }
 
 func classicConsole(args []string) bool {
@@ -42,6 +44,13 @@ func parseArgs(args []string) options {
 			if i+1 < len(args) {
 				i++
 				opt.dataDir = args[i]
+			}
+		case "--version":
+			opt.version = true
+		case "--handover":
+			if i+1 < len(args) {
+				i++
+				opt.handover = args[i]
 			}
 		case "--watch":
 			if i+1 < len(args) {

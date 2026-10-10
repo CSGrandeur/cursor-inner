@@ -104,7 +104,31 @@ func Request(id uint32, call provider.ToolCall) (*cursorpb.ExecServerMessage, *c
 	case "strreplace", "write", "editnotebook":
 		return startEdit(id, call, a)
 	case "shell", "bash":
+		if command, ok := a.str("command"); ok {
+			if text, ok := shellPatch(command); ok {
+				rewritten, err := patchCall(call, text)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				return Request(id, rewritten)
+			}
+		}
 		return startShell(id, call, a)
+	case "applypatch":
+		if _, ok := a.rawString("patch"); ok {
+			if _, ok := a.str("path"); ok {
+				return startEdit(id, call, a)
+			}
+		}
+		text, ok := a.rawString("patch", "input", "diff")
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("apply_patch requires the patch text in input")
+		}
+		rewritten, err := patchCall(call, text)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return Request(id, rewritten)
 	case "readlints":
 		return startLints(id, call, a)
 	case "task":

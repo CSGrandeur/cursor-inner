@@ -28,9 +28,10 @@ const (
 	wmTray    = 0x8001
 	trayUID   = 1
 
-	cmdShow = 1
-	cmdOpen = 2
-	cmdQuit = 3
+	cmdShow   = 1
+	cmdOpen   = 2
+	cmdQuit   = 3
+	cmdUpdate = 4
 )
 
 var (
@@ -67,6 +68,7 @@ var (
 	residentTerm   *console.Console
 	residentOpen   func()
 	residentQuit   func()
+	residentUpdate func()
 )
 
 type wndClassEx struct {
@@ -215,12 +217,15 @@ func showTrayMenu() {
 		return
 	}
 	defer procDestroyMenu.Call(menu)
-	show, open, quit := "Show window", "Open settings", "Quit"
+	show, open, update, quit := "Show window", "Open settings", "Check for updates", "Quit"
 	if uiChinese() {
-		show, open, quit = "显示窗口", "打开配置页", "退出"
+		show, open, update, quit = "显示窗口", "打开配置页", "检查更新", "退出"
 	}
 	appendMenu(menu, 0, cmdShow, show)
 	appendMenu(menu, 0, cmdOpen, open)
+	if residentUpdate != nil {
+		appendMenu(menu, 0, cmdUpdate, update)
+	}
 	appendMenu(menu, 0x800, 0, "")
 	appendMenu(menu, 0, cmdQuit, quit)
 	var pt trayPoint
@@ -236,6 +241,10 @@ func showTrayMenu() {
 	case cmdOpen:
 		if residentOpen != nil {
 			residentOpen()
+		}
+	case cmdUpdate:
+		if fn := residentUpdate; fn != nil {
+			go fn() // 检查和确认框不能卡住托盘消息循环
 		}
 	case cmdQuit:
 		if residentQuit != nil {
@@ -375,3 +384,6 @@ func showFromTray() {
 		}
 	}
 }
+
+// setTrayUpdate 挂上托盘菜单「检查更新」。
+func setTrayUpdate(fn func()) { residentUpdate = fn }

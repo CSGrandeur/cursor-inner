@@ -209,12 +209,21 @@ func injectionDelivered(id string) *cursorpb.AgentServerMessage {
 	}}})
 }
 
+const compactSummaryInstruction = `Summarize the conversation for future model turns.
+Use exactly these sections with the headings below (plain text, no markdown fences):
+## Goal
+## Done
+## Files
+## Decisions
+## Next
+Keep each section short. List edited file paths under Files. Reply with the summary only.`
+
 func (s *Session) summarize(ctx context.Context, send Emit, model config.Model, dial dialer.Func, messages []provider.Message) ([]provider.Message, error) {
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_SummaryStarted{SummaryStarted: &cursorpb.SummaryStartedUpdate{}}})); err != nil {
 		return messages, err
 	}
-	prompt := append(append([]provider.Message{}, messages...), provider.Message{Role: "user", Content: "Summarize the conversation above as specified. Reply with the summary only."})
-	_, reply, err := chatOrCompact(ctx, model, dial, "You are compacting conversation history for future model turns. Produce a concise plain-text summary that preserves durable context. Do not address the user.", prompt, nil, func(text string) error {
+	prompt := append(append([]provider.Message{}, messages...), provider.Message{Role: "user", Content: compactSummaryInstruction})
+	_, reply, err := chatOrCompact(ctx, model, dial, "You are compacting conversation history for future model turns. Follow the section headings. Do not address the user.", prompt, nil, func(text string) error {
 		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_Summary{Summary: &cursorpb.SummaryUpdate{Summary: text}}}))
 	}, nil)
 	if err != nil {
@@ -225,11 +234,50 @@ func (s *Session) summarize(ctx context.Context, send Emit, model config.Model, 
 	s.promptTokens = reply.PromptTokens
 	s.completionTokens = reply.CompletionTokens
 	s.cacheTokens = reply.CacheTokens
+	paths := uniquePaths(append(s.editedPaths, extractSummaryFiles(text)...))
+	s.editedPaths = paths
 	out := append([]provider.Message{{Role: "user", Content: "<summary>\n" + text + "\n</summary>"}}, recentTail(messages, 2)...)
+	if len(paths) > 0 {
+		out = append(out, provider.Message{Role: "user", Content: "After compaction, re-read these edited files before changing them again: " + strings.Join(paths, ", ")})
+	}
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_SummaryCompleted{SummaryCompleted: &cursorpb.SummaryCompletedUpdate{HookMessage: &text}}})); err != nil {
 		return out, err
 	}
 	return out, nil
+}
+
+func extractSummaryFiles(summary string) []string {
+	var out []string
+	inFiles := false
+	for _, line := range strings.Split(summary, "\n") {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "## ") {
+			inFiles = strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(trim, "## ")), "Files")
+			continue
+		}
+		if !inFiles || trim == "" || strings.HasPrefix(trim, "## ") {
+			continue
+		}
+		trim = strings.TrimLeft(trim, "-*• \t")
+		if trim != "" {
+			out = append(out, trim)
+		}
+	}
+	return out
+}
+
+func uniquePaths(paths []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 func (s *Session) checkpoint(send Emit, conversation, system string, messages []provider.Message, summary string, mode cursorpb.AgentMode) error {

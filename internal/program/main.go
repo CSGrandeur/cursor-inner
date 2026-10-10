@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +24,7 @@ import (
 	"cursor-inner/internal/fsutil"
 	"cursor-inner/internal/logx"
 	"cursor-inner/internal/mitm"
+	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
 	"cursor-inner/internal/web"
 )
@@ -60,7 +60,13 @@ func listenURL(dir string) string {
 }
 
 func Main(version string) {
+	windowTitle = web.Title(version)
 	opt := parseArgs(os.Args[1:])
+	if opt.version {
+		// 自更新的预检：只报版本号，不碰任何状态。
+		fmt.Println(version)
+		return
+	}
 	if opt.watch > 0 {
 		dir := opt.dataDir
 		if dir == "" {
@@ -75,7 +81,15 @@ func Main(version string) {
 		dir = config.DefaultDir()
 	}
 	// 已在运行时直接提示并退出，不要再为换控制台拉起第二个进程，否则会弹出两份提示。
-	if dir != "" && rejectIfRunning(dir) {
+	var succ *selfupdate.Successor
+	if opt.handover != "" {
+		s, err := selfupdate.JoinHandover(opt.handover)
+		if err != nil {
+			os.Exit(3)
+		}
+		succ = s
+	}
+	if succ == nil && dir != "" && rejectIfRunning(dir) {
 		return
 	}
 	if handoffToClassicConsole() {
@@ -92,7 +106,19 @@ func Main(version string) {
 		}
 	}
 	noTakeover := opt.noTakeover
-	release, already, err := acquireSingleton(dir)
+	if succ != nil {
+		// 交接：先告诉旧进程我能启动，等它交出监听和单实例。旧进程取消或超时就直接退出，旧进程照常服务。
+		if err := succ.Ready(os.Getpid()); err != nil {
+			os.Exit(3)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := succ.WaitReleased(ctx)
+		cancel()
+		if err != nil {
+			os.Exit(3)
+		}
+	}
+	release, already, err := acquireSingletonRetry(dir, succ != nil)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -128,6 +154,13 @@ func Main(version string) {
 		term.Close()
 		os.Exit(1)
 	}
+	if opt.debug && dir != config.DefaultDir() {
+		if src, ok := config.Peek(config.DefaultDir()); ok {
+			if spec := inheritProxy(store, src); spec != "" {
+				log.Printf("调试模式沿用配置的出站代理 %s", spec)
+			}
+		}
+	}
 	proxy := mitm.New(func() config.Proxy { return store.Get().Proxy }, func() []catalog.Entry {
 		cfg := store.Get()
 		out := make([]catalog.Entry, 0, len(cfg.Models))
@@ -150,7 +183,11 @@ func Main(version string) {
 	life := takeover.New(dir, proxy)
 	application := app.New(store, life, autostart.New(), executable())
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	webAddr := "127.0.0.1:0"
+	if succ != nil && succ.Plan.WebAddr != "" {
+		webAddr = succ.Plan.WebAddr
+	}
+	ln, err := listenWeb(webAddr)
 	if err != nil {
 		slog.Error(fmt.Sprintf("没有可用端口：%v", err))
 		term.Close()
@@ -175,13 +212,19 @@ func Main(version string) {
 
 	if opt.debug {
 		slog.Debug(fmt.Sprintf("调试数据目录 %s", dir))
+	} else if succ != nil {
+		// 交接：守护进程等旧进程确认之后再挂（见 Successor.WaitConfirmed）。
 	} else if err := startWatchdog(dir); err != nil {
 		slog.Warn(fmt.Sprintf("退出兜底没有挂上：%v", err))
 	}
 
-	server := &http.Server{Handler: web.Handler(application), ReadHeaderTimeout: 10 * time.Second}
+	server := &http.Server{Handler: web.HandlerVersion(application, version), ReadHeaderTimeout: 10 * time.Second}
+	webRL := &relisten{srv: server, ln: ln}
 	go func() { _ = server.Serve(ln) }()
-	if !opt.debug {
+	upd := newUpdateGlue(version, dir, opt.debug, store, life, proxy, application, webRL, &release, term)
+	application.SetUpdater(upd.updater)
+	setTrayUpdate(upd.trayCheck)
+	if !opt.debug && succ == nil {
 		_ = openBrowser(url)
 	}
 	openPage := func() {
@@ -235,13 +278,27 @@ func Main(version string) {
 		}
 	}
 	cfg := store.Get()
-	if opt.debug {
+	if opt.debug && succ != nil && succ.Plan.MitmAddr != "" {
+		if err := life.ProxyOnlyAt(succ.Plan.MitmAddr); err != nil {
+			slog.Error(fmt.Sprintf("调试代理交接失败：%v", err))
+			os.Exit(4)
+		}
+		log.Printf("调试模式：已接过调试代理 %s", life.Snapshot().URL)
+	} else if opt.debug {
 		if err := life.ProxyOnly(); err != nil {
 			slog.Error(fmt.Sprintf("调试代理没有启动：%v", err))
 		} else if snap := life.Snapshot(); snap.URL != "" {
 			log.Printf("调试代理 %s", snap.URL)
 		}
 		log.Printf("调试模式：不改 Cursor 的设置，也不结束 Cursor")
+	} else if succ != nil {
+		if succ.Plan.TakeoverActive {
+			if err := life.Adopt(succ.Plan.MitmAddr); err != nil {
+				slog.Error(fmt.Sprintf("交接接管失败：%v", err))
+				os.Exit(4) // 旧进程会回滚并收回端口
+			}
+			log.Printf("已从 %s 接过接管 %s，Cursor 与 Grok 无需重启", succ.Plan.FromVersion, life.Snapshot().URL)
+		}
 	} else if noTakeover {
 		log.Printf("已跳过接管，Cursor 不会被结束")
 	} else if cfg.Takeover {
@@ -276,5 +333,24 @@ func Main(version string) {
 			}
 		}()
 	}
+	if succ != nil {
+		if err := succ.Done(selfupdate.Ack{PID: os.Getpid(), Version: version, WebURL: url}); err != nil {
+			os.Exit(4)
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			if err := succ.WaitConfirmed(ctx, os.Getpid()); err != nil {
+				return // 旧进程会结束本进程并回滚
+			}
+			log.Printf("已更新到 %s", version)
+			if !opt.debug {
+				if err := startWatchdog(dir); err != nil {
+					slog.Warn(fmt.Sprintf("退出兜底没有挂上：%v", err))
+				}
+			}
+		}()
+	}
+	upd.cleanupOld(succ != nil)
 	select {}
 }

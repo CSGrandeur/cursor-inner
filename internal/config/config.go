@@ -30,12 +30,15 @@ type Model struct {
 	FastSupport     bool      `json:"fast,omitempty"`
 	ContextWindow   int       `json:"context_window,omitempty"`
 	MaxOutputTokens int       `json:"max_output_tokens,omitempty"`
+	PromptCacheKey  string    `json:"prompt_cache_key,omitempty"`
+	Fallback        []string  `json:"fallback,omitempty"` // 其它已保存模型的 id，仅在尚未流出任何字时切换
 	LastTest        *LastTest `json:"last_test,omitempty"`
 	Effort          string    `json:"-"`
 	Fast            bool      `json:"-"`
 	ImageBaseURL    string    `json:"-"`
 	ImageAPIKey     string    `json:"-"`
 	ImageModel      string    `json:"-"`
+	TextToolMode    bool      `json:"-"` // 本次运行时：端点不支持原生工具，改用文本工具协议
 }
 
 // ImageAPI 是设置页选择的出图接口。留空时模型看不到 GenerateImage。
@@ -46,15 +49,26 @@ type ImageAPI struct {
 }
 
 type LastTest struct {
-	OK                   bool      `json:"ok"`
-	At                   string    `json:"at,omitempty"`
-	DurationMS           int64     `json:"duration_ms"`
-	FirstValidResponseMS *int64    `json:"first_valid_response_ms,omitempty"`
-	OutputTokens         uint64    `json:"output_tokens"`
-	TokensPerSecond      float64   `json:"tokens_per_second"`
-	TokensEstimated      bool      `json:"tokens_estimated"`
-	Output               string    `json:"output,omitempty"`
-	Error                i18n.Text `json:"error,omitzero"`
+	OK                   bool          `json:"ok"`
+	At                   string        `json:"at,omitempty"`
+	DurationMS           int64         `json:"duration_ms"`
+	FirstValidResponseMS *int64        `json:"first_valid_response_ms,omitempty"`
+	OutputTokens         uint64        `json:"output_tokens"`
+	TokensPerSecond      float64       `json:"tokens_per_second"`
+	TokensEstimated      bool          `json:"tokens_estimated"`
+	Output               string        `json:"output,omitempty"`
+	Error                i18n.Text     `json:"error,omitzero"`
+	Capabilities         *Capabilities `json:"capabilities,omitempty"`
+}
+
+// Capabilities 是能力探测结果；探测成功后可用来自动勾选设置。
+type Capabilities struct {
+	Tools        bool   `json:"tools"`
+	Reasoning    bool   `json:"reasoning"`
+	Images       bool   `json:"images"`
+	CacheHit     bool   `json:"cache_hit"`
+	Family       string `json:"family,omitempty"`
+	TextToolMode bool   `json:"text_tool_mode,omitempty"` // 端点不接受原生工具，改走文本工具协议
 }
 
 type File struct {
@@ -117,6 +131,19 @@ func Load(dir string) (*Store, error) {
 	return s, nil
 }
 
+// Peek 只读地看 dir 里的配置，不创建也不改文件。读不到或解析失败时 ok 为 false。
+func Peek(dir string) (File, bool) {
+	raw, err := os.ReadFile(filepath.Join(dir, "config.json"))
+	if err != nil || len(strings.TrimSpace(string(raw))) == 0 {
+		return File{}, false
+	}
+	var f File
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return File{}, false
+	}
+	return f, true
+}
+
 // takeoverGrokOrDefault 把旧配置里没有的接管 Grok 开关当成开。显式 false 保持关闭。
 func takeoverGrokOrDefault(raw []byte, parsed bool) bool {
 	var probe map[string]json.RawMessage
@@ -155,7 +182,14 @@ func (s *Store) clone() File {
 	for i := range out.Models {
 		if out.Models[i].LastTest != nil {
 			snap := *out.Models[i].LastTest
+			if snap.Capabilities != nil {
+				cap := *snap.Capabilities
+				snap.Capabilities = &cap
+			}
 			out.Models[i].LastTest = &snap
+		}
+		if out.Models[i].Fallback != nil {
+			out.Models[i].Fallback = append([]string(nil), out.Models[i].Fallback...)
 		}
 	}
 	return out

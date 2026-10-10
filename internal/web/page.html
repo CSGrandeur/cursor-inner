@@ -329,6 +329,45 @@
       transition-duration: .01ms !important;
     }
   }
+  .last-wrap { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tt-badge {
+    display: inline-flex; align-items: center;
+    font-family: var(--mono); font-size: 11px; white-space: nowrap;
+    padding: 1px 7px; border-radius: 999px; cursor: help;
+    color: var(--signal); background: var(--signal-soft);
+  }
+  .caps-dialog {
+    border: 1px solid var(--line-strong); border-radius: 12px; padding: 0;
+    width: min(520px, calc(100vw - 48px));
+    background: var(--panel); color: var(--text); box-shadow: var(--shadow);
+  }
+  .caps-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .caps-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+  }
+  .caps-head strong { font-size: 13px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .caps-head .sm { flex: none; }
+  .caps-body { padding: 4px 16px 14px; display: flex; flex-direction: column; }
+  .cap-row {
+    display: grid; grid-template-columns: 18px 150px 1fr; align-items: start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid var(--line);
+  }
+  .cap-row:last-child { border-bottom: 0; }
+  .cap-ic { font-size: 12px; line-height: 1.5; text-align: center; }
+  .cap-name { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .cap-val { font-size: 12px; line-height: 1.5; word-break: break-word; }
+  .cap-val .why { display: block; color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .cap-ok { color: var(--good); }
+  .cap-degraded { color: var(--signal); }
+  .cap-off { color: var(--faint); }
+  .cap-info { color: var(--muted); }
+  .cap-val.cap-info, .cap-val.cap-ok, .cap-val.cap-degraded, .cap-val.cap-off { color: var(--text); }
+  @media (max-width: 560px) {
+    .cap-row { grid-template-columns: 18px 1fr; }
+    .cap-row .cap-name { grid-column: 2; }
+    .cap-row .cap-val { grid-column: 2; }
+  }
 </style>
 </head>
 <body>
@@ -345,12 +384,23 @@
         <img class="app-icon" alt="" aria-hidden="true" width="16" height="16" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAIXElEQVR42pVXbWhUVxp+3nPOvXdmkoljTIwl9SMIVk0iabQ/3I3Bj1ajsGzpNrGCHwXXogsVRNhtf1gr/dGt/9zijza71aJCib/UrKClYLddpLoNoUJXrFUEN+vGxGQmM5mZ3HPOuz/uvfORyrK98HLOnZyc532f9/MSyo8AYNva2po8z+sFsMlauwxAPYAaALUACP/fwwCyAHIAngiIOxD4wvf9ge+++240wopA0dvbKwHYzs7Ofa7rfgvgQwAvE9FKIloAIPkzwBGeTRLRAiJaCYGXAXyolBrq7OzcB8CGmKDe3l55/vx509HR8YHjOL83xsBaa4iIKkB/DvhsJgCAmZmFEFJKCd/3jw8PD/+ht7dXEgB0dHTsdRznz77v+wAkEYmfmESEQCeUVmYurdH+f2rDbAEYx3Ec3/d/Ozw8/Bfq6OhoZObvhRD11loQkWAGiAAhBJgZWmv42ofRBtbaKqWklHAcB47jQAgBay0sW1CF+VVcADY894SIVipr7WtSygZjjAEggQDY930UCgUIIZBKpdCyoAVNTU1IpVLwPA/GGGSzWTx+/BgjIyMYHR1FsVhELBZDLBYLWKlQtjLYjTEmxHxNMfNL1lpmZoT+QT6fR0NDA9atW4cXXngBy5YtQ2NjIxKJGjiOgpSy5BKtNTKZDB48eIAbN27gyy+v4Ycf7kIphUQiAWvtU90TYr5EbW1t3wshVgDgXC5Hc+fOxZYtW7BhwwY0NzdDSAG2ZR9HtAshIIQMXaAQj8fhui7S6TSuXbuGs2fP4tatW0gmk5BSVrkOABMRMfM/qb2t/d+W7YJ8Ps/r1nVRX992NDc3w/d9sGUoR8FxHCilQlBRoUAglcEZi8Uxd24Kk5NpfPrpafT396NYLCKRSCDwcpUCj2QqlTpKRN7u3bvR17edXNdFPp8HEZWAI8DZa6VCSjmIx+MoFPIYGhpCKpXCpk2b8Pzzz+PmzZt49OgRYrFYiQlmJgAsPM+t3b9/PzZu3EiZqSn4vl8CIKJgFQJEldYH1JdFQQhCXV0dPv74Y7z66qvYvn07BgcvYe3atfjkk1Nob29HOp2OMoXC1K0VBw78jlpb2zA5OQkRBhYRgSILSUAQQQiCEFHwlWMhYkhKCWbG6tWr4XkeHj58iDffPIirV6+ipWUJTp48ieeeew5TU1OldGVmkgf2H3i3OFMs+Ti6UClVRX+wF0gmk6ifNw/JujoIIkTZo5SCNhqtK1vha42/f/01YvE4/vbVV9i4cSMWLVqE1atX4/Lly8jn80FgsoV85TevvFtpRbBXUKraOikl6urqcO/ePZw6fRr/uHkTLS0tmDdvHqy1kCJQFADWdXVhaGgI9378EdlsFg8fPkRPTw8aGxsxf/58DP51EK7nga0NmlFligVreR898Xgc9+/fx+uvv44/nTiB999/Hzt27MD4+Dg8zwOF8RHd88EfP0AymURNTQ2uXLmCwcFBMDO2bt2KrVt6kJ6cDFw8u0iUe1A5HpgZiUQC33zzDUZGRtDU1ISmpibcuXMHb7/9duA+Kcqu0BrPLnwWBw8exMTEBGoSCXz00UfIZDJgZux74w3U1NRAaw3xlI5RXcU5UCqfz2PNmjWor69HLpdDcWYG9fX1uHDhAs6cOQNHqYqqF1TI3bt3Y/ny5cjlpnH79m0MDw+DmbFixQqsX78emUw6dAEYHHW1CuTgPfgll8uhra0Nhw4dCiI5LMPJZBLvvfceHjx4ACkltNaw1kBrDc/zcOLECSxeshjJZBINDQ3QWsMYg23btkEIGbqAI8vLrTX4nata7djYGPbs2YOenh5MTEyAiKCUwvj4OI4cOVJiIJwpMD09jVWrVuHSpUu4ePEili5dikKhgOl8Hu3t7WhpaQkUiCS6oPRe9bfg4kKhgCNH3kFjYyOKxSKMMZgzZw6uXLmCGzduwHVdaF+XLE2n0/A8D8888wymp6dhLWNmZgZz5szBqlWrAgWsZVi2VYoEUqFYWEKnpqawZMliHD58uMRCFCPpdBoAoE0AHrjDolAoIJvNhswYWBPc1draChG0RQu2lcCRmLISbGGMARFhbGwMfX3bsXPnTjx58gSjo6PY2rMVv1i7FplMpsRWpETkkmhltvB9HwsXLmQ6d+5cxvO8pFKKHcch13VLE060n12QlFRwPRexWAzXr19HsVhEd3c3lOOgWChUuTOYkBg2BLfGwFjLnufRyMjIlLLW5pg5aYyBlBLRGmlc2XIJ5bZbLM7AGIOuri5IKZHNZlGcmakK3GAqCtgL7iuza4xBMpnMKWaeYOYFxhgYayCtrAaeBQ4CtNaQksFsMTY2HjYmEZTQMKsY/JSYqhYhxIQyxt4FsNxaa62x0ohKq0W5OxJBkapK1cqWrbV96rQcxFBFUAdDqwUgtNZ3FaA/Z+ZfRUFTorsk0UdBAKqUqqKYiGCtDRiiqhE8FFQpYG2A47ousdafK2vps1wu9048Hq/XWlsiEpUKVE3VjFL7lVKCLYMEARQ6KFw5LOmza0xopFVKUTqdHlNKfSb27t37mJnfcl1XWGuN1tpGqaO1rhAfvj9LtB+kWXjehGfL78Ed0fmZGd9qrU0sFhNW67c6Ozsfy4GBAblr165vN2/enKirq+s2xpC11jzlWw9Pq5pV6TaLZmMMhwZwyK6sra2V4+Pjx3/Z1XV8YGAg+DQbGBiQfX195tSpU/s8zzvqeV5zNOfNHj4jqcwSMctdP/mUEwJghu/7//J9/1h3d3d/hFn6r6NHj4pjx47Z/v7+ptra2l4p5SYiWiaEqBdK1SghaqWUVDkZB4NqRbxEMRDQlGUgR0RPiOiOEOKL6cfT51/89Yv/YWZBRBYA/gvg3mmt0Yj9cwAAAABJRU5ErkJggg==">
         <span data-i18n="openGrok">启动 Grok</span>
       </button>
+      <button id="open-logs" type="button" class="sm" data-i18n="openLogs" data-i18n-title="openLogs" title="打开日志文件夹">打开日志</button>
+      <button id="run-leakcheck" type="button" class="sm" data-i18n="leakCheck" data-i18n-title="leakCheck" title="跑一次泄漏检查">泄漏检查</button>
       <button id="lang" type="button" class="sm" aria-label="Language">EN</button>
       <button id="quit" type="button" class="sm" data-i18n="quit" data-i18n-title="quitTitle" title="退出 cursor-inner，并还原 Cursor 的代理设置">退出</button>
     </div>
   </header>
 
   <section class="panel" aria-label="settings">
+    <div class="row" id="update-row" hidden>
+      <h2 data-i18n="update">更新</h2>
+      <div class="copy">
+        <p class="desc" data-i18n="updateDesc">启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。</p>
+        <p class="meta" id="update-status"></p>
+        <pre class="meta" id="update-notes" hidden style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:6px 0 0"></pre>
+      </div>
+      <div class="tail"><button id="update-check" type="button" class="sm" data-i18n="updateCheck">检查更新</button> <button id="update-apply" type="button" class="sm" data-i18n="updateApply" hidden>更新</button></div>
+    </div>
     <div class="row">
       <h2 data-i18n="takeoverCursor">接管 Cursor</h2>
       <div class="copy">
@@ -366,6 +416,21 @@
         <p class="meta" id="grok-meta"></p>
       </div>
       <div class="tail"><label class="switch"><input id="takeover-grok" type="checkbox" data-i18n-aria="takeoverGrok" aria-label="接管 Grok"><span></span></label></div>
+    </div>
+    <div class="row">
+      <h2 data-i18n="tun">TUN 模式</h2>
+      <div class="copy">
+        <p class="desc" data-i18n="tunDesc">用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。</p>
+        <p class="desc" id="tun-status"></p>
+      </div>
+      <div class="tail"><button id="tun-on" type="button" class="sm" data-i18n="tunOn">开启</button> <button id="tun-off" type="button" class="sm" data-i18n="tunOff">关闭</button></div>
+    </div>
+    <div class="row">
+      <h2 data-i18n="strict">严格模式</h2>
+      <div class="copy">
+        <p class="desc" data-i18n="strictDesc">用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。</p>
+      </div>
+      <div class="tail"><button id="strict-on" type="button" class="sm" data-i18n="strictOn">开启</button> <button id="strict-off" type="button" class="sm" data-i18n="strictOff">关闭</button></div>
     </div>
     <div class="row">
       <h2 data-i18n="proxy">代理</h2>
@@ -439,6 +504,7 @@
         <label class="field"><span data-i18n="type">类型</span>
           <select name="type">
             <option value="openai-chat">OpenAI Chat</option>
+            <option value="openai-responses">OpenAI Responses</option>
             <option value="anthropic">Anthropic</option>
           </select>
         </label>
@@ -460,6 +526,8 @@
             </button>
           </span>
         </label>
+        <label class="field"><span data-i18n="promptCacheKey">缓存键</span><input name="prompt_cache_key" type="text" spellcheck="false" class="mono" data-i18n-placeholder="optional" placeholder="可选"></label>
+        <label class="field"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它模型 id，逗号分隔"></label>
       </div>
       <div class="actions">
         <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
@@ -478,11 +546,17 @@
 </main>
 <div class="toast" id="banner" role="status"></div>
 <div class="hover-tip" id="hover-tip" hidden></div>
+<dialog class="caps-dialog" id="caps-dialog">
+  <div class="caps-head"><strong id="caps-title"></strong><button type="button" class="sm" id="caps-close" data-i18n="capsClose"></button></div>
+  <div class="caps-body" id="caps-body"></div>
+</dialog>
 <script>
 const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
-    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok",
+    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", update: "更新", updateDesc: "启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upDownloading: "正在下载 {pct}", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upRoute: "路径：{route}", upUnsigned: "未签名清单（仅 sha256 校验）", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
+    tun: "TUN 模式", tunDesc: "用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
+    strict: "严格模式", strictDesc: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
     takeoverCursor: "接管 Cursor", takeoverCursorDesc: "写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。",
     takeoverGrok: "接管 Grok", takeoverGrokDesc: "写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。",
@@ -491,11 +565,12 @@ const MESSAGES = {
     image: "出图", imageDesc: "OpenAI 兼容出图接口，供 GenerateImage。密钥留空表示不改。",
     imageEmpty: "未配置，模型看不到 GenerateImage。", imageReady: "已配置 {model}{hint}",
     save: "保存", autostart: "开机启动", autostartDesc: "登录后自动启动，只保留一条启动项。",
-    models: "自定义模型", modelsHint: "测试会流式请求 1 到 120 的数字，记录速度、首字和输出",
+    models: "自定义模型", modelsHint: "测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置",
+    promptCacheKey: "缓存键", fallback: "备用模型", fallbackHint: "其它模型 id，逗号分隔",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试", colProxy: "代理", colReason: "推理", colFast: "Fast", colContext: "上下文", colMax: "最大", colOps: "操作",
     tipModel: "上面是显示名，下面是请求使用的模型名。点击模型名复制，悬停可看被截断的全名。",
     tipEndpoint: "上面是接口类型，下面是地址。点击类型标签复制地址。",
-    tipLastTest: "最近一次测试。数字是速度，悬停数字可看首字、耗时和返回。",
+    tipLastTest: "最近一次能力探测。数字是速度，悬停可看首字、耗时、能力与返回。",
     tipProxy: "这个模型的请求是否经过页面上方的代理。",
     tipReason: "打开后，Cursor 的模型菜单里可以选择推理力度，请求会带上这个力度。",
     tipFast: "打开后，Cursor 里可以使用 Fast，请求带 service_tier。只有 OpenAI Chat 能开。",
@@ -511,15 +586,23 @@ const MESSAGES = {
     proxyOn: "生效中：Cursor 的联网经过这个代理。", proxyOff: "当前直连。",
     liveOn: "接管中", liveOff: "未接管",
     untested: "未测试", failed: "失败", testFailed: "测试失败", testFailedWith: "测试失败：{error}", unknownError: "未知错误",
-    testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 返回：{output}",
+    testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 能力 {caps} · 返回：{output}",
     estimated: "（估算）", requestFailed: "请求失败 {status}",
     quitConfirm: "退出 cursor-inner？\n\nCursor 的代理设置会被还原，正在运行的 Cursor 会被关闭。这次给 Grok Bot 加上的代理参数也会去掉；如果它正在运行，会重新打开。",
     goneTitle: "cursor-inner 已退出", goneBody: "Cursor 的代理设置已还原，可以关闭这个页面。",
+    capsTitle: "能力探测结果", capsClose: "关闭",
+    capNativeTools: "工具调用", capReasoning: "推理", capImage: "图片输入", capCache: "缓存命中", capSpeed: "速度",
+    capStatusSupported: "支持", capStatusOff: "不支持", capStatusNone: "未命中", capReasonOff: "未开启",
+    capToolsNative: "支持原生工具调用", capToolsText: "不支持原生工具调用，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "不支持工具调用",
+    capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试失败：{error}",
+    ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
     switchLang: "EN"
   },
   en: {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
-    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting",
+    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", update: "Update", updateDesc: "Checks GitHub Releases once at startup. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upDownloading: "Downloading {pct}", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upRoute: "route: {route}", upUnsigned: "unsigned manifest (sha256 only)", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
+    tun: "TUN mode", tunDesc: "Uses a sing-box TUN to route only official endpoints (grok, x.ai, Cursor, cursorvm, etc.) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure.", tunOn: "Turn on", tunOff: "Turn off", tunAsked: "Administrator approval requested; see the PowerShell window for the result",
+    strict: "Strict mode", strictDesc: "Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (grok, x.ai, Cursor). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps.", strictOn: "Turn on", strictOff: "Turn off", strictAsked: "Administrator approval requested; see the PowerShell window for the result",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
     takeoverCursor: "Take over Cursor", takeoverCursorDesc: "Writes Cursor's proxy settings. A running window does not see that, so turning it on or off closes Cursor — open it again yourself. Custom models are appended to the list.",
     takeoverGrok: "Take over Grok", takeoverGrokDesc: "Sets launch args and HTTPS_PROXY. A process that already has the current proxy is left alone; a bare window from the login page can exit on its own. Not started if it is not already running.",
@@ -528,11 +611,12 @@ const MESSAGES = {
     image: "Images", imageDesc: "OpenAI-compatible endpoint for GenerateImage. Leave the key blank to keep it.",
     imageEmpty: "Not configured. The model will not see GenerateImage.", imageReady: "Configured {model}{hint}",
     save: "Save", autostart: "Start at login", autostartDesc: "Starts at login, and keeps a single entry.",
-    models: "Custom models", modelsHint: "Tests stream the numbers 1 to 120 and record speed, first token and output",
+    models: "Custom models", modelsHint: "Tests probe tools, reasoning, images and cache, record speed, and can auto-fill settings",
+    promptCacheKey: "Cache key", fallback: "Fallback", fallbackHint: "Other model ids, comma-separated",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test", colProxy: "Proxy", colReason: "Reasoning", colFast: "Fast", colContext: "Context", colMax: "Max", colOps: "Actions",
     tipModel: "Display name on top, request model name below. Click the model name to copy it. Hover to read a truncated name.",
     tipEndpoint: "Endpoint type on top, URL below. Click the type tag to copy the URL.",
-    tipLastTest: "The latest test. The number is speed. Hover it for the first token, duration and reply.",
+    tipLastTest: "Latest capability probe. The number is speed. Hover for first token, duration, capabilities and reply.",
     tipProxy: "Whether this model's requests go through the proxy above.",
     tipReason: "Shows an effort picker in Cursor's model menu and sends that effort.",
     tipFast: "Allows Fast in Cursor and sends service_tier. OpenAI Chat only.",
@@ -548,10 +632,16 @@ const MESSAGES = {
     proxyOn: "Active: Cursor's traffic goes through this proxy.", proxyOff: "Direct connection.",
     liveOn: "Takeover active", liveOff: "Not taken over",
     untested: "Not tested", failed: "Failed", testFailed: "Test failed", testFailedWith: "Test failed: {error}", unknownError: "unknown error",
-    testDetail: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated} · reply: {output}",
+    testDetail: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated} · caps {caps} · reply: {output}",
     estimated: " (estimated)", requestFailed: "Request failed {status}",
     quitConfirm: "Quit cursor-inner?\n\nCursor's proxy settings will be restored and any running Cursor will be closed. Proxy arguments added to Grok Bot are removed; if it is running, it is opened again.",
     goneTitle: "cursor-inner has quit", goneBody: "Cursor's proxy settings have been restored. You can close this page.",
+    capsTitle: "Capability probe", capsClose: "Close",
+    capNativeTools: "Tool calls", capReasoning: "Reasoning", capImage: "Image input", capCache: "Cache hit", capSpeed: "Speed",
+    capStatusSupported: "Supported", capStatusOff: "Not supported", capStatusNone: "No hit", capReasonOff: "Off",
+    capToolsNative: "Native tool calls supported", capToolsText: "Native tool calls not supported; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calls not supported",
+    capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test failed: {error}",
+    ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
     switchLang: "中文"
   }
 };
@@ -608,6 +698,76 @@ function formatSpeed(value) {
   return Number.isFinite(value) ? value.toFixed(1) : "0.0";
 }
 
+function capsLabel(caps) {
+  if (!caps) return "--";
+  const bits = [];
+  if (caps.tools) bits.push("tools");
+  if (caps.reasoning) bits.push("reason");
+  if (caps.images) bits.push("image");
+  if (caps.cache_hit) bits.push("cache");
+  if (caps.family) bits.push(caps.family);
+  return bits.length ? bits.join("+") : "--";
+}
+
+const CAP_ICON = { ok: "\u2713", degraded: "\u26a0", off: "\u2715", info: "\u2022" };
+
+function capRow(name, kind, value, why) {
+  const row = el("div", "cap-row");
+  row.append(el("div", "cap-ic cap-" + kind, CAP_ICON[kind] || ""));
+  row.append(el("div", "cap-name", name));
+  const val = el("div", "cap-val cap-" + kind);
+  val.append(document.createTextNode(value));
+  if (why) val.append(el("span", "why", why));
+  row.append(val);
+  return row;
+}
+
+function openCapsDialog(result, name) {
+  const dlg = document.querySelector("#caps-dialog");
+  const body = document.querySelector("#caps-body");
+  const caps = result && result.capabilities;
+  let title = t("capsTitle");
+  if (name) title += " \u00b7 " + name;
+  if (caps && caps.family) title += " \u00b7 " + caps.family;
+  document.querySelector("#caps-title").textContent = title;
+  body.replaceChildren();
+  if (!result || !result.ok) {
+    body.append(capRow(t("capNativeTools"), "off", t("capFailed", {error: (result && tr(result.error)) || t("unknownError")})));
+    dlg.showModal();
+    return;
+  }
+  if (caps && caps.tools && caps.text_tool_mode) {
+    body.append(capRow(t("capNativeTools"), "degraded", t("capToolsText"), t("capToolsTextWhy")));
+  } else if (caps && caps.tools) {
+    body.append(capRow(t("capNativeTools"), "ok", t("capToolsNative")));
+  } else {
+    body.append(capRow(t("capNativeTools"), "off", t("capToolsNo")));
+  }
+  body.append(caps && caps.reasoning
+    ? capRow(t("capReasoning"), "ok", t("capStatusSupported"))
+    : capRow(t("capReasoning"), "off", t("capReasonOff")));
+  body.append(caps && caps.images
+    ? capRow(t("capImage"), "ok", t("capStatusSupported"))
+    : capRow(t("capImage"), "off", t("capStatusOff")));
+  body.append(caps && caps.cache_hit
+    ? capRow(t("capCache"), "ok", t("capStatusSupported"))
+    : capRow(t("capCache"), "off", t("capStatusNone")));
+  body.append(capRow(t("capSpeed"), "info", t("capSpeedVal", {
+    speed: formatSpeed(result.tokens_per_second),
+    first: result.first_valid_response_ms == null ? "--" : result.first_valid_response_ms,
+    duration: result.duration_ms,
+    tokens: result.output_tokens,
+    estimated: result.tokens_estimated ? t("estimated") : ""
+  })));
+  dlg.showModal();
+}
+
+{
+  const dlg = document.querySelector("#caps-dialog");
+  document.querySelector("#caps-close").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+}
+
 function testDetail(result) {
   if (!result) return t("untested");
   if (!result.ok) return t("testFailedWith", {error: tr(result.error) || t("unknownError")});
@@ -617,6 +777,7 @@ function testDetail(result) {
     duration: result.duration_ms,
     tokens: result.output_tokens,
     estimated: result.tokens_estimated ? t("estimated") : "",
+    caps: capsLabel(result.capabilities),
     output: result.output || "--"
   });
 }
@@ -634,9 +795,8 @@ function testBadge(result) {
   return node;
 }
 
-function showTest(result) {
-  if (result.ok) toast(testDetail(result), "ok");
-  else showError(tr(result.error) || t("testFailed"));
+function showTest(result, name) {
+  openCapsDialog(result, name);
 }
 
 async function send(url, options) {
@@ -648,6 +808,7 @@ async function send(url, options) {
 
 function formModel() {
   const fd = new FormData(form);
+  const fallback = String(fd.get("fallback") || "").split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
   const body = {
     display_name: fd.get("display_name") || "",
     type: fd.get("type"),
@@ -658,7 +819,9 @@ function formModel() {
     reasoning: form.reasoning.checked,
     fast: form.fast.checked,
     context_window: tokenField(fd.get("context_window")),
-    max_output_tokens: tokenField(fd.get("max_output_tokens"))
+    max_output_tokens: tokenField(fd.get("max_output_tokens")),
+    prompt_cache_key: String(fd.get("prompt_cache_key") || "").trim(),
+    fallback
   };
   if (editingId) body.id = editingId;
   return body;
@@ -696,6 +859,8 @@ function fillForm(model, mode) {
   form.fast.checked = !!model.fast;
   form.context_window.value = model.context_window > 0 ? String(model.context_window) : "";
   form.max_output_tokens.value = model.max_output_tokens > 0 ? String(model.max_output_tokens) : "";
+  form.prompt_cache_key.value = model.prompt_cache_key || "";
+  form.fallback.value = (model.fallback || []).join(", ");
   editingId = mode === "edit" ? model.id : "";
   syncFormMode();
   if (lastState) render(lastState);
@@ -778,6 +943,8 @@ function render(state) {
   tipAnchor = null;
   const listen = document.querySelector("#listen");
   document.querySelector("#listen-text").textContent = state.listen_url || "";
+  const tunNode = document.querySelector("#tun-status");
+  if (tunNode) tunNode.textContent = (state.tunnel && tr(state.tunnel.detail)) || "";
   listen.href = state.listen_url || "/";
   document.querySelector("#live-dot").className = "dot" + (state.takeover_active ? " on" : "");
   listen.title = state.takeover_active ? t("liveOn") : t("liveOff");
@@ -849,12 +1016,24 @@ function render(state) {
     apiInner.append(tag, urlLine);
     api.append(apiInner);
     const last = el("td");
-    last.append(testBadge(model.last_test));
+    const lastWrap = el("div", "last-wrap");
+    const badge = testBadge(model.last_test);
+    if (model.last_test) {
+      badge.style.cursor = "pointer";
+      badge.addEventListener("click", () => openCapsDialog(model.last_test, model.display_name || model.model));
+    }
+    lastWrap.append(badge);
+    if (model.last_test && model.last_test.capabilities && model.last_test.capabilities.text_tool_mode) {
+      const tt = el("span", "tt-badge", t("ttBadge"));
+      tt.dataset.tip = t("ttBadgeTip");
+      lastWrap.append(tt);
+    }
+    last.append(lastWrap);
     const test = el("button", "sm", t("test"));
     test.type = "button";
     test.addEventListener("click", () => busy(test, t("testing"), () => act(async () => {
       const result = await send("/api/models/" + model.id + "/test", {method: "POST"});
-      showTest(result);
+      showTest(result, model.display_name || model.model);
       return send("/api/state");
     })));
     const edit = el("button", "sm", t("edit"));
@@ -951,7 +1130,7 @@ document.querySelector("#form-clear").addEventListener("click", () => {
 const draftTest = document.querySelector("#draft-test");
 draftTest.addEventListener("click", () => busy(draftTest, t("testing"), () => act(async () => {
   const result = await send("/api/models/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
-  showTest(result);
+  showTest(result, formModel().display_name || t("addModel"));
   return null;
 })));
 document.querySelector("#open-cursor").addEventListener("click", () => {
@@ -968,6 +1147,38 @@ document.querySelector("#open-grok").addEventListener("click", () => {
     return null;
   });
 });
+document.querySelector("#run-leakcheck").addEventListener("click", () => {
+  act(async () => {
+    await send("/api/leakcheck", {method: "POST"});
+    toast(t("leakStarted"), "ok");
+    return null;
+  });
+});
+document.querySelector("#open-logs").addEventListener("click", () => {
+  act(async () => {
+    await send("/api/logs", {method: "POST"});
+    toast(t("logsOpened"), "ok");
+    return null;
+  });
+});
+for (const [id, on] of [["#tun-on", true], ["#tun-off", false]]) {
+  document.querySelector(id).addEventListener("click", () => {
+    act(async () => {
+      await send("/api/tunnel", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: on})});
+      toast(t("tunAsked"), "ok");
+      return null;
+    });
+  });
+}
+for (const [id, on] of [["#strict-on", true], ["#strict-off", false]]) {
+  document.querySelector(id).addEventListener("click", () => {
+    act(async () => {
+      await send("/api/strict", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: on})});
+      toast(t("strictAsked"), "ok");
+      return null;
+    });
+  });
+}
 document.querySelector("#quit").addEventListener("click", async () => {
   if (!confirm(t("quitConfirm"))) return;
   try {
@@ -1026,6 +1237,70 @@ document.addEventListener("mouseout", (event) => {
 });
 applyLang();
 load();
+
+// —— 更新 ——
+const upRow = document.querySelector("#update-row");
+let upPoll = null;
+function renderUpdate(st) {
+  upRow.hidden = false;
+  const status = document.querySelector("#update-status");
+  const notes = document.querySelector("#update-notes");
+  const apply = document.querySelector("#update-apply");
+  const pct = st.total ? Math.floor(100 * st.done / st.total) + "%" : "";
+  const text = {
+    checking: t("upChecking"), up_to_date: t("upUpToDate", {current: st.current}),
+    available: t("upAvailable", {latest: st.latest, current: st.current}),
+    downloading: t("upDownloading", {pct}), waiting_idle: t("upWaiting"),
+    handover: t("upHandover"), done: t("upDone"), failed: t("upFailed", {error: st.error || ""})
+  }[st.state] || "";
+  const extra = [];
+  if (st.route) extra.push(t("upRoute", {route: st.route}));
+  if (st.latest && !st.signed) extra.push(t("upUnsigned"));
+  let line = text + (extra.length ? " · " + extra.join(" · ") : "");
+  if (st.state === "available" && st.error) line += " · " + t("upFailed", {error: st.error});
+  status.textContent = line;
+  const showNotes = st.notes && (st.state === "available" || st.state === "downloading" || st.state === "waiting_idle");
+  notes.hidden = !showNotes;
+  notes.textContent = showNotes ? st.notes : "";
+  apply.hidden = st.state !== "available";
+  const busyNow = ["checking", "downloading", "waiting_idle", "handover", "done"].includes(st.state);
+  document.querySelector("#update-check").disabled = busyNow;
+  if (busyNow && !upPoll) upPoll = setInterval(pollUpdate, 1500);
+  if (!busyNow && upPoll) { clearInterval(upPoll); upPoll = null; }
+  if (st.state === "done") waitNewVersion(st.current);
+}
+async function pollUpdate() {
+  try { renderUpdate(await send("/api/update")); } catch (_) { /* 交接空窗里请求失败是正常的 */ }
+}
+let upWaiting = false;
+async function waitNewVersion(old) {
+  if (upWaiting) return;
+  upWaiting = true;
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const v = await send("/api/version");
+      if (v.version && v.version !== old) { location.reload(); return; }
+    } catch (_) {}
+  }
+}
+async function checkUpdate(auto) {
+  try {
+    renderUpdate({state: "checking", current: ""});
+    renderUpdate(await send("/api/update/check", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({auto})}));
+  } catch (err) {
+    if (!auto) showError(err.message);
+    upRow.hidden = true;
+  }
+}
+document.querySelector("#update-check").addEventListener("click", () => checkUpdate(false));
+document.querySelector("#update-apply").addEventListener("click", async () => {
+  const st = await send("/api/update").catch(() => null);
+  if (!st || !confirm(t("upConfirm", {latest: st.latest}))) return;
+  try { renderUpdate(await send("/api/update/apply", {method: "POST"})); } catch (err) { showError(err.message); }
+});
+// 每次 cursor-inner 启动只自动检查一次（后端去重）；页面只是触发与展示。
+send("/api/update").then(st => { if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true); }).catch(() => {});
 </script>
 </body>
 </html>

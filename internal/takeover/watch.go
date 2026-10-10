@@ -4,10 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"cursor-inner/internal/selfupdate"
 )
 
-func recoverAfterExit(dir string) {
+func recoverAfterExit(dir string, pid int) {
 	if !Marked(dir) {
+		return
+	}
+	// 自更新交接：旧进程退出是把接管交给了新进程，新进程有自己的守护进程，这里什么都不做。
+	if selfupdate.HandedOver(dir, pid) {
 		return
 	}
 	err := Recover(dir)

@@ -80,6 +80,27 @@ func chatOrCompact(ctx context.Context, model config.Model, dial dialer.Func, sy
 	return messages, reply, err
 }
 
+// chatOrCompactSession 在 Session 上调用：支持流式前备用模型切换，并在溢出时压缩重试。
+func (s *Session) chatOrCompactSession(ctx context.Context, model config.Model, dial dialer.Func, system string, messages []provider.Message, tools []provider.Tool, onText func(string) error, onThinking func(string) error) ([]provider.Message, config.Model, provider.Message, error) {
+	catalog := append([]config.Model{model}, s.Fallbacks...)
+	dialFor := func(m config.Model) (dialer.Func, error) {
+		if m.ID == model.ID || m.UseProxy == model.UseProxy {
+			return dial, nil
+		}
+		return dialer.ForModel(s.Proxy, m.UseProxy)
+	}
+	used, reply, err := chatWithFallback(ctx, model, catalog, dialFor, system, messages, tools, onText, onThinking)
+	if !provider.Overflow(err) {
+		if used.ID != model.ID {
+			s.fallbackUsed = append(s.fallbackUsed, used.DisplayName)
+		}
+		return messages, used, reply, err
+	}
+	messages = forceCompact(messages)
+	used, reply, err = chatWithFallback(ctx, used, catalog, dialFor, system, messages, tools, onText, onThinking)
+	return messages, used, reply, err
+}
+
 func estimateTokens(messages []provider.Message) int {
 	base := 0
 	from := 0

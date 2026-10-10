@@ -857,9 +857,10 @@ func TestSteerDuringTheAnswerContinuesTheTurn(t *testing.T) {
 }
 
 func TestStepLimitStillSendsCheckpoint(t *testing.T) {
+	// 每次换路径，避免相同调用指纹的循环检测先于步数上限触发。
 	responses := make([]string, maxSteps)
 	for i := range responses {
-		responses[i] = sse(fmt.Sprintf(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c%d","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`, i))
+		responses[i] = sse(fmt.Sprintf(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c%d","function":{"name":"Read","arguments":"{\"path\":\"/w/a%d.go\"}"}}]}}]}`, i, i))
 	}
 	fm := &fakeModel{responses: responses}
 	srv := fm.server(t)
@@ -893,8 +894,9 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 			if exec.GetReadArgs() == nil {
 				continue
 			}
+			path := exec.GetReadArgs().GetPath()
 			if _, err := hub.Bidi(bidi(t, "cap", execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
-				Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.go", Output: &cursorpb.ReadSuccess_Content{Content: "x"}}},
+				Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: path, Output: &cursorpb.ReadSuccess_Content{Content: "x"}}},
 			}}}))); err != nil {
 				t.Fatal(err)
 			}
@@ -913,6 +915,55 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 			return
 		case <-ctx.Done():
 			t.Fatal("step limit did not finish")
+		}
+	}
+}
+
+func TestIdenticalToolLoopStops(t *testing.T) {
+	responses := make([]string, loopStopAt+1)
+	for i := range responses {
+		responses[i] = sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`)
+	}
+	fm := &fakeModel{responses: responses}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "loop", runRequest("mine", "conv-loop", "read it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "loop")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	for {
+		select {
+		case m := <-out:
+			exec := m.GetExecServerMessage()
+			if exec.GetReadArgs() == nil {
+				continue
+			}
+			if _, err := hub.Bidi(bidi(t, "loop", execResult(exec.GetId(), &cursorpb.ExecClientMessage{Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+				Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.go", Output: &cursorpb.ReadSuccess_Content{Content: "x"}}},
+			}}}))); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-done:
+			if err == nil || !strings.Contains(err.Error(), "相同工具调用") {
+				t.Fatalf("err=%v", err)
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("timeout")
 		}
 	}
 }

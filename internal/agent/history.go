@@ -22,6 +22,7 @@ type History struct {
 }
 
 func NewHistory(dir string) *History {
+	tightenPerms(filepath.Join(dir, "conversations"))
 	return &History{dir: filepath.Join(dir, "conversations")}
 }
 
@@ -41,7 +42,7 @@ func (h *History) PutBlob(id, data []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, hex.EncodeToString(id)), data, 0o644)
+	return os.WriteFile(filepath.Join(dir, hex.EncodeToString(id)), data, 0o600)
 }
 
 func (h *History) GetBlob(id []byte) ([]byte, bool) {
@@ -70,7 +71,7 @@ func (h *History) SaveState(conversation string, state *cursorpb.ConversationSta
 	if err := os.MkdirAll(h.dir, 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(h.path(conversation), raw, 0o644)
+	return os.WriteFile(h.path(conversation), raw, 0o600)
 }
 
 func (h *History) LoadState(conversation string) *cursorpb.ConversationStateStructure {

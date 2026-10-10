@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"cursor-inner/internal/config"
@@ -76,14 +77,21 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 	}
 	var last error
 	started := time.Now()
+	useText := TextToolActive(m) // 端点不支持原生工具时，把工具规格写进系统提示，由救援解析读回
+	immediate := false
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		if attempt > 0 {
+		if attempt > 0 && !immediate {
 			noteModel(ctx, runlog.Note{Kind: "model_retry", Attempt: attempt, Error: Explain(last), ElapsedMs: time.Since(started).Milliseconds()})
 			if err := waitRetry(ctx, last, attempt); err != nil {
 				return Message{}, err
 			}
 		}
-		noteModel(ctx, runlog.Note{Kind: "model_attempt", Attempt: attempt, Tools: len(tools), Messages: len(messages)})
+		immediate = false
+		effSystem, effTools := system, tools
+		if useText {
+			effSystem, effTools = textToolSystem(system, tools), nil
+		}
+		noteModel(ctx, runlog.Note{Kind: "model_attempt", Attempt: attempt, Tools: len(effTools), Messages: len(messages)})
 		var lastPiece time.Time
 		piece := func(kind string, text string, fn func(string) error) error {
 			if fn == nil {
@@ -99,7 +107,7 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 			return fn(text)
 		}
 		emitted := false
-		msg, err := chatOnce(ctx, m, dial, system, messages, tools, func(text string) error {
+		msg, err := chatOnce(ctx, m, dial, effSystem, messages, effTools, func(text string) error {
 			emitted = true
 			return piece("model_text", text, onText)
 		}, func(text string) error {
@@ -110,6 +118,7 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 			return piece("model_thinking", text, onThinking)
 		})
 		if err == nil {
+			msg = applyRescue(msg, tools)
 			noteModel(ctx, runlog.Note{
 				Kind: "model_done", Attempt: attempt, ElapsedMs: time.Since(started).Milliseconds(),
 				Tools: len(msg.ToolCalls), Prompt: msg.PromptTokens, Output: msg.CompletionTokens,
@@ -119,11 +128,86 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 		}
 		last = err
 		noteModel(ctx, modelError(attempt, time.Since(started), err))
+		// vLLM 没配工具解析器时，带 tools 会被 400 拒绝（报 enable-auto-tool-choice / tool-call-parser）。
+		// 记下该端点+模型，改走文本工具协议，并立刻重试一次（不计退避）。
+		if !useText && len(tools) > 0 && !emitted && wantsTextToolMode(err) {
+			rememberTextTool(m)
+			noteModel(ctx, runlog.Note{Kind: "model_text_tool_mode", Attempt: attempt, Error: Explain(err)})
+			useText = true
+			immediate = true
+			continue
+		}
 		if emitted || !Retryable(err) {
 			return Message{}, withRetries(err, attempt)
 		}
 	}
 	return Message{}, withRetries(last, maxAttempts-1)
+}
+
+// textToolMem 记住哪些端点+模型不支持原生工具（本进程内）。键为 baseURL|model。
+var textToolMem sync.Map
+
+func textToolKey(m config.Model) string {
+	return strings.ToLower(strings.TrimSpace(m.BaseURL)) + "|" + strings.ToLower(strings.TrimSpace(m.Model))
+}
+
+func rememberTextTool(m config.Model) { textToolMem.Store(textToolKey(m), true) }
+
+// TextToolActive 判断该模型当前是否走文本工具协议：配置里标了，或本进程已探到端点不支持原生工具。
+func TextToolActive(m config.Model) bool {
+	if m.TextToolMode {
+		return true
+	}
+	v, ok := textToolMem.Load(textToolKey(m))
+	return ok && v.(bool)
+}
+
+// wantsTextToolMode 判断这是不是「端点不支持原生工具」的 400（vLLM 没配 tool 解析器）。
+func wantsTextToolMode(err error) bool {
+	var api *APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	if api.Status != 400 && api.Kind != KindBadRequest {
+		return false
+	}
+	s := strings.ToLower(api.Text + " " + api.Detail)
+	return strings.Contains(s, "enable-auto-tool-choice") ||
+		strings.Contains(s, "tool-call-parser") ||
+		strings.Contains(s, "tool call parser")
+}
+
+// textToolSystem 把工具规格写进系统提示，格式用现有救援解析认得的 <tool_call>{json}</tool_call>。
+func textToolSystem(system string, tools []Tool) string {
+	if len(tools) == 0 {
+		return system
+	}
+	var b strings.Builder
+	if strings.TrimSpace(system) != "" {
+		b.WriteString(system)
+		b.WriteString("\n\n")
+	}
+	b.WriteString("# Calling tools\n")
+	b.WriteString("This endpoint does NOT accept native/function tool calls. ")
+	b.WriteString("To call a tool, output a block exactly in this form and nothing else around it:\n")
+	b.WriteString("<tool_call>\n{\"name\": \"<tool_name>\", \"arguments\": {<json arguments>}}\n</tool_call>\n")
+	b.WriteString("Emit one <tool_call> block per call. Do not wrap it in Markdown code fences. ")
+	b.WriteString("When the task is done and you need no tool, reply in plain text with no <tool_call> block.\n\n")
+	b.WriteString("Available tools:\n")
+	for _, t := range tools {
+		b.WriteString("\n- ")
+		b.WriteString(t.Name)
+		if strings.TrimSpace(t.Description) != "" {
+			b.WriteString(": ")
+			b.WriteString(t.Description)
+		}
+		if len(t.Parameters) > 0 {
+			b.WriteString("\n  JSON Schema: ")
+			b.Write(t.Parameters)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 func noteModel(ctx context.Context, n runlog.Note) {
@@ -140,9 +224,13 @@ func modelError(attempt int, elapsed time.Duration, err error) runlog.Note {
 	return n
 }
 
+// ErrStopStream 由 onText/onThinking 返回，表示检测到复读等情况，希望立刻收尾本次生成；
+// chatOnce 捕获它，把已累积的内容按正常完成返回，不当作错误上抛。
+var ErrStopStream = errors.New("stop streaming")
+
 func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
 	maxTokens := m.MaxOutputTokens
-	if maxTokens == 0 && m.Type == "anthropic" {
+	if maxTokens == 0 && (m.Type == "anthropic" || m.Type == "openai-responses") {
 		maxTokens = 8192
 	}
 	resp, err := do(ctx, m, dial, chatRequest{System: system, Messages: messages, Tools: tools, MaxTokens: maxTokens})
@@ -167,12 +255,15 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		}
 		if msg.Content != "" {
 			if err := onText(msg.Content); err != nil {
+				if errors.Is(err, ErrStopStream) {
+					return msg, nil
+				}
 				return Message{}, err
 			}
 		}
 		return msg, nil
 	}
-	acc := newAccumulator(m.Type)
+	acc := newAccumulator(m.Type, m.Type != "anthropic" && ProfileOf(m).ThinkTagSplit)
 	sc := bufio.NewScanner(reader)
 	sc.Buffer(make([]byte, 0, 64*1024), 8<<20)
 	for sc.Scan() {
@@ -190,11 +281,17 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		}
 		if piece.thinking != "" && onThinking != nil {
 			if err := onThinking(piece.thinking); err != nil {
+				if errors.Is(err, ErrStopStream) {
+					return acc.message(), nil
+				}
 				return Message{}, err
 			}
 		}
 		if piece.text != "" {
 			if err := onText(piece.text); err != nil {
+				if errors.Is(err, ErrStopStream) {
+					return acc.message(), nil
+				}
 				return Message{}, err
 			}
 		}
@@ -254,10 +351,12 @@ func requestBody(m config.Model, req chatRequest) ([]byte, error) {
 	switch m.Type {
 	case "openai-chat":
 		return openAIBody(m, req)
+	case "openai-responses":
+		return responsesBody(m, req)
 	case "anthropic":
 		return anthropicBody(m, req)
 	default:
-		return nil, i18n.E("接口类型只支持 openai-chat 和 anthropic", "Endpoint type must be openai-chat or anthropic")
+		return nil, i18n.E("接口类型只支持 openai-chat、openai-responses 和 anthropic", "Endpoint type must be openai-chat, openai-responses or anthropic")
 	}
 }
 
@@ -294,22 +393,40 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 		Function function `json:"function"`
 	}
 	body := struct {
-		Model           string `json:"model"`
-		Messages        []msg  `json:"messages"`
-		Tools           []tool `json:"tools,omitempty"`
-		Stream          bool   `json:"stream"`
-		MaxTokens       int    `json:"max_tokens,omitempty"`
-		ReasoningEffort string `json:"reasoning_effort,omitempty"`
-		ServiceTier     string `json:"service_tier,omitempty"`
-		StreamOptions   struct {
+		Model              string         `json:"model"`
+		Messages           []msg          `json:"messages"`
+		Tools              []tool         `json:"tools,omitempty"`
+		Stream             bool           `json:"stream"`
+		MaxTokens          int            `json:"max_tokens,omitempty"`
+		ReasoningEffort    string         `json:"reasoning_effort,omitempty"`
+		ServiceTier        string         `json:"service_tier,omitempty"`
+		PromptCacheKey     string         `json:"prompt_cache_key,omitempty"`
+		EnableThinking     *bool          `json:"enable_thinking,omitempty"`
+		ThinkingBudget     *int           `json:"thinking_budget,omitempty"`
+		ParallelToolCalls  *bool          `json:"parallel_tool_calls,omitempty"`
+		ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
+		StreamOptions      struct {
 			IncludeUsage bool `json:"include_usage"`
 		} `json:"stream_options"`
-	}{Model: m.Model, Stream: true, MaxTokens: req.MaxTokens, ReasoningEffort: m.Effort}
+	}{Model: m.Model, Stream: true, MaxTokens: req.MaxTokens, ReasoningEffort: m.Effort, PromptCacheKey: strings.TrimSpace(m.PromptCacheKey)}
 	if m.Fast {
 		body.ServiceTier = "fast"
 		slog.Debug("service_tier", "value", "fast")
 	}
 	body.StreamOptions.IncludeUsage = true
+	if et := qwenEnableThinking(m); et != nil {
+		body.EnableThinking = et
+		if !*et {
+			// vLLM 只认 chat_template_kwargs 里的 enable_thinking，顶层字段会被忽略，
+			// 所以关思考时两处都发（qwen3-32b 等在 vLLM 上才真关得掉思考）。
+			body.ChatTemplateKwargs = map[string]any{"enable_thinking": false}
+		}
+	}
+	body.ThinkingBudget = qwenThinkingBudget(m)
+	if len(req.Tools) > 0 && ProfileOf(m).ParallelToolCalls {
+		yes := true
+		body.ParallelToolCalls = &yes
+	}
 	if req.System != "" {
 		body.Messages = append(body.Messages, msg{Role: "system", Content: req.System})
 	}
@@ -443,10 +560,17 @@ type accumulator struct {
 	cacheTokens      int
 	calls            map[int]*ToolCall
 	args             map[int]*strings.Builder
+	seenID           map[int]string // 每个槽位已见过的调用 id，用于识别 Ollama 不带 index 的多调用
+	maxIndex         int
+	thinker          *inlineThink // 非空时剥离 content 里的 <think> 推理标签
 }
 
-func newAccumulator(kind string) *accumulator {
-	return &accumulator{kind: kind, calls: map[int]*ToolCall{}, args: map[int]*strings.Builder{}}
+func newAccumulator(kind string, splitThink bool) *accumulator {
+	a := &accumulator{kind: kind, calls: map[int]*ToolCall{}, args: map[int]*strings.Builder{}, seenID: map[int]string{}, maxIndex: -1}
+	if splitThink {
+		a.thinker = &inlineThink{}
+	}
+	return a
 }
 
 func (a *accumulator) call(index int) (*ToolCall, *strings.Builder) {
@@ -458,6 +582,9 @@ func (a *accumulator) call(index int) (*ToolCall, *strings.Builder) {
 }
 
 func (a *accumulator) feed(data []byte) (piece, error) {
+	if a.kind == "openai-responses" {
+		return a.feedResponses(data)
+	}
 	if a.kind == "anthropic" {
 		var event struct {
 			Type         string `json:"type"`
@@ -478,11 +605,17 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 			Error struct {
 				Message string `json:"message"`
 			} `json:"error"`
+			Message struct {
+				Usage anthropicUsage `json:"usage"`
+			} `json:"message"`
+			Usage anthropicUsage `json:"usage"`
 		}
 		if json.Unmarshal(data, &event) != nil {
 			return piece{}, nil
 		}
 		switch event.Type {
+		case "message_start":
+			a.addAnthropicUsage(event.Message.Usage)
 		case "error":
 			return piece{}, i18n.Ef("接口返回错误：%s", "Endpoint error: %s", event.Error.Message)
 		case "content_block_start":
@@ -505,6 +638,7 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 				args.WriteString(event.Delta.PartialJSON)
 			}
 		case "message_delta":
+			a.addAnthropicUsage(event.Usage)
 			if event.Delta.StopReason != "" {
 				a.finish = event.Delta.StopReason
 			}
@@ -568,7 +702,20 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 	}
 	delta := choice.Delta
 	for _, tc := range delta.ToolCalls {
-		c, args := a.call(tc.Index)
+		// Ollama 的 OpenAI 兼容流对多个工具调用都用 index 0，但带不同的 id；
+		// 看到同一槽位换了新 id 就新开一个槽位，避免把两次调用的参数拼在一起。
+		idx := tc.Index
+		if tc.ID != "" {
+			if prev, ok := a.seenID[idx]; ok && prev != tc.ID {
+				a.maxIndex++
+				idx = a.maxIndex
+			}
+			a.seenID[idx] = tc.ID
+		}
+		if idx > a.maxIndex {
+			a.maxIndex = idx
+		}
+		c, args := a.call(idx)
 		if tc.ID != "" {
 			c.ID = tc.ID
 		}
@@ -581,12 +728,23 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 	if think == "" {
 		think = delta.Reasoning
 	}
+	content := delta.Content
+	if a.thinker != nil && content != "" {
+		tx, th := a.thinker.feed(content)
+		content = tx
+		think += th
+	}
 	a.reasoning.WriteString(think)
-	a.text.WriteString(delta.Content)
-	return piece{text: delta.Content, thinking: think}, nil
+	a.text.WriteString(content)
+	return piece{text: content, thinking: think}, nil
 }
 
 func (a *accumulator) message() Message {
+	if a.thinker != nil {
+		tx, th := a.thinker.flush()
+		a.text.WriteString(tx)
+		a.reasoning.WriteString(th)
+	}
 	msg := Message{Role: "assistant", Content: a.text.String(), Reasoning: a.reasoning.String(), ReasoningSignature: a.signature.String(), PromptTokens: a.promptTokens, CompletionTokens: a.completionTokens, CacheTokens: a.cacheTokens}
 	indexes := make([]int, 0, len(a.calls))
 	for i := range a.calls {
@@ -728,4 +886,25 @@ func openAIContent(message Message) any {
 		})
 	}
 	return parts
+}
+
+// anthropicUsage 是 Messages 流里 message_start / message_delta 带的用量。
+// input_tokens 不含缓存部分，提示总量要把读缓存和写缓存加回来，命中率才和 OpenAI 口径一致。
+type anthropicUsage struct {
+	InputTokens         int `json:"input_tokens"`
+	OutputTokens        int `json:"output_tokens"`
+	CacheReadTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationTokens int `json:"cache_creation_input_tokens"`
+}
+
+func (a *accumulator) addAnthropicUsage(u anthropicUsage) {
+	if p := u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens; p > 0 {
+		a.promptTokens = p
+	}
+	if u.OutputTokens > 0 {
+		a.completionTokens = u.OutputTokens
+	}
+	if u.CacheReadTokens > 0 {
+		a.cacheTokens = u.CacheReadTokens
+	}
 }

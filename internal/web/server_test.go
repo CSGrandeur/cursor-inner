@@ -13,6 +13,8 @@ import (
 )
 
 type fake struct {
+	strict     *bool
+	tunnel     *bool
 	view       View
 	autostart  bool
 	takeover   bool
@@ -72,6 +74,8 @@ func (f *fake) TestSaved(string) provider.Result { return provider.Result{OK: tr
 func (f *fake) Quit() error                      { f.quit = true; return nil }
 func (f *fake) OpenCursor() error                { f.opened = true; return nil }
 func (f *fake) OpenGrok() error                  { f.openedGrok = true; return nil }
+func (f *fake) OpenLogs() error                  { return nil }
+func (f *fake) RunLeakCheck() error              { return nil }
 
 func TestOpenCursorEndpoint(t *testing.T) {
 	f := &fake{}
@@ -98,6 +102,34 @@ func TestOpenGrokEndpoint(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 || !f.openedGrok {
 		t.Fatalf("status %d opened %v", res.StatusCode, f.openedGrok)
+	}
+}
+
+func TestLogsEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/logs", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+}
+
+func TestLeakCheckEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/leakcheck", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("status %d", res.StatusCode)
 	}
 }
 
@@ -184,5 +216,39 @@ func TestPageAndAutostartToggle(t *testing.T) {
 		if res3.StatusCode != 200 || f.takeover != tc.want || f.view.TakeoverGrok != tc.grok {
 			t.Fatalf("%s status %d cursor %v grok %v", tc.body, res3.StatusCode, f.takeover, f.view.TakeoverGrok)
 		}
+	}
+}
+func (f *fake) SetStrictEgress(enabled bool) error { f.strict = &enabled; return nil }
+func (f *fake) SetTunnel(enabled bool) error       { f.tunnel = &enabled; return nil }
+
+func TestTunnelEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/tunnel", strings.NewReader(`{"enabled":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 || f.tunnel == nil || !*f.tunnel {
+		t.Fatalf("status %d tunnel %v", resp.StatusCode, f.tunnel)
+	}
+}
+
+func TestStrictEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/strict", strings.NewReader(`{"enabled":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 || f.strict == nil || !*f.strict {
+		t.Fatalf("status %d strict %v", resp.StatusCode, f.strict)
 	}
 }
