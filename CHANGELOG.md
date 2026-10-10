@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-10-10
+
+### Changed
+
+- Open Cursor and Open Grok in the settings page top bar show the apps' own icons instead of drawn marks.
+
 ## [0.3.6] - 2026-10-10
 
 ### Changed
@@ -121,7 +127,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.2...v0.3.4
