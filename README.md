@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.5.1`。
+安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.5.2`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -199,7 +199,7 @@ TUN 模式（配置页「TUN 模式」点开启，弹 UAC）：cursor-inner 管�
 配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页。在 Windows 上双击打开时，单击顶栏里的地址也会打开。在 Windows Terminal、iTerm2、GNOME Terminal 里，按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.5.1   http://127.0.0.1:52341   按回车打开配置页
+ ▌▐ cursor-inner v0.5.2   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 代理 socks5://127.0.0.1:1080    自定义模型 3
     模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
@@ -318,7 +318,7 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.5.1 ./build.sh linux      # dist/cursor-inner-v0.5.1-linux-amd64，并写入版本号
+VERSION=v0.5.2 ./build.sh linux      # dist/cursor-inner-v0.5.2-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。

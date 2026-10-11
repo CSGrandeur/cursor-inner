@@ -116,17 +116,22 @@ func (m Manifest) Pick(goos, goarch string) (Asset, error) {
 	return Asset{}, ErrNoAsset
 }
 
-// assetURLs 给出下载地址：清单里写了就用清单的，否则用清单同目录下的同名文件。
+// assetURLs 给出下载地址：先取清单同目录下的同名文件（各更新源各用自己的），再补上清单里写的地址
+// （给只认清单地址的旧版本用），去重。下载内容都要对上签名清单里的 sha256，地址本身不需要可信。
 func assetURLs(a Asset, manifestURL string) []string {
-	if len(a.URLs) > 0 {
-		return a.URLs
+	var out []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		if u != "" && !seen[u] {
+			seen[u] = true
+			out = append(out, u)
+		}
 	}
-	base, err := url.Parse(manifestURL)
-	if err != nil {
-		return nil
+	add(sibling(manifestURL, a.Name))
+	for _, u := range a.URLs {
+		add(u)
 	}
-	ref, _ := url.Parse(url.PathEscape(a.Name))
-	return []string{base.ResolveReference(ref).String()}
+	return out
 }
 
 // 错误分类，给界面挑说明文字用。

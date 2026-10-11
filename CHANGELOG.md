@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-11
+
+Self-update from GitHub did not work in 0.4.0 and 0.5.1. **If you are on 0.5.1, download 0.5.2 manually once** (0.5.1 cannot update itself and its settings page wrongly says the update manifest failed signature verification). 0.4.0 can update itself to 0.5.2.
+
+### Fixed
+
+- Self-update from GitHub: `releases/latest/download/manifest.json` redirects to `releases/download/vX.Y.Z/manifest.json` and then to a signed CDN address on another host. The client built the signature and package addresses from that CDN address, so 0.5.1 fetched the manifest itself as its "signature" and reported a bad signature, and 0.4.0 got an error status for the package. Sibling files are now resolved against the last address on the original host (`releases/download/vX.Y.Z/`), without query parameters, which also pins signature and package to the version of the manifest. A new end-to-end test reproduces GitHub's two-hop redirect to a CDN that ignores extra parameters.
+- The signed manifest now lists each package's GitHub download address, so 0.4.0 (which only uses listed addresses when present) can download the package. Newer clients try each update source's own release directory first and the listed address after it; the content is always checked against the signed sha256.
+
 ## [0.5.1] - 2026-10-11
 
 First published release of these changes. The `v0.5.0` tag was never released: its release build stopped at the new signed-manifest self-check (see Fixed).
@@ -214,7 +223,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.4.0...v0.5.1
 [0.4.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.6...v0.3.7

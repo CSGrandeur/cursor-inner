@@ -31,8 +31,8 @@ func TestParseManifestUnsigned(t *testing.T) {
 		t.Fatalf("urls %v", urls)
 	}
 	l, _ := m.Pick("linux", "amd64")
-	if u := assetURLs(l, "https://x/manifest.json"); u[0] != "https://mirror.example/x" {
-		t.Fatalf("explicit urls ignored: %v", u)
+	if u := assetURLs(l, "https://x/manifest.json"); len(u) != 2 || u[0] != "https://x/cursor-inner-v0.4.0-linux-amd64" || u[1] != "https://mirror.example/x" {
+		t.Fatalf("own directory first, then the manifest's urls: %v", u)
 	}
 }
 

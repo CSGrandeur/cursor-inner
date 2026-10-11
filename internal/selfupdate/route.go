@@ -7,6 +7,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 )
 
@@ -36,8 +39,11 @@ func ProxyRoute(dial DialFunc) Route {
 
 // Fetched 是一次成功的请求结果。
 type Fetched struct {
-	Body     []byte
-	FinalURL string // 跟随重定向后的地址，用来拼同目录的下载地址
+	Body []byte
+	// FinalURL 是拼同目录地址（签名、安装包）用的基准：跟随重定向后、仍在原主机上的最后一个地址。
+	// GitHub 的 releases/latest/download/manifest.json 先跳到同主机的 releases/download/vX.Y.Z/manifest.json，
+	// 再跳到另一台主机上带签名参数的 CDN 地址；CDN 地址不能拿来拼别的文件，所以基准停在 vX.Y.Z 那一跳。
+	FinalURL string
 	Route    Route
 }
 
@@ -101,7 +107,45 @@ func fetch(ctx context.Context, r Route, url string, timeout time.Duration, limi
 	if int64(len(body)) > limit {
 		return nil, "", errors.New("响应过大")
 	}
-	return body, resp.Request.URL.String(), nil
+	return body, baseURL(resp), nil
 }
 
 var errNotFound = errors.New("HTTP 404")
+
+// baseURL 沿重定向链找出仍在最初那台主机上的最后一个地址（见 Fetched.FinalURL）。
+func baseURL(resp *http.Response) string {
+	var chain []*url.URL
+	for req := resp.Request; req != nil; {
+		chain = append(chain, req.URL)
+		if req.Response == nil {
+			break
+		}
+		req = req.Response.Request
+	}
+	first := chain[len(chain)-1]
+	for _, u := range chain { // chain 从最后一跳往回排
+		if strings.EqualFold(u.Host, first.Host) {
+			return u.String()
+		}
+	}
+	return first.String()
+}
+
+// sibling 给出和 base 同目录的另一个文件的地址，不带 base 的查询参数。
+func sibling(base, name string) string {
+	b, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	ref, _ := url.Parse(url.PathEscape(name))
+	return b.ResolveReference(ref).String()
+}
+
+// sigURL 是清单旁边的 manifest.json.sig。
+func sigURL(manifestURL string) string {
+	b, err := url.Parse(manifestURL)
+	if err != nil {
+		return manifestURL + ".sig"
+	}
+	return sibling(manifestURL, path.Base(b.Path)+".sig")
+}

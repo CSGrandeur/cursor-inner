@@ -27,8 +27,11 @@ for f in "$out"/cursor-inner-"$version"-*; do
 	esac
 	size=$(wc -c <"$f" | tr -d ' ')
 	sum=$(sha256sum "$f" | cut -d' ' -f1)
-	assets=$(printf '%s' "$assets" | jq -c --arg os "$os" --arg arch "$arch" --arg name "$name" --argjson size "$size" --arg sha "$sum" \
-		'. + [{os:$os, arch:$arch, name:$name, size:$size, sha256:$sha}]')
+	# urls：v0.4.0 只认清单里写的地址，否则按跳转后的 CDN 地址拼文件名、下载失败。新版本先用各更新源自己的目录，
+	# 这里的地址只是补充；内容一律按签名清单里的 sha256 校验。
+	url="https://github.com/${GITHUB_REPOSITORY:-CSGrandeur/cursor-inner}/releases/download/$version/$name"
+	assets=$(printf '%s' "$assets" | jq -c --arg os "$os" --arg arch "$arch" --arg name "$name" --argjson size "$size" --arg sha "$sum" --arg url "$url" \
+		'. + [{os:$os, arch:$arch, name:$name, size:$size, sha256:$sha, urls:[$url]}]')
 done
 published=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 expires=""

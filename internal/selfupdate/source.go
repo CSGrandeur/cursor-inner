@@ -104,7 +104,7 @@ func (u *Updater) fetchSource(ctx context.Context, src Source, routes []Route) s
 	res.route, res.manURL = got.Route, got.FinalURL
 	var sig []byte
 	if len(u.opt.Keys) > 0 {
-		s, _, serr := fetch(ctx, got.Route, got.FinalURL+".sig", u.opt.Timeout, 16<<10)
+		s, _, serr := fetch(ctx, got.Route, sigURL(got.FinalURL), u.opt.Timeout, 16<<10)
 		if serr != nil && !errors.Is(serr, errNotFound) {
 			res.err, res.elapsed = fmt.Errorf("取签名失败：%w", serr), time.Since(start)
 			return res
