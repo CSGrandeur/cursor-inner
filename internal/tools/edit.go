@@ -23,6 +23,7 @@ type editState struct {
 	path   string
 	before string
 	after  string
+	fresh  bool // 写之前文件不存在：结果里不带 before_full_file_content，Cursor 撤销时才会删掉新文件而不是留个空文件
 }
 
 func startEdit(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServerMessage, *cursorpb.ToolCall, *Pending, error) {
@@ -125,6 +126,7 @@ func (p *Pending) afterRead(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCa
 	}
 	p.edit.before = before
 	p.edit.after = after
+	p.edit.fresh = read.GetFileNotFound() != nil
 	p.edit.phase = editWrite
 	return &cursorpb.ExecServerMessage{Message: &cursorpb.ExecServerMessage_WriteArgs{WriteArgs: &cursorpb.WriteArgs{
 		Path:                        p.edit.path,
@@ -675,30 +677,35 @@ func editError(path, message string) *cursorpb.EditResult {
 	}}}
 }
 
-func editSuccess(path, before, after string) *cursorpb.EditResult {
+// editSuccess 组卡片结果。fresh 表示写之前文件不存在：此时不填 before_full_file_content——
+// Cursor 撤销/拒绝时按它是否存在区分「恢复原内容」与「删掉新建的文件」，填了空串会留下 0 字节文件。
+func editSuccess(path, before, after string, fresh bool) *cursorpb.EditResult {
 	added, removed, diff := unifiedDiff(before, after)
-	return &cursorpb.EditResult{Result: &cursorpb.EditResult_Success{Success: &cursorpb.EditSuccess{
-		Path:                  path,
-		LinesAdded:            &added,
-		LinesRemoved:          &removed,
-		DiffString:            &diff,
-		BeforeFullFileContent: &before,
-		AfterFullFileContent:  after,
-	}}}
+	ok := &cursorpb.EditSuccess{
+		Path:                 path,
+		LinesAdded:           &added,
+		LinesRemoved:         &removed,
+		DiffString:           &diff,
+		AfterFullFileContent: after,
+	}
+	if !fresh {
+		ok.BeforeFullFileContent = &before
+	}
+	return &cursorpb.EditResult{Result: &cursorpb.EditResult_Success{Success: ok}}
 }
 
 func editResultFromWrite(p *Pending, r *cursorpb.WriteResult) *cursorpb.EditResult {
 	switch v := r.GetResult().(type) {
 	case *cursorpb.WriteResult_Success:
-		before, after := "", v.Success.GetFileContentAfterWrite()
+		before, after, fresh := "", v.Success.GetFileContentAfterWrite(), false
 		if p.edit != nil {
-			before, after = p.edit.before, p.edit.after
+			before, after, fresh = p.edit.before, p.edit.after, p.edit.fresh
 		}
 		path := v.Success.GetPath()
 		if path == "" && p.edit != nil {
 			path = p.edit.path
 		}
-		return editSuccess(path, before, after)
+		return editSuccess(path, before, after, fresh)
 	case *cursorpb.WriteResult_PermissionDenied:
 		return &cursorpb.EditResult{Result: &cursorpb.EditResult_WritePermissionDenied{WritePermissionDenied: &cursorpb.EditWritePermissionDenied{
 			Path:       v.PermissionDenied.GetPath(),

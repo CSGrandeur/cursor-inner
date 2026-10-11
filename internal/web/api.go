@@ -51,6 +51,8 @@ type ProxyView struct {
 	Enabled   bool   `json:"enabled"`
 	Address   string `json:"address"`
 	Effective bool   `json:"effective"`
+	Scope     string `json:"scope"`   // global / official
+	Bridged   bool   `json:"bridged"` // 地址本身就要经本机代理桥（socks / 带认证）：切换范围时 Grok Bot 不用重开
 }
 
 type TunnelView struct {
@@ -62,6 +64,7 @@ type Backend interface {
 	State() (View, error)
 	SetTakeover(target string, enabled bool) error
 	SetProxy(enabled bool, address string) error
+	SetProxyScope(scope string) error
 	SetImage(baseURL, apiKey, model string) error
 	SetAutostart(enabled bool) error
 	AddModel(model config.Model) error

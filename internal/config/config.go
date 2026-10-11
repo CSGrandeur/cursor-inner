@@ -16,7 +16,26 @@ import (
 type Proxy struct {
 	Enabled bool   `json:"enabled"`
 	Address string `json:"address"`
+	// Scope 是 Cursor 和 Grok Bot 流量的代理范围：空或 "global" 全部走代理；
+	// "official" 只有官方端点走代理，其余直连。自定义模型的「走代理」开关不看它。
+	Scope string `json:"scope,omitempty"`
 }
+
+const (
+	ScopeGlobal   = "global"
+	ScopeOfficial = "official"
+)
+
+// ScopeName 返回规范化的代理范围，旧配置和认不出的值都按全局。
+func (p Proxy) ScopeName() string {
+	if strings.EqualFold(strings.TrimSpace(p.Scope), ScopeOfficial) {
+		return ScopeOfficial
+	}
+	return ScopeGlobal
+}
+
+// OfficialOnly 报告是否只让官方端点走代理。
+func (p Proxy) OfficialOnly() bool { return p.ScopeName() == ScopeOfficial }
 
 type Model struct {
 	ID              string    `json:"id"`

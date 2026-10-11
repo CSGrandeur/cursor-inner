@@ -32,6 +32,7 @@ type patchStep struct {
 	path   string
 	before string
 	after  string
+	fresh  bool   // 写入目标原本不存在（Add、Move 的新路径）
 	line   string // 这一步完成后在摘要里记的一行；Move 的写入步骤为空，删旧文件那步才记
 	ui     *cursorpb.ToolCall
 }
@@ -97,7 +98,7 @@ func planPatch(ops []patchOp, files map[string]patchFile) ([]patchStep, error) {
 		switch {
 		case op.kind == "add":
 			content := strings.Join(op.add, "\n") + "\n"
-			steps[k].before = f.text
+			steps[k].before, steps[k].fresh = f.text, !f.exists
 			steps[k].after = restoreNewlines(content, f.exists && usesCRLF(f.text))
 			vfs[op.path] = patchFile{exists: true, text: steps[k].after}
 			k++
@@ -131,7 +132,9 @@ func planPatch(ops []patchOp, files map[string]patchFile) ([]patchStep, error) {
 			if op.move == op.path {
 				return nil, fmt.Errorf("%s: '*** Move to:' names the same file", op.path)
 			}
-			steps[k].before, steps[k].after = f.text, after
+			// 写入的是新路径：卡片的 before 是新路径原来的内容（通常不存在），不是旧文件。
+			dst := vfs[op.move]
+			steps[k].before, steps[k].after, steps[k].fresh = dst.text, after, !dst.exists
 			steps[k+1].before = f.text
 			vfs[op.move] = patchFile{exists: true, text: after}
 			vfs[op.path] = patchFile{}
@@ -287,7 +290,7 @@ func (st *patchState) advance(msg *cursorpb.ExecClientMessage) (*cursorpb.ExecSe
 		}
 		text, isErr = writeText(r)
 		if tool, ok := step.ui.GetTool().(*cursorpb.ToolCall_EditToolCall); ok {
-			tool.EditToolCall.Result = editResultFromWrite(&Pending{edit: &editState{path: step.path, before: step.before, after: step.after}}, r)
+			tool.EditToolCall.Result = editResultFromWrite(&Pending{edit: &editState{path: step.path, before: step.before, after: step.after, fresh: step.fresh}}, r)
 		}
 	}
 	if st.next > 0 {

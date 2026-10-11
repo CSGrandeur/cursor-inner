@@ -47,6 +47,8 @@ type Status struct {
 	CheckedAt time.Time `json:"checked_at,omitempty"`
 	Done      int64     `json:"done,omitempty"`
 	Total     int64     `json:"total,omitempty"`
+	Speed     int64     `json:"speed,omitempty"`    // 下载速度，字节/秒（滑动窗口）
+	DLRoute   string    `json:"dl_route,omitempty"` // 下载安装包当前走的网络路径（可能和检查时不同）
 	AutoDone  bool      `json:"auto_done"`
 }
 
@@ -65,6 +67,8 @@ type Options struct {
 	Now    func() time.Time
 	GOOS   string
 	GOARCH string
+	// Download 是下载的测速、换路径、续传和时长上限策略；零值用默认值。
+	Download DownloadPolicy
 	// Preflight 默认跑新版本的 --version；测试可替换。
 	Preflight func(ctx context.Context, exe, want string) error
 }
@@ -263,6 +267,7 @@ func (u *Updater) Apply(ctx context.Context) error {
 	results, best := u.results, u.best
 	u.running = true
 	u.st.State, u.st.Error = StateDownloading, ""
+	u.st.Done, u.st.Total, u.st.Speed, u.st.DLRoute = 0, 0, 0, ""
 	u.mu.Unlock()
 	defer func() { u.mu.Lock(); u.running = false; u.mu.Unlock() }()
 
@@ -289,8 +294,8 @@ func (u *Updater) apply(ctx context.Context, results []sourceResult, best int) e
 		return err
 	}
 	dir := filepath.Join(u.opt.DataDir, "update")
-	staged, used, fails, err := DownloadMirrors(ctx, mirrorsFor(results, best, a), a, dir, func(done, total int64) {
-		u.set(func(s *Status) { s.Done, s.Total = done, total })
+	staged, used, fails, err := DownloadMirrors(ctx, mirrorsFor(results, best, a, u.Routes()), a, dir, u.opt.Download, func(p Progress) {
+		u.set(func(s *Status) { s.Done, s.Total, s.Speed, s.DLRoute = p.Done, p.Total, p.Rate, p.Route })
 	})
 	for _, f := range fails {
 		slog.Warn("更新包下载失败，换下一个源", "source", f.Mirror, "err", f.Err.Error())

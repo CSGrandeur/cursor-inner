@@ -228,7 +228,18 @@ func (s *Server) Warning() i18n.Text {
 	return s.warning
 }
 
+// dialContext 是 Cursor 流量的出站：按配置的代理范围拨号（全局全部走代理；仅官方时官方端点走代理、其余直连）。
+// 每次拨号都读当前设置，切换范围对新连接立即生效。
 func (s *Server) dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	d, err := dialer.Scoped(s.proxy())
+	if err != nil {
+		return nil, err
+	}
+	return d(ctx, network, addr)
+}
+
+// webDial 是自定义模型 WebSearch / WebFetch 的出站：cursor-inner 自己的联网，不看代理范围，照旧走代理。
+func (s *Server) webDial(ctx context.Context, network, addr string) (net.Conn, error) {
 	d, err := dialer.FromProxy(s.proxy())
 	if err != nil {
 		return nil, err
@@ -423,7 +434,7 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flush(w)
 	d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
-	session.Web = s.dialContext
+	session.Web = s.webDial
 	session.Proxy = s.proxy()
 	if err == nil {
 		err = session.Run(r.Context(), d, func(m *cursorpb.AgentServerMessage) error {

@@ -14,6 +14,7 @@ import (
 
 type fake struct {
 	strict     *bool
+	scope      string
 	tunnel     *bool
 	view       View
 	autostart  bool
@@ -40,6 +41,10 @@ func (f *fake) SetTakeover(target string, enabled bool) error {
 	return nil
 }
 func (f *fake) SetProxy(bool, string) error { return nil }
+func (f *fake) SetProxyScope(scope string) error {
+	f.scope = scope
+	return nil
+}
 func (f *fake) SetImage(baseURL, apiKey, model string) error {
 	f.view.Image = ImageView{BaseURL: baseURL, Model: model, KeyHint: apiKey}
 	return nil
@@ -250,5 +255,21 @@ func TestStrictEndpoint(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 200 || f.strict == nil || !*f.strict {
 		t.Fatalf("status %d strict %v", resp.StatusCode, f.strict)
+	}
+}
+
+func TestProxyScopeEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/proxy/scope", strings.NewReader(`{"scope":"official"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || f.scope != "official" {
+		t.Fatalf("status %d scope %q", res.StatusCode, f.scope)
 	}
 }

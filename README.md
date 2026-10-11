@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.5.2`。
+安装脚本自动识别系统和 CPU 架构，下载最新版本，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。用脚本下载的程序不带浏览器的下载标记，SmartScreen 和 Gatekeeper 不会拦截。指定版本可以设置环境变量 `CURSOR_INNER_VERSION=v0.5.3`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -170,9 +170,11 @@ flowchart LR
 
 退出 cursor-inner 时不会改动 Grok Bot：它直接连你配置的代理，不经过 cursor-inner，所以退出后照样走代理。要撤掉 Grok 的代理，在配置页关掉「接管 Grok」。WebRTC 不走代理时就不发 UDP（`--force-webrtc-ip-handling-policy=disable_non_proxied_udp`）。
 
-代理带用户名和密码、或是 socks 代理时，Grok Bot 自己用不了。这时 cursor-inner 在本机回环地址上开一个代理桥，经你配置的代理（含认证）转发。上游代理不通时代理桥返回 502，不会直连。cursor-inner 没在运行时，这种情况下的 Grok Bot 会连不上，而不是改成直连。
+代理范围（配置页「代理范围」，默认「全局」）：全局时 Cursor 和 Grok Bot 的联网全部走配置的代理，和以前一样；「仅官方」时只有官方端点（grok.com、x.ai、spacexai.com、cursor.com、cursor.sh、cursorapi.com、cursor-cdn.com、cursorvm.com、anysphere.co 及其子域名）走代理，其余直连。分流在 cursor-inner 里做：Cursor 的本机代理每次拨号按当前范围出站；Grok Bot 一律经本机代理桥，由桥分流。判断规则只朝安全方向放宽：官方域名、TUN 的 fake-ip 段（198.18.0.0/15、fc00::/18）、写死的公网 IP 一律走代理；回环和 LAN/WSL 私网段直连；其它域名先看连接里客户端发出的 TLS SNI（明文 HTTP 看 Host），SNI 是官方、没有 SNI 或认不出协议的都走代理，确认不是官方才直连。解析官方域名用的 DoH（cloudflare-dns.com、dns.google）也走代理。直连失败不会改走代理，官方连接代理不通也不会直连。切换即时生效：Cursor 不用重开；代理是 socks 或带认证时 Grok Bot 本来就经代理桥，也不用重开；代理是普通 HTTP 时，切换会自动重开一次 Grok Bot（改走或改回代理桥）。TUN 和严格模式本来就只管官方端点，两种范围下规则相同。自定义模型的「走代理」开关、自定义模型的 WebSearch / WebFetch 和自更新不受代理范围影响。
 
-检查是否有遗漏：`scripts/grok-leak-check.ps1` 采样 Grok Bot 与 Cursor 所有进程的出站连接。它在运行时经代理用 DoH 解析官方域名（grok、x.ai、Cursor 及 cursorvm 等），再结合 TLS 证书名和反向解析，把直连官方端点标为 FAIL，GitHub、Google 等第三方直连标为 INFO。Electron 主进程和 Cursor 的部分 Node 服务直接用 socket，不认代理参数。要让官方端点一条不漏，可在配置页「严格模式」点开启（弹 UAC），或以管理员身份运行 `scripts/strict-egress.ps1 -Enable`：防火墙为 Grok Bot.exe 和 Cursor.exe 阻止到官方 IP 的直连，计划任务开机时和每 30 分钟重新解析。局限：按 IP 拦截，Cloudflare 等共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下（走代理不受影响）；清单外的新域名、两次刷新之间换的新 IP 会漏；不改 hosts。`-Disable` 撤销，`-Status` 查看。
+代理带用户名和密码、或是 socks 代理时，Grok Bot 自己用不了。这时 cursor-inner 在本机回环地址上开一个代理桥，经你配置的代理（含认证）转发；代理范围选「仅官方」时 Grok Bot 也经这个桥。上游代理不通时代理桥返回 502，不会直连。cursor-inner 没在运行时，这种情况下的 Grok Bot 会连不上，而不是改成直连。
+
+检查是否有遗漏：`scripts/grok-leak-check.ps1` 采样 Grok Bot 与 Cursor 所有进程的出站连接。它在运行时经代理用 DoH 解析官方域名（grok、x.ai、Cursor 及 cursorvm 等），再结合 TLS 证书名和反向解析，把直连官方端点标为 FAIL，GitHub、Google 等第三方直连标为 INFO。它还会经 Grok Bot 和 Cursor 实际使用的本机代理地址各 CONNECT 一个官方主机和一个第三方主机，看 cursor-inner 新开的连接：官方主机被直连标 FAIL；第三方主机在全局时应走代理、仅官方时应直连，不符也标 FAIL。`-RouteOnly` 只做这一项，不采样连接。Electron 主进程和 Cursor 的部分 Node 服务直接用 socket，不认代理参数。要让官方端点一条不漏，可在配置页「严格模式」点开启（弹 UAC），或以管理员身份运行 `scripts/strict-egress.ps1 -Enable`：防火墙为 Grok Bot.exe 和 Cursor.exe 阻止到官方 IP 的直连，计划任务开机时和每 30 分钟重新解析。局限：按 IP 拦截，Cloudflare 等共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下（走代理不受影响）；清单外的新域名、两次刷新之间换的新 IP 会漏；不改 hosts。`-Disable` 撤销，`-Status` 查看。
 
 关于仍然直连官方端点的两条连接（Cursor 的 `api3.cursor.sh`、Grok 的 `us*.cursorvm.com`）：已查明无法从应用外部把它们逼进代理。开启 `cursor.general.disableHttp2`（接管 Cursor 时已设）后，Cursor 的主 API 流量已经走代理；剩下这条 api3 直连是 Cursor 的指标/遥测客户端，Grok 那条是它连云端 agent 网关的探测。两者都是写死的 HTTP/2 客户端、不支持代理，且跑在各自独立的 Electron Node 进程里：外挂的 UI 扩展加载到的扩展宿主和发起这些请求的宿主不是同一个，`NODE_OPTIONS=--require` 又被 Electron 的 `nodeOptions` fuse 清掉，所以 `tls.connect` 注入和 `HTTPS_PROXY`/`NODE_USE_ENV_PROXY` 都够不到它们（已在测试实例上验证）。要接管只能改厂商自带的程序包。这两条的「零泄漏」保证仍然靠严格模式（上一轮的官方 IP 防火墙）。
 
@@ -186,7 +188,8 @@ TUN 模式（配置页「TUN 模式」点开启，弹 UAC）：cursor-inner 管�
 
 配置页从上到下的开关与按钮，均可随时开关、互不影响：
 
-- **更新** — 启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。 按钮「检查更新」/「更新」。
+- **更新** — 启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。 按钮「检查更新」/「更新」。
+- **代理范围** — 全局：Cursor 和 Grok Bot 的联网全部走上面的代理。仅官方：只有 Grok、x.ai、Cursor 等官方地址走代理，其余直连。回环和局域网始终直连。 「全局」/「仅官方」，切换即时生效，代理是普通 HTTP 时会自动重开一次 Grok Bot。
 - **TUN 模式** — 用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。 「开启」/「关闭」。
 - **严格模式** — 用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。 「开启」/「关闭」。
 - **日志与诊断** — 「打开日志」打开日志文件夹，「泄漏检查」在开发者版本里跑一次代理泄漏检查。
@@ -199,7 +202,7 @@ TUN 模式（配置页「TUN 模式」点开启，弹 UAC）：cursor-inner 管�
 配置页地址和运行状态固定在窗口顶部，不会被日志刷走。按回车即可打开配置页。在 Windows 上双击打开时，单击顶栏里的地址也会打开。在 Windows Terminal、iTerm2、GNOME Terminal 里，按住 Ctrl 或 Cmd 单击地址。自定义模型每一轮开始和结束各记一行。
 
 ```text
- ▌▐ cursor-inner v0.5.2   http://127.0.0.1:52341   按回车打开配置页
+ ▌▐ cursor-inner v0.5.3   http://127.0.0.1:52341   按回车打开配置页
     接管 ● 接管中    出站 代理 socks5://127.0.0.1:1080    自定义模型 3
     模型列表 ✓ 3 · 20:31    本地 4    官方 12    最近错误 无
 ──────────────────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ TUN 模式（配置页「TUN 模式」点开启，弹 UAC）：cursor-inner 管�
 | 参数 | 作用 |
 | --- | --- |
 | `--no-takeover` | 只打开配置页，不修改 Cursor 设置，也不关闭 Cursor |
-| `--debug` | 另起一个使用临时数据目录的实例：提供代理和配置页，不改 Cursor 设置，不关闭 Cursor，不打开浏览器 |
+| `--debug` | 另起一个使用临时数据目录的实例：提供代理和配置页，不改 Cursor 设置，不关闭 Cursor，不关闭或重开 Grok Bot，不打开浏览器 |
 | `--verbose` | 把调试日志也显示在窗口里（默认只写进 `inner.log`） |
 | `--data-dir <目录>` | 使用指定的数据目录 |
 
@@ -318,7 +321,7 @@ cursor-inner 不收集任何数据，没有遥测、统计或自动更新请求�
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.5.2 ./build.sh linux      # dist/cursor-inner-v0.5.2-linux-amd64，并写入版本号
+VERSION=v0.5.3 ./build.sh linux      # dist/cursor-inner-v0.5.3-linux-amd64，并写入版本号
 ```
 
 构建 Windows amd64 版本时，`build.sh` 会自动安装 [rsrc](https://github.com/akavel/rsrc)，用来把图标写进 exe。推送 `v*.*.*` 标签后，GitHub Actions 会测试、编译五个平台的版本，并按 [CHANGELOG.md](CHANGELOG.md) 里的对应条目发布 Release。

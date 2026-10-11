@@ -85,6 +85,20 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeState(w, backend)
 	})
+	mux.HandleFunc("PUT /api/proxy/scope", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Scope string `json:"scope"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetProxyScope(body.Scope); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
 	mux.HandleFunc("PUT /api/image", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			BaseURL string `json:"base_url"`

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,11 @@ type App struct {
 	tun      *tunnel.Manager
 	upd      *selfupdate.Updater
 	frozen   atomic.Bool
+	isolated atomic.Bool
 }
+
+// Isolate 用于 --debug 调试实例：之后不再关闭或重开正在运行的 Grok Bot。
+func (a *App) Isolate() { a.isolated.Store(true) }
 
 func (a *App) OnQuit(fn func()) {
 	a.mu.Lock()
@@ -135,6 +140,8 @@ func (a *App) State() (web.View, error) {
 	}
 	view.Proxy.Enabled = cfg.Proxy.Enabled
 	view.Proxy.Address = cfg.Proxy.Address
+	view.Proxy.Scope = cfg.Proxy.ScopeName()
+	view.Proxy.Bridged = on && grokbot.NeedsBridge(spec)
 	view.Proxy.Effective = on && perr == nil
 	view.Image.BaseURL = cfg.Image.BaseURL
 	view.Image.Model = cfg.Image.Model
@@ -199,7 +206,8 @@ func (a *App) SetTakeover(target string, enabled bool) error {
 }
 
 func (a *App) SetProxy(enabled bool, address string) error {
-	next := config.Proxy{Enabled: enabled, Address: address}
+	next := a.store.Get().Proxy
+	next.Enabled, next.Address = enabled, address
 	if _, _, err := dialer.EffectiveAddress(next); err != nil {
 		return err
 	}
@@ -213,6 +221,26 @@ func (a *App) SetProxy(enabled bool, address string) error {
 		return err
 	}
 	a.life.SyncDirect()
+	a.SyncGrok()
+	return nil
+}
+
+// SetProxyScope 切换 Cursor 和 Grok Bot 的代理范围（global / official）。
+// Cursor 的本机代理每次拨号都读当前设置，新连接立即按新范围走；
+// Grok Bot 经代理桥时只换桥里的分流，不重开；HTTP 代理从全局切到仅官方要改走代理桥，会重开一次 Grok Bot。
+func (a *App) SetProxyScope(scope string) error {
+	switch scope {
+	case config.ScopeGlobal, config.ScopeOfficial:
+	default:
+		return i18n.E("未知的代理范围", "Unknown proxy scope")
+	}
+	if err := a.store.Update(func(f *config.File) error {
+		f.Proxy.Scope = scope
+		return nil
+	}); err != nil {
+		return err
+	}
+	slog.Info("代理范围已切换", "scope", scope)
 	a.SyncGrok()
 	return nil
 }

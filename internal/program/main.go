@@ -134,8 +134,7 @@ func Main(version string) {
 	var logFile io.Writer
 	if err := os.MkdirAll(dir, 0o755); err == nil {
 		logPath := filepath.Join(dir, "inner.log")
-		_ = logx.Rotate(logPath)
-		if f, err := os.Create(logPath); err == nil {
+		if f, err := openInnerLog(logPath, succ != nil); err == nil {
 			defer f.Close()
 			logFile = f
 		}
@@ -182,6 +181,9 @@ func Main(version string) {
 	}, agent.NewHistory(dir))
 	life := takeover.New(dir, proxy)
 	application := app.New(store, life, autostart.New(), executable())
+	if opt.debug {
+		application.Isolate()
+	}
 
 	webAddr := "127.0.0.1:0"
 	if succ != nil && succ.Plan.WebAddr != "" {
@@ -290,7 +292,7 @@ func Main(version string) {
 		} else if snap := life.Snapshot(); snap.URL != "" {
 			log.Printf("调试代理 %s", snap.URL)
 		}
-		log.Printf("调试模式：不改 Cursor 的设置，也不结束 Cursor")
+		log.Printf("调试模式：不改 Cursor 的设置，也不结束 Cursor；不关闭或重开 Grok Bot")
 	} else if succ != nil {
 		if succ.Plan.TakeoverActive {
 			if err := life.Adopt(succ.Plan.MitmAddr); err != nil {
@@ -353,4 +355,14 @@ func Main(version string) {
 	}
 	upd.cleanupOld(succ != nil)
 	select {}
+}
+
+// openInnerLog 打开本次运行的 inner.log。正常启动时清空重写（过大先轮转）；自更新交接时接在后面写，
+// 不截断：旧进程还开着这个文件，下载、校验、换路径、交接的记录都在里面，清空了就没法追查这次更新。
+func openInnerLog(path string, handover bool) (*os.File, error) {
+	if handover {
+		return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	}
+	_ = logx.Rotate(path)
+	return os.Create(path)
 }

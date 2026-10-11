@@ -15,6 +15,8 @@ import (
 //   - proxyURL 为空且 keep 为假：用户关掉了代理，按用户选择不带代理。
 //
 // 地址带认证或是 socks 时，Grok Bot 自己用不了，改由本机回环上的代理桥转发。
+// 代理范围是「仅官方」时也一律经代理桥：桥按目标分流，官方端点走代理，其余直连。
+// 桥的端口只由代理地址决定，所以 socks / 带认证的代理切换范围时 Grok Bot 不用重开。
 func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	spec, on, err := dialer.EffectiveAddress(cfg.Proxy)
 	if err != nil {
@@ -23,8 +25,8 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	if !on {
 		return "", false
 	}
-	if grokbot.NeedsBridge(spec) {
-		d, err := dialer.FromProxy(cfg.Proxy)
+	if cfg.Proxy.OfficialOnly() || grokbot.NeedsBridge(spec) {
+		d, err := dialer.Scoped(cfg.Proxy)
 		if err != nil {
 			slog.Warn("Grok 代理桥没法用当前代理：" + err.Error())
 			return "", true
@@ -40,6 +42,9 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	if !ok {
 		return "", true
 	}
+	if d, err := dialer.FromProxy(cfg.Proxy); err == nil {
+		a.bridge.Retarget(grokbot.DialFunc(d))
+	}
 	return u, false
 }
 
@@ -50,6 +55,15 @@ func (a *App) SyncGrok() {
 		return
 	}
 	cfg := a.store.Get()
+	if a.isolated.Load() {
+		// 调试实例不碰正在运行的 Grok Bot（那是用户自己的），只把代理桥按当前设置备好。
+		if cfg.TakeoverGrok {
+			if proxyURL, keep := a.grokProxy(cfg); !keep {
+				slog.Info("调试实例：不改动 Grok Bot", "grok_proxy", proxyHostOnly(proxyURL), "scope", cfg.Proxy.ScopeName())
+			}
+		}
+		return
+	}
 	if !cfg.TakeoverGrok {
 		_ = grokbot.Apply("")
 		return

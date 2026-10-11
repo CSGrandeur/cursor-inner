@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-11
+
+### Added
+
+- Proxy scope on the settings page: "Global" (default, unchanged behaviour) or "Official only". With Official only, Cursor and Grok Bot send only official endpoints (grok.com, x.ai, spacexai.com, cursor.com, cursor.sh, cursorapi.com, cursor-cdn.com, cursorvm.com, anysphere.co) through the proxy and connect directly to everything else. Cursor's local proxy chooses the route on every dial; Grok Bot always goes through the loopback proxy bridge, which does the same split. Official domains, the TUN fake-ip ranges, hard-coded public IPs and the DoH resolvers used for official names always use the proxy; loopback and LAN/WSL ranges are direct; other domains are decided from the client's TLS SNI or HTTP Host, and a missing SNI or unknown protocol goes through the proxy. A failed direct connection is never retried through the proxy and an official connection never falls back to direct. Switching is immediate; only a plain HTTP proxy needs one automatic Grok Bot restart. TUN and Strict mode rules are the same in both scopes. Custom models' "Use proxy" switch is unchanged. Checked on 2026-10-11 with an isolated instance and a logging upstream proxy: in Global, a third-party HTTPS site, `api.x.ai` and a bare IP all reached the upstream proxy from both the Cursor and Grok paths; in Official only, the third-party host was connected directly by cursor-inner and never reached the proxy, while `api.x.ai`, the bare IP and `cloudflare-dns.com` still did.
+- `scripts/grok-leak-check.ps1` probes the routes: through each local proxy address Grok Bot and Cursor use, it connects to an official and a third-party host and checks which new connections cursor-inner opens. An official host reached directly is FAIL in either scope; a third-party host must use the proxy with Global and connect directly with Official only. The scope is read from `config.json` or given with `-Scope`; `-Via`, `-ProbeOfficial`, `-ProbeThirdParty`, `-RouteOnly` and `-NoRouteProbe` control the probe.
+
+### Changed
+
+- The settings page shows download speed, time left and the network path in use while an update downloads, for example "Downloading 42% · 1.3 MB/s · about 9 s left · manifest GitHub · proxy · package Gitee · signature verified". The update line now says "manifest …" and "package …" instead of "from …" and "package from …", which read as two conflicting sources.
+- A `--debug` instance no longer closes or restarts the running Grok Bot when its proxy or takeover settings change; it only prepares its own proxy bridge.
+
+### Fixed
+
+- Self-update downloads no longer stay on a slow network path. Before, the package was downloaded only over the path that answered the update check, with no fallback, no resume and no stall timeout: when the default network was slow but kept sending data, the update simply waited. Now the download measures its speed over a sliding 8 s window. If, after a 4 s warm-up, the estimated time left is over 45 s, the same file is also requested over the other path (the configured proxy, or the default network) from the current offset with an HTTP Range request. The two run side by side for 6 s, and the new path is kept only if it was at least 1.5 times faster. A path that sends nothing for 20 s (including no response headers) or drops the connection is resumed from the last written byte, preferring the other path, up to 4 times. A server without Range support is downloaded again from the start. Each address gives up after 15 minutes. However many paths were used, the finished file is re-read and checked byte for byte against the size and sha256 in the signed manifest. If a file pieced together from two paths does not match, each path is tried again on its own, so one bad path cannot spoil a good one. Measured on 2026-10-11 against the real v0.5.2 release (14.9 MB Linux package) with the default path limited to 64 KB/s: 0.4.0 took 232.5 s; the new code switched to the proxy after about 7 s and finished in 11.7 s.
+- After a self-update handover, the new process appends to `inner.log` instead of truncating it, so the old process's record of the download, verification and handover is kept.
+- Rejecting or undoing an `apply_patch` or `Write` that created a file (an `Add File`, the new path of a `Move to`, or a `Write` to a missing path) now deletes the new file in Cursor instead of leaving an empty 0-byte file. The edit card for a file that did not exist before no longer carries an empty "before" content, which Cursor took as "restore this file to empty". Checked in an isolated Cursor window on 2026-10-11, together with CRLF line endings, which stay CRLF after StrReplace, multi-file `apply_patch` and `Write`.
+
 ## [0.5.2] - 2026-10-11
 
 Self-update from GitHub did not work in 0.4.0 and 0.5.1. **If you are on 0.5.1, download 0.5.2 manually once** (0.5.1 cannot update itself and its settings page wrongly says the update manifest failed signature verification). 0.4.0 can update itself to 0.5.2.
@@ -223,7 +241,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.4.0...v0.5.1
 [0.4.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.7...v0.4.0

@@ -70,6 +70,16 @@ func (b *Bridge) Ensure(key string, dial DialFunc) (string, error) {
 	return "http://" + ln.Addr().String(), nil
 }
 
+// Retarget 只换桥的出站拨号，不动监听。Grok Bot 改用别的代理地址、但还没重开时，
+// 仍连着桥的请求也按当前设置出站。
+func (b *Bridge) Retarget(dial DialFunc) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.ln != nil {
+		b.dial = dial
+	}
+}
+
 // Close 停掉桥。之后 Grok Bot 连不上代理，但不会改成直连。
 func (b *Bridge) Close() {
 	b.mu.Lock()

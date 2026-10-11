@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/official"
 )
 
 // Options 是生成 sing-box 配置所需的输入。
@@ -24,8 +25,8 @@ type Options struct {
 }
 
 const (
-	defaultFakeIP4 = "198.18.0.0/15"
-	defaultFakeIP6 = "fc00::/18"
+	defaultFakeIP4 = official.FakeIP4
+	defaultFakeIP6 = official.FakeIP6
 )
 
 // Config 生成 sing-box 配置：

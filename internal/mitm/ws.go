@@ -198,7 +198,7 @@ func (s *Server) serveLocalAgent(client net.Conn, session *agent.Session, id str
 		defer close(done)
 		d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
 		session.Proxy = s.proxy()
-		session.Web = s.dialContext
+		session.Web = s.webDial
 		if err == nil {
 			err = session.Run(ctx, d, emit)
 		}

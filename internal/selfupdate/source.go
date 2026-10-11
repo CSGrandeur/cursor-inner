@@ -144,7 +144,8 @@ func pickBest(results []sourceResult) int {
 }
 
 // mirrorsFor 给出下载这个版本的所有地方：选中的源排第一，其余同版本、同一份文件（sha256 相同）的源按速度排在后面。
-func mirrorsFor(results []sourceResult, best int, a Asset) []Mirror {
+// 每个源先用它验过清单的那条网络路径，routes 里的其他路径作为备用（太慢、卡住、断开时用）。
+func mirrorsFor(results []sourceResult, best int, a Asset, routes []Route) []Mirror {
 	order := []int{best}
 	for i, r := range results {
 		if i == best || r.err != nil || r.manifest.Version != results[best].manifest.Version {
@@ -166,7 +167,13 @@ func mirrorsFor(results []sourceResult, best int, a Asset) []Mirror {
 	for _, i := range order {
 		r := results[i]
 		pa, _ := r.manifest.Pick(a.OS, a.Arch)
-		out = append(out, Mirror{Name: r.src.Name, Route: r.route, URLs: assetURLs(pa, r.manURL)})
+		var alt []Route
+		for _, rt := range routes {
+			if rt.Name != r.route.Name {
+				alt = append(alt, rt)
+			}
+		}
+		out = append(out, Mirror{Name: r.src.Name, Route: r.route, Alt: alt, URLs: assetURLs(pa, r.manURL)})
 	}
 	return out
 }
