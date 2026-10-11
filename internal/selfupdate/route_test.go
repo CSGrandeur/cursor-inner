@@ -82,7 +82,7 @@ func TestUpdaterUsesCheckedRouteForDownload(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	u := New(Options{Version: "v0.3.0", DataDir: t.TempDir(), Sources: []string{srv.URL + "/manifest.json"}, GOOS: "windows", GOARCH: "amd64", Timeout: time.Second})
+	u := New(Options{Version: "v0.3.0", DataDir: t.TempDir(), Sources: []Source{URLSource(srv.URL + "/manifest.json")}, GOOS: "windows", GOARCH: "amd64", Timeout: time.Second})
 	proxyUsed := 0
 	u.opt.Proxy = func() (DialFunc, bool) {
 		return func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -100,7 +100,7 @@ func TestUpdaterUsesCheckedRouteForDownload(t *testing.T) {
 	if err != nil || got.Route.Name != "proxy" {
 		t.Fatalf("%v %v", got.Route.Name, err)
 	}
-	m, _, _ := ParseManifest(got.Body, nil, nil)
+	m, _, _ := ParseManifest(got.Body, nil, nil, time.Now())
 	a, _ := m.Pick("windows", "amd64")
 	before := proxyUsed
 	path, err := Download(context.Background(), got.Route, assetURLs(a, got.FinalURL), a, t.TempDir(), nil)
@@ -115,7 +115,7 @@ func TestUpdaterUsesCheckedRouteForDownload(t *testing.T) {
 func TestUpdaterCheckRecordsRoute(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(goodManifest)) }))
 	defer srv.Close()
-	u := New(Options{Version: "v0.3.0", DataDir: t.TempDir(), Sources: []string{srv.URL + "/manifest.json"}, GOOS: "windows", GOARCH: "amd64", Timeout: time.Second})
+	u := New(Options{Version: "v0.3.0", DataDir: t.TempDir(), Sources: []Source{URLSource(srv.URL + "/manifest.json")}, GOOS: "windows", GOARCH: "amd64", Timeout: time.Second})
 	st := u.Check(context.Background(), true)
 	if st.State != StateAvailable || st.Route != "default" || st.Latest != "v0.4.0" || st.Notes == "" {
 		t.Fatalf("%+v", st)

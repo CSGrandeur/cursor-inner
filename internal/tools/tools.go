@@ -31,6 +31,7 @@ func Catalog() []provider.Tool {
 type Pending struct {
 	Call      provider.ToolCall
 	edit      *editState
+	patch     *patchState
 	shell     *shellState
 	Terminals string
 	// Note 是交给模型的补充说明，例如云端子代理改在本地执行。
@@ -106,9 +107,12 @@ func Request(id uint32, call provider.ToolCall) (*cursorpb.ExecServerMessage, *c
 	case "shell", "bash":
 		if command, ok := a.str("command"); ok {
 			if text, ok := shellPatch(command); ok {
-				rewritten, err := patchCall(call, text)
+				rewritten, ops, err := patchCall(call, text)
 				if err != nil {
 					return nil, nil, nil, err
+				}
+				if ops != nil {
+					return startPatch(id, call, ops)
 				}
 				return Request(id, rewritten)
 			}
@@ -124,9 +128,12 @@ func Request(id uint32, call provider.ToolCall) (*cursorpb.ExecServerMessage, *c
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("apply_patch requires the patch text in input")
 		}
-		rewritten, err := patchCall(call, text)
+		rewritten, ops, err := patchCall(call, text)
 		if err != nil {
 			return nil, nil, nil, err
+		}
+		if ops != nil {
+			return startPatch(id, call, ops)
 		}
 		return Request(id, rewritten)
 	case "readlints":
@@ -143,6 +150,9 @@ func Request(id uint32, call provider.ToolCall) (*cursorpb.ExecServerMessage, *c
 
 // Advance 消化一条执行结果。需要继续执行时返回下一条请求（调用方填 id）；否则返回交给模型的文本。
 func (p *Pending) Advance(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall) (*cursorpb.ExecServerMessage, string, bool) {
+	if p.patch != nil {
+		return p.patch.advance(msg)
+	}
 	if p.edit != nil && p.edit.phase == editRead {
 		return p.afterRead(msg, ui)
 	}

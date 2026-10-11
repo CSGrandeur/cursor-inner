@@ -17,7 +17,7 @@ func familyNote(m config.Model) string {
 		return ""
 	case provider.FamilyGPT:
 		lines = append(lines,
-			"- To edit files use StrReplace or Write. apply_patch is also accepted, one file per patch.",
+			"- To edit files use StrReplace or Write. apply_patch is also accepted, including several files, Delete File and Move to in one patch.",
 			"- Keep going until the task is done; do not stop to ask for confirmation of routine steps.")
 	case provider.FamilyGemini:
 		lines = append(lines,

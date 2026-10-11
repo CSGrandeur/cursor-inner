@@ -52,9 +52,9 @@ if [ -z "$stamp" ]; then
 	stamp=dev
 fi
 ldflags="-s -w -X main.version=$stamp"
-# 自更新清单的签名公钥（base64 ed25519）。注入后新版本只接受带有效签名的清单。
-if [ -n "${UPDATE_PUBLIC_KEY:-}" ]; then
-	ldflags="$ldflags -X cursor-inner/internal/selfupdate.publicKey=$UPDATE_PUBLIC_KEY"
+# 发版公钥写在 internal/selfupdate/trust.go 里，不靠这里注入。UPDATE_EXTRA_KEYS 只给本机演练和 fork 追加公钥。
+if [ -n "${UPDATE_EXTRA_KEYS:-}" ]; then
+	ldflags="$ldflags -X cursor-inner/internal/selfupdate.extraKeys=$UPDATE_EXTRA_KEYS"
 fi
 if [ "$os" = windows ]; then
 	# 窗口子系统：点控制台的叉只会关掉窗口。控制台子系统会在关闭事件返回后结束进程。

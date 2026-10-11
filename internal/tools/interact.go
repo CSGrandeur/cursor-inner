@@ -282,7 +282,7 @@ func finishSearch(ui *cursorpb.ToolCall, resp *cursorpb.WebSearchRequestResponse
 		}
 		return "The user rejected the web search: " + reason, true, ""
 	case *cursorpb.WebSearchRequestResponse_Approved_:
-		refs, err := FederatedSearch(web, term)
+		refs, notes, err := FederatedSearch(web, term)
 		if err != nil {
 			if tool != nil {
 				tool.WebSearchToolCall.Result = &cursorpb.WebSearchResult{Result: &cursorpb.WebSearchResult_Error{Error: &cursorpb.WebSearchError{Error: err.Error()}}}
@@ -292,14 +292,18 @@ func finishSearch(ui *cursorpb.ToolCall, resp *cursorpb.WebSearchRequestResponse
 		if tool != nil {
 			tool.WebSearchToolCall.Result = &cursorpb.WebSearchResult{Result: &cursorpb.WebSearchResult_Success{Success: &cursorpb.WebSearchSuccess{References: refs}}}
 		}
+		skipped := ""
+		if len(notes) > 0 {
+			skipped = "\n\nNot used: " + strings.Join(notes, "; ")
+		}
 		if len(refs) == 0 {
-			return "No web results for " + term, false, ""
+			return "No web results for " + term + skipped, false, ""
 		}
 		var lines []string
 		for _, ref := range refs {
 			lines = append(lines, fmt.Sprintf("- %s (%s)\n%s", ref.GetTitle(), ref.GetUrl(), ref.GetChunk()))
 		}
-		return strings.Join(lines, "\n"), false, ""
+		return strings.Join(lines, "\n") + skipped, false, ""
 	default:
 		return "The web search was not approved.", true, ""
 	}

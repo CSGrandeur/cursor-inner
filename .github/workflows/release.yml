@@ -19,6 +19,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the Gitee mirror step pushes the full history and the tag
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -44,7 +46,6 @@ jobs:
       - name: Build and package
         env:
           VERSION: ${{ github.ref_name }}
-          UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
         run: |
           set -eu
           mkdir -p out
@@ -85,7 +86,17 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          UPDATE_SIGNING_KEY_NEXT: ${{ secrets.UPDATE_SIGNING_KEY_NEXT }}
+          UPDATE_MANIFEST_TTL_DAYS: ${{ vars.UPDATE_MANIFEST_TTL_DAYS }}
         run: ./scripts/release_manifest.sh out "$VERSION" release-notes.md
+
+      # Clients only accept manifests signed by a key in internal/selfupdate/trust.go; stop here
+      # rather than publish a manifest every installed copy would reject.
+      - name: Verify signed manifest
+        env:
+          UPDATE_RELEASE_DIR: ${{ github.workspace }}/out
+          UPDATE_RELEASE_VERSION: ${{ github.ref_name }}
+        run: go test ./internal/selfupdate -run '^TestReleaseArtifacts$' -count=1 -v
 
       - name: Checksums
         run: |
@@ -123,3 +134,14 @@ jobs:
           flags=""
           case "$VERSION" in *-*) flags="--prerelease" ;; esac
           gh release create "$VERSION" out/* --verify-tag --title "cursor-inner ${VERSION}" --notes-file notes.md $flags
+
+      # Second update source for users who reach Gitee faster than GitHub. Optional: skipped
+      # without the GITEE_TOKEN secret, and a failure here does not undo the GitHub release.
+      - name: Mirror to Gitee
+        continue-on-error: true
+        env:
+          VERSION: ${{ github.ref_name }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_REPO: ${{ vars.GITEE_REPO }}
+          GITEE_USER: ${{ vars.GITEE_USER }}
+        run: ./scripts/gitee_release.sh out "$VERSION" notes.md

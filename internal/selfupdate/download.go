@@ -16,27 +16,60 @@ import (
 // ErrChecksum 表示下载内容和清单里的 sha256 或大小对不上。文件已删掉，不会被使用。
 var ErrChecksum = errors.New("下载内容校验失败")
 
-// Download 用选定的路径下载文件到 dir 下的临时文件，边下边算 sha256，
-// 大小和摘要都对上才改名为最终文件并返回路径。任何失败都不留下可执行文件。
-func Download(ctx context.Context, r Route, urls []string, a Asset, dir string, progress func(done, total int64)) (string, error) {
+// Mirror 是一个可以下载安装包的地方：一个更新源加上它验过清单时用的网络路径。
+type Mirror struct {
+	Name  string
+	Route Route
+	URLs  []string
+}
+
+// MirrorFailure 记录某个镜像为什么没用上，写进日志和界面。
+type MirrorFailure struct {
+	Mirror string
+	Err    error
+}
+
+// DownloadMirrors 依次从各镜像下载，边下边算 sha256，大小和摘要都对上才改名为最终文件并返回路径和用上的镜像名。
+// 某个镜像给的文件对不上（被篡改、不完整）就删掉、换下一个；全部失败才报错，校验失败优先报 ErrChecksum。
+// 任何失败都不留下可执行文件。
+func DownloadMirrors(ctx context.Context, mirrors []Mirror, a Asset, dir string, progress func(done, total int64)) (string, string, []MirrorFailure, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", "", nil, err
 	}
-	var last error
-	for _, u := range urls {
-		path, err := downloadOne(ctx, r, u, a, dir, progress)
-		if err == nil {
-			return path, nil
+	var fails []MirrorFailure
+	var checksum error
+	for _, m := range mirrors {
+		for _, u := range m.URLs {
+			path, err := downloadOne(ctx, m.Route, u, a, dir, progress)
+			if err == nil {
+				return path, m.Name, fails, nil
+			}
+			fails = append(fails, MirrorFailure{Mirror: m.Name, Err: err})
+			if errors.Is(err, ErrChecksum) && checksum == nil {
+				checksum = err
+			}
+			if ctx.Err() != nil {
+				return "", "", fails, ctx.Err()
+			}
 		}
-		last = err
-		if errors.Is(err, ErrChecksum) || ctx.Err() != nil {
-			return "", err
-		}
 	}
-	if last == nil {
-		last = errors.New("没有下载地址")
+	if checksum != nil {
+		return "", "", fails, checksum
 	}
-	return "", last
+	if len(fails) == 0 {
+		return "", "", nil, errors.New("没有下载地址")
+	}
+	var errs []error
+	for _, f := range fails {
+		errs = append(errs, fmt.Errorf("%s: %w", f.Mirror, f.Err))
+	}
+	return "", "", fails, errors.Join(errs...)
+}
+
+// Download 是只有一个镜像时的 DownloadMirrors。
+func Download(ctx context.Context, r Route, urls []string, a Asset, dir string, progress func(done, total int64)) (string, error) {
+	path, _, _, err := DownloadMirrors(ctx, []Mirror{{Name: r.Name, Route: r, URLs: urls}}, a, dir, progress)
+	return path, err
 }
 
 func downloadOne(ctx context.Context, r Route, url string, a Asset, dir string, progress func(done, total int64)) (string, error) {

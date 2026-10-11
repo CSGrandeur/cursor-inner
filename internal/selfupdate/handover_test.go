@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sync"
@@ -211,17 +210,15 @@ func TestHandedOver(t *testing.T) {
 
 // Apply 交接失败时：程序文件换回旧版本，状态回到可更新。
 func TestApplyRollbackRestoresExe(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(goodManifest)) })
-	mux.HandleFunc("/cursor-inner-v0.4.0-windows-amd64.exe", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("abc")) })
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	k := newTestKey(t)
+	_, srv := newFakeRelease(t, k, "v0.4.0", []byte("abc"))
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "cursor-inner.exe")
 	os.WriteFile(exe, []byte("old"), 0o755)
 	var exeDuringHandover string
 	u := New(Options{
-		Version: "v0.3.0", Exe: exe, DataDir: dir, Sources: []string{srv.URL + "/manifest.json"}, GOOS: "windows", GOARCH: "amd64",
+		Version: "v0.3.0", Exe: exe, DataDir: dir, Sources: []Source{URLSource(srv.URL + "/manifest.json")}, GOOS: "windows", GOARCH: "amd64",
+		Keys:      []TrustedKey{k.key},
 		Preflight: func(ctx context.Context, path, want string) error { return nil },
 		Handover: func(ctx context.Context, to string) error {
 			b, _ := os.ReadFile(exe)
@@ -247,16 +244,15 @@ func TestApplyRollbackRestoresExe(t *testing.T) {
 }
 
 func TestApplyChecksumFailureNeverSwaps(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(goodManifest)) })
-	mux.HandleFunc("/cursor-inner-v0.4.0-windows-amd64.exe", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("xyz")) })
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	k := newTestKey(t)
+	rel, srv := newFakeRelease(t, k, "v0.4.0", []byte("abc"))
+	rel.files["cursor-inner-v0.4.0-windows-amd64.exe"] = []byte("xyz")
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "cursor-inner.exe")
 	os.WriteFile(exe, []byte("old"), 0o755)
 	called := false
-	u := New(Options{Version: "v0.3.0", Exe: exe, DataDir: dir, Sources: []string{srv.URL + "/manifest.json"}, GOOS: "windows", GOARCH: "amd64",
+	u := New(Options{Version: "v0.3.0", Exe: exe, DataDir: dir, Sources: []Source{URLSource(srv.URL + "/manifest.json")}, GOOS: "windows", GOARCH: "amd64",
+		Keys:      []TrustedKey{k.key},
 		Preflight: func(context.Context, string, string) error { return nil },
 		Handover:  func(context.Context, string) error { called = true; return nil }})
 	u.Check(context.Background(), false)
@@ -268,6 +264,9 @@ func TestApplyChecksumFailureNeverSwaps(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(exe); string(b) != "old" {
 		t.Fatalf("exe touched: %q", b)
+	}
+	if st := u.Status(); st.ErrorCode != CodeChecksum {
+		t.Fatalf("%+v", st)
 	}
 }
 

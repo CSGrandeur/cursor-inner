@@ -160,7 +160,10 @@ func (p *Pending) Feed(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall) (
 	stream := msg.GetShellStream()
 	if stream == nil || p.shell == nil {
 		next, text, isErr = p.Advance(msg, ui)
-		return next, nil, text, isErr, next == nil
+		if p.patch != nil {
+			deltas = p.patch.takeDeltas()
+		}
+		return next, deltas, text, isErr, next == nil
 	}
 	switch event := stream.GetEvent().(type) {
 	case *cursorpb.ShellStream_Stdout:

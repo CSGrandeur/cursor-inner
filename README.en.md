@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.4.0` to install a specific version.
+The installer detects your OS and CPU, downloads the latest release, verifies it against the release's `SHA256SUMS.txt`, and installs it for the current user without administrator rights. Files fetched this way carry no browser download mark, so SmartScreen and Gatekeeper do not block them. Set `CURSOR_INNER_VERSION=v0.5.0` to install a specific version.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -199,7 +199,7 @@ The switches and buttons on the settings page, top to bottom; each can be toggle
 The settings page URL and run status stay pinned at the top of the console window and are never scrolled away by logs. Press Enter to open the settings page. After a double-click on Windows, a click on the address in the header opens it too. In Windows Terminal, iTerm2, GNOME Terminal and others, Ctrl+click or Cmd+click the URL. Each custom-model turn writes a start line and an end line.
 
 ```text
- ▌▐ cursor-inner v0.4.0   http://127.0.0.1:52341   press Enter to open settings
+ ▌▐ cursor-inner v0.5.0   http://127.0.0.1:52341   press Enter to open settings
     takeover ● on    outbound proxy socks5://127.0.0.1:1080    custom models 3
     catalog ✓ 3 · 20:31    local 4    official 12    last error none
 ──────────────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ Official models are not affected. If a Cursor update changes its internal protoc
 <details>
 <summary><b>Does cursor-inner update itself?</b></summary>
 
-Yes. It checks GitHub Releases once at startup, and on demand from the settings page. The new version takes over the same local ports, so Grok and Cursor keep running; the download is verified against the manifest's sha256, and the new version rolls back automatically if it fails its health check — never falling back to a direct connection. Manifests can be ed25519-signed; with a public key built in, unsigned or tampered manifests are rejected.
+Yes. It checks the GitHub and Gitee releases once at startup, and on demand from the settings page, and uses whichever source offers the newest correctly signed version (the faster one when they agree). The new version takes over the same local ports, so Grok and Cursor keep running. Every update manifest must carry an ed25519 signature from the release key built into the program; unsigned, tampered, wrongly signed, expired or replayed older manifests are rejected before anything is downloaded. The download must match the size and sha256 in the signed manifest, and the new version rolls back automatically if it fails its health check — never falling back to a direct connection.
 
 </details>
 
@@ -318,7 +318,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows                   # dist/cursor-inner-windows-amd64.exe
 ./build.sh darwin arm64              # dist/cursor-inner-darwin-arm64
-VERSION=v0.4.0 ./build.sh linux      # dist/cursor-inner-v0.4.0-linux-amd64, and stamps that version
+VERSION=v0.5.0 ./build.sh linux      # dist/cursor-inner-v0.5.0-linux-amd64, and stamps that version
 ```
 
 For Windows amd64 builds, `build.sh` installs [rsrc](https://github.com/akavel/rsrc) to embed the icon into the exe. Pushing a `v*.*.*` tag makes GitHub Actions test, build all five platform targets and publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).

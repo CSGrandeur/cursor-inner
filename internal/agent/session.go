@@ -712,9 +712,13 @@ func (s *Session) card(send Emit, call provider.ToolCall, text string, isErr boo
 	return toolOutcome{call: call, text: text, mode: mode, card: ui}, nil
 }
 
+// noteEdited 记下这一轮改过的文件，压缩之后提醒模型先重读再改。
 func (s *Session) noteEdited(call provider.ToolCall) {
-	switch strings.ToLower(call.Name) {
+	switch strings.ToLower(strings.ReplaceAll(call.Name, "_", "")) {
 	case "strreplace", "write", "editnotebook":
+	case "applypatch", "shell", "bash":
+		s.editedPaths = uniquePaths(append(s.editedPaths, tools.PatchPaths(call)...))
+		return
 	default:
 		return
 	}
@@ -886,6 +890,9 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 					return toolOutcome{}, err
 				}
 				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "done", ElapsedMs: time.Since(started).Milliseconds(), Bytes: len(text)})
+				if !isErr {
+					s.noteEdited(call)
+				}
 				return toolOutcome{call: call, text: text, images: pending.Images, isErr: isErr, card: ui}, nil
 			}
 			if pastWait(pending, started) {

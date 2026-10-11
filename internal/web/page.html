@@ -395,8 +395,9 @@
     <div class="row" id="update-row" hidden>
       <h2 data-i18n="update">更新</h2>
       <div class="copy">
-        <p class="desc" data-i18n="updateDesc">启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。</p>
+        <p class="desc" data-i18n="updateDesc">启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。</p>
         <p class="meta" id="update-status"></p>
+        <p class="meta warn" id="update-warn"></p>
         <pre class="meta" id="update-notes" hidden style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:6px 0 0"></pre>
       </div>
       <div class="tail"><button id="update-check" type="button" class="sm" data-i18n="updateCheck">检查更新</button> <button id="update-apply" type="button" class="sm" data-i18n="updateApply" hidden>更新</button></div>
@@ -554,7 +555,7 @@
 const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
-    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", update: "更新", updateDesc: "启动时检查一次 GitHub Release。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upDownloading: "正在下载 {pct}", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upRoute: "路径：{route}", upUnsigned: "未签名清单（仅 sha256 校验）", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
+    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", update: "更新", updateDesc: "启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upDownloading: "正在下载 {pct}", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "来源 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包来自 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
     tun: "TUN 模式", tunDesc: "用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     strict: "严格模式", strictDesc: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
@@ -600,7 +601,7 @@ const MESSAGES = {
   },
   en: {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
-    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", update: "Update", updateDesc: "Checks GitHub Releases once at startup. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upDownloading: "Downloading {pct}", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upRoute: "route: {route}", upUnsigned: "unsigned manifest (sha256 only)", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
+    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", update: "Update", updateDesc: "Checks the GitHub and Gitee releases once at startup and only installs correctly signed versions. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upDownloading: "Downloading {pct}", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upCheckFailed: "Update check failed", upApplyFailed: "Update did not complete", upFrom: "from {source} · {route}", upRouteDefault: "default network", upRouteProxy: "proxy", upVerified: "signature verified", upMirror: "package from {source}", upSkipped: "{source} not used: {reason}", upManual: "This build has no built-in update key, so it cannot update itself. Download {latest} from the Releases page.", upKeep: "Nothing was downloaded or replaced; the current version keeps running.", upE_sig_missing: "The update manifest is not signed and was rejected.", upE_sig_invalid: "The update manifest failed signature verification (it may have been tampered with) and was rejected.", upE_key_unknown: "The update manifest is not signed by a trusted key and was rejected.", upE_expired: "The update manifest has expired and was rejected.", upE_rollback: "The update source offered an older version than one seen before (possibly a replayed manifest); ignored.", upE_bad_manifest: "The update source returned an invalid manifest; rejected.", upE_checksum: "The downloaded package does not match the SHA256 in the signed manifest and was deleted.", upE_network: "Could not reach the update sources.", upDetail: "Details: {error}", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
     tun: "TUN mode", tunDesc: "Uses a sing-box TUN to route only official endpoints (grok, x.ai, Cursor, cursorvm, etc.) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure.", tunOn: "Turn on", tunOff: "Turn off", tunAsked: "Administrator approval requested; see the PowerShell window for the result",
     strict: "Strict mode", strictDesc: "Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (grok, x.ai, Cursor). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps.", strictOn: "Turn on", strictOff: "Turn off", strictAsked: "Administrator approval requested; see the PowerShell window for the result",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
@@ -1241,28 +1242,54 @@ load();
 // —— 更新 ——
 const upRow = document.querySelector("#update-row");
 let upPoll = null;
+const upTrust = ["sig_missing", "sig_invalid", "key_unknown", "expired", "rollback", "bad_manifest", "checksum"];
+const upNames = {github: "GitHub", gitee: "Gitee"};
+const upName = n => upNames[n] || n;
+function upReason(code, error) {
+  const k = "upE_" + code;
+  return code && (MESSAGES[lang][k] || MESSAGES.zh[k]) ? t(k) : (error || "");
+}
 function renderUpdate(st) {
   upRow.hidden = false;
   const status = document.querySelector("#update-status");
+  const warn = document.querySelector("#update-warn");
   const notes = document.querySelector("#update-notes");
   const apply = document.querySelector("#update-apply");
   const pct = st.total ? Math.floor(100 * st.done / st.total) + "%" : "";
+  const code = st.error_code || "";
   const text = {
     checking: t("upChecking"), up_to_date: t("upUpToDate", {current: st.current}),
     available: t("upAvailable", {latest: st.latest, current: st.current}),
     downloading: t("upDownloading", {pct}), waiting_idle: t("upWaiting"),
-    handover: t("upHandover"), done: t("upDone"), failed: t("upFailed", {error: st.error || ""})
+    handover: t("upHandover"), done: t("upDone"), failed: st.latest ? t("upApplyFailed") : t("upCheckFailed")
   }[st.state] || "";
   const extra = [];
-  if (st.route) extra.push(t("upRoute", {route: st.route}));
-  if (st.latest && !st.signed) extra.push(t("upUnsigned"));
-  let line = text + (extra.length ? " · " + extra.join(" · ") : "");
-  if (st.state === "available" && st.error) line += " · " + t("upFailed", {error: st.error});
-  status.textContent = line;
+  const routeName = {default: t("upRouteDefault"), proxy: t("upRouteProxy")};
+  if (st.source && st.state !== "failed") extra.push(t("upFrom", {source: upName(st.source), route: routeName[st.route] || st.route || ""}));
+  if (st.signed && st.state !== "failed") extra.push(t("upVerified"));
+  if (st.mirror && st.mirror !== st.source) extra.push(t("upMirror", {source: upName(st.mirror)}));
+  status.textContent = text + (extra.length ? " · " + extra.join(" · ") : "");
+  // 第二行：失败原因、没有公钥时的手动下载提示、某个源被弃用的原因。验签类问题用醒目颜色。
+  const lines = [];
+  if (code === "no_key") lines.push(t("upManual", {latest: st.latest || ""}));
+  else if (st.error) {
+    let line = upReason(code, st.error);
+    if (upTrust.includes(code)) line += " " + t("upKeep");
+    if (line !== st.error && code !== "rollback") line += " " + t("upDetail", {error: st.error});
+    lines.push(line);
+  }
+  if (st.state !== "failed") {
+    for (const s of st.sources || []) {
+      if (s.code && upTrust.includes(s.code)) lines.push(t("upSkipped", {source: upName(s.name), reason: upReason(s.code, s.error)}));
+    }
+  }
+  warn.textContent = lines.join("\n");
+  warn.style.whiteSpace = "pre-line";
+  warn.classList.toggle("warn", upTrust.includes(code) || (st.sources || []).some(s => upTrust.includes(s.code)) || code === "no_key");
   const showNotes = st.notes && (st.state === "available" || st.state === "downloading" || st.state === "waiting_idle");
   notes.hidden = !showNotes;
   notes.textContent = showNotes ? st.notes : "";
-  apply.hidden = st.state !== "available";
+  apply.hidden = st.state !== "available" || st.can_apply === false;
   const busyNow = ["checking", "downloading", "waiting_idle", "handover", "done"].includes(st.state);
   document.querySelector("#update-check").disabled = busyNow;
   if (busyNow && !upPoll) upPoll = setInterval(pollUpdate, 1500);

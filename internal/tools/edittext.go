@@ -6,8 +6,8 @@ import (
 	"cursor-inner/internal/provider"
 )
 
-// EditText 在内存里执行一次编辑类调用（StrReplace / Write / ApplyPatch / Shell 里的 apply_patch），
-// 与真实读改写流程用同一套匹配逻辑。供评测和测试用，不碰磁盘。
+// EditText 在内存里执行一次单文件编辑类调用（StrReplace / Write / ApplyPatch / Shell 里的 apply_patch），
+// 与真实读改写流程用同一套匹配逻辑。供评测和测试用，不碰磁盘。多文件补丁用 ApplyPatchFiles。
 func EditText(call provider.ToolCall, before string) (string, error) {
 	a, err := parseArgs(call.Arguments)
 	if err != nil {
@@ -20,19 +20,11 @@ func EditText(call provider.ToolCall, before string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("not an apply_patch command")
 		}
-		rewritten, err := patchCall(call, text)
-		if err != nil {
-			return "", err
-		}
-		return EditText(rewritten, before)
+		return editPatchText(call, text, before)
 	case "applypatch":
 		if _, ok := a.str("path"); !ok {
 			text, _ := a.rawString("patch", "input", "diff")
-			rewritten, err := patchCall(call, text)
-			if err != nil {
-				return "", err
-			}
-			return EditText(rewritten, before)
+			return editPatchText(call, text, before)
 		}
 		text, _ := a.rawString("patch")
 		ops, err := parsePatch(text)
@@ -47,4 +39,18 @@ func EditText(call provider.ToolCall, before string) (string, error) {
 		return replaceString(a, before)
 	}
 	return "", fmt.Errorf("%s is not an edit tool", call.Name)
+}
+
+func editPatchText(call provider.ToolCall, text, before string) (string, error) {
+	rewritten, ops, err := patchCall(call, text)
+	if err != nil {
+		return "", err
+	}
+	if ops != nil {
+		return "", fmt.Errorf("apply_patch touches %d files; use ApplyPatchFiles", len(ops))
+	}
+	if normalize(rewritten.Name) == "delete" {
+		return "", nil
+	}
+	return EditText(rewritten, before)
 }

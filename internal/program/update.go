@@ -160,9 +160,12 @@ type updateGlue struct {
 
 func newUpdateGlue(version, dir string, debug bool, store *config.Store, life *takeover.Service, proxy *mitm.Server, application *app.App, web *relisten, release *func(), term *console.Console) *updateGlue {
 	g := &updateGlue{version: version, dir: dir, exe: executable(), life: life, proxy: proxy, app: application, web: web, release: release, term: term}
-	key, err := selfupdate.EmbeddedKey()
+	keys, err := selfupdate.TrustedKeys()
 	if err != nil {
 		slog.Warn(err.Error())
+	}
+	if len(keys) == 0 {
+		slog.Warn("此构建没有内置更新公钥：只检查新版本，不自动安装")
 	}
 	g.updater = selfupdate.New(selfupdate.Options{
 		Version:  version,
@@ -171,7 +174,7 @@ func newUpdateGlue(version, dir string, debug bool, store *config.Store, life *t
 		Proxy:    application.UpdateProxy,
 		Busy:     proxy.LocalBusy,
 		Handover: g.handover,
-		Key:      key,
+		Keys:     keys,
 		Sources:  debugSources(debug),
 	})
 	_ = store
@@ -284,6 +287,14 @@ func (g *updateGlue) trayCheck() {
 	zh := uiChinese()
 	switch st.State {
 	case selfupdate.StateAvailable:
+		if !st.CanApply {
+			msg := "cursor-inner " + st.Latest + " is available, but this build has no built-in update key, so it cannot update itself. Download it from the Releases page."
+			if zh {
+				msg = "cursor-inner " + st.Latest + " 已发布，但此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载。"
+			}
+			infoDialog(msg)
+			return
+		}
 		notes := st.Notes
 		if len([]rune(notes)) > 600 {
 			notes = string([]rune(notes)[:600]) + "…"
@@ -319,12 +330,20 @@ func (g *updateGlue) trayCheck() {
 	}
 }
 
-// debugSources：只有 --debug 调试实例才认 CURSOR_INNER_UPDATE_MANIFEST，用来对本机假 Release 做交接演练。
-func debugSources(debug bool) []string {
-	if src := os.Getenv("CURSOR_INNER_UPDATE_MANIFEST"); debug && src != "" {
-		return []string{src}
+// debugSources：只有 --debug 调试实例才认 CURSOR_INNER_UPDATE_MANIFEST（逗号分隔，可以写多个清单地址演练镜像切换），
+// 用来对本机假 Release 做交接演练。验签照常：演练用的公钥要在构建时用 extraKeys 加进去。
+func debugSources(debug bool) []selfupdate.Source {
+	raw := os.Getenv("CURSOR_INNER_UPDATE_MANIFEST")
+	if !debug || raw == "" {
+		return nil
 	}
-	return nil
+	var out []selfupdate.Source
+	for _, s := range strings.Split(raw, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, selfupdate.URLSource(s))
+		}
+	}
+	return out
 }
 
 // passthroughArgs 把影响行为的启动参数原样带给新进程（--debug、--no-takeover、--verbose），
