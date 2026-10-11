@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-11
+## [0.5.1] - 2026-10-11
+
+First published release of these changes. The `v0.5.0` tag was never released: its release build stopped at the new signed-manifest self-check (see Fixed).
 
 ### Added
 
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Release pipeline: the bare Linux/macOS executables were deleted together with their staging directory, so the update manifest only listed Windows (already the case in 0.4.0) and Linux/macOS copies could not self-update. They are now kept next to `manifest.json`, and the release self-check requires every platform.
 - Files edited by Cursor-executed tools (StrReplace, Write, EditNotebook, apply_patch) are now remembered for the turn, so after context compaction the model is reminded to re-read them before editing again. Previously only locally answered tools were recorded, so the reminder relied on the files the summary happened to name.
 
 ## [0.4.0] - 2026-10-11
@@ -211,8 +214,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.4.0...v0.5.0
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.4.0...v0.5.1
 [0.4.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.3.5...v0.3.6

@@ -69,8 +69,10 @@ jobs:
             cp assets/icon.svg "out/${name}/cursor-inner.svg"
             cp $docs "out/${name}/"
             tar -C out -czf "out/${name}.tar.gz" "${name}"
-            cp "dist/${name}" "out/${name}"
+            # Remove the staging directory first: copying onto an existing directory would put
+            # the binary inside it and the rm would then delete it.
             rm -r "out/${name}"
+            cp "dist/${name}" "out/${name}"
           done
 
       - name: Generate SBOM
