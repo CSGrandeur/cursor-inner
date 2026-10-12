@@ -7,6 +7,21 @@ import (
 	"testing"
 )
 
+func TestTitleMark(t *testing.T) {
+	SetTitleMark(" local ")
+	t.Cleanup(func() { SetTitleMark("") })
+	if got := Title("v0.5.3"); got != "cursor-inner local v0.5.3" {
+		t.Fatalf("Title with mark = %q", got)
+	}
+	if got := Title(""); got != "cursor-inner local" {
+		t.Fatalf("Title with mark and no version = %q", got)
+	}
+	SetTitleMark("")
+	if got := Title("v0.5.3"); got != "cursor-inner v0.5.3" {
+		t.Fatalf("Title after clearing mark = %q", got)
+	}
+}
+
 func TestTitle(t *testing.T) {
 	for in, want := range map[string]string{
 		"v0.3.7":               "cursor-inner v0.3.7",

@@ -12,6 +12,33 @@ import (
 	"time"
 )
 
+func TestSyncRefusesSystemHostsAndPort443(t *testing.T) {
+	f := New(func(context.Context, string, string) (net.Conn, error) {
+		t.Fatal("dialed")
+		return nil, io.EOF
+	})
+	if err := f.Sync(true); err != errDirectForwardRefused {
+		t.Fatalf("Sync: %v", err)
+	}
+	if err := f.Listen(); err != errDirectForwardRefused {
+		t.Fatalf("Listen: %v", err)
+	}
+	if f.ln != nil {
+		t.Fatal("listener opened")
+	}
+	// 只换端口、仍指向系统 hosts，也不许。
+	f.port = "0"
+	if err := f.Sync(true); err != errDirectForwardRefused {
+		t.Fatalf("Sync with ephemeral port: %v", err)
+	}
+	// 只换文件、仍听 443，也不许。
+	f.port = "443"
+	f.path = filepath.Join(t.TempDir(), "hosts")
+	if err := f.Listen(); err != errDirectForwardRefused {
+		t.Fatalf("Listen on 443: %v", err)
+	}
+}
+
 func TestServerNameFromHello(t *testing.T) {
 	client, server := net.Pipe()
 	defer server.Close()

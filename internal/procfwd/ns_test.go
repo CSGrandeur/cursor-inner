@@ -16,6 +16,8 @@ import (
 // TestVirtualHostsForward 在独立的网络和 hosts 挂载里跑。
 // 普通 go test 会跳过，避免改本机的 /etc/hosts。
 func TestVirtualHostsForward(t *testing.T) {
+	// 这条会改挂载里的 hosts 并听 443。产品上已经禁止，不再提供打开它的开关。
+	t.Skip("禁止写 hosts 并听 443：mirrored WSL 上会挂死 WSLService")
 	if os.Getenv("PROCFWD_NS") != "1" {
 		t.Skip("需要 PROCFWD_NS=1，并且跑在独立的网络和 hosts 挂载里")
 	}

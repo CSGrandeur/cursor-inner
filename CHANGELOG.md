@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-10-12
+
+### Fixed
+
+- Closing cursor-inner no longer takes down WSL. On Windows it ended Cursor with `taskkill /F /T`, and `/T` also killed `wsl.exe` that Cursor had started for Remote WSL. Several windows then called `wsl.exe` again at once, and the WSL service stopped answering (`Wsl/Service/E_UNEXPECTED`). Cursor itself is still closed; the WSL processes are left alone.
+- The unused hosts-file redirect cannot be turned back on. Writing Cursor host names into the system hosts file and listening on port 443 loops on a mirrored WSL network and hangs the WSL service. That path now refuses to run unless a test points it at its own hosts file and a port other than 443.
+
 ## [0.5.4] - 2026-10-12
 
 ### Added
@@ -266,7 +273,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...v0.5.2

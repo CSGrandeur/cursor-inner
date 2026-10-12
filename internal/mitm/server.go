@@ -164,7 +164,8 @@ func (s *Server) stopDirectLocked() {
 	s.directNote = i18n.Text{}
 }
 
-// SyncDirect 不再改系统 hosts，也不听 443。Cursor 走 settings.json 里的本机代理，和 0.2.0 一样。
+// SyncDirect 不改系统 hosts，也不听 443。即使有人把这里接回 procfwd.Sync，默认参数也会被拒绝。
+// Cursor 走 settings.json 里的本机代理，和 0.2.0 一样。
 func (s *Server) SyncDirect() {}
 
 // Release 停止接受新连接，已建立的连接（包括正在流式返回的回合）继续由本进程服务。自更新交接用。

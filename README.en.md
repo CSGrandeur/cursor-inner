@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><sub>Your models in Cursor · official models unchanged · Cursor and Grok through your proxy</sub></p>
+<p align="center"><sub>Your models in Cursor's Agent · Cursor, Grok and Codex through your proxy</sub></p>
 
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
@@ -24,7 +24,9 @@
 
 <br>
 
-cursor-inner runs on your machine. It adds the OpenAI Chat or Anthropic endpoints you configure to Cursor's model list. When you pick one of them, your machine calls that endpoint; when you pick an official model, the request goes to Cursor unchanged. Cursor and Grok can send their traffic through the proxy you set. It works on Windows, macOS and Linux, and the settings page is in English and Chinese.
+cursor-inner runs on your computer. A custom model appears in Cursor's list and uses Cursor's Agent to read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Official Cursor models are still sent to Cursor.
+
+Cursor, Grok and Codex are taken over so they use the proxy you enter. A system proxy often fails to hold these three, and people then turn on a system-wide TUN, which carries other programs along. You do not have to change the system proxy or enable a system TUN, and other programs keep their own route. On quit, or if cursor-inner exits unexpectedly, Cursor's previous proxy settings are written back. It runs on Windows, macOS and Linux, and the settings page can be switched between Chinese and English.
 
 <p align="center">
   <img src="docs/images/window-en-light.png" alt="cursor-inner settings page" width="92%">
@@ -37,8 +39,8 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 - **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list.
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
 - **Agent work.** A custom model can read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Edits show a diff and are written after you accept them.
-- **Your proxy.** One address. Cursor and Grok send their traffic through it, or only official hosts such as Grok, x.ai, Cursor and OpenAI do, and everything else connects directly. Each custom model chooses whether to use the proxy.
-- **Official hosts stay on the proxy.** On Windows, TUN mode or Strict mode also sends official hosts that the apps dial directly. If either mode cannot start, the normal proxy keeps working.
+- **Your proxy.** Takes over only Cursor, Grok and Codex. One address, and they use it. You do not change the system proxy, or turn on a system-wide TUN that would carry other programs with it. You can also send only official hosts such as Grok, x.ai, Cursor and OpenAI through the proxy, and connect directly to everything else. Each custom model chooses whether to use the proxy. Codex is not started if it is not already running.
+- **If a connection still bypasses.** After takeover, if one of the three still dials an official host directly, TUN mode or Strict mode inside cursor-inner covers those official hosts only. Other programs on the system are left alone. If either mode cannot start, takeover continues.
 - **Update and quit.** Update in one click; Cursor and Grok keep running. Quitting, or an unexpected exit, writes Cursor's previous proxy settings back.
 
 ## Installation
@@ -55,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.4`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.5`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -216,10 +218,8 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.4 ./build.sh linux
+VERSION=v0.5.5 ./build.sh linux
 ```
-
-Pushing a `v*.*.*` tag makes GitHub Actions publish a release from the matching entry in [CHANGELOG.md](CHANGELOG.md).
 
 ## Acknowledgements
 

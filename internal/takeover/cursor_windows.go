@@ -9,8 +9,15 @@ import (
 	"strings"
 )
 
+// cursorKillArgs 只结束 Cursor.exe 自己。
+// 不能加 /T：Remote WSL 的 wsl.exe 是 Cursor 的子进程，/T 会把它一起强制结束。
+// 多个窗口同时再去拉起 wsl.exe 时，mirrored 模式下的 WSLService 会返回 E_UNEXPECTED（灾难性故障）。
+func cursorKillArgs() []string {
+	return []string{"/F", "/IM", "Cursor.exe"}
+}
+
 func TerminateCursor() error {
-	out, err := exec.Command("taskkill", "/F", "/T", "/IM", "Cursor.exe").CombinedOutput()
+	out, err := exec.Command("taskkill", cursorKillArgs()...).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err == nil {
 		return nil

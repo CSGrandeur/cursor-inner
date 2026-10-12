@@ -38,12 +38,26 @@ func (f *Forwarder) file() string {
 	return hostsPath()
 }
 
+// errDirectForwardRefused：产品路径禁止把 Cursor 的名字写进系统 hosts 并在 443 上接。
+// mirrored WSL 会把这些名字解析到 Windows 的 127.0.0.1，转发再解析回自己，连接堆积后 WSLService 挂死。
+var errDirectForwardRefused = i18n.E("不会修改系统 hosts，也不会在 443 上转发", "Refusing to edit the system hosts file or listen on port 443")
+
+// isolated 只给单测：hosts 文件不是系统那份，端口也不是 443。两条都满足才允许打开转发。
+func (f *Forwarder) isolated() bool {
+	if f.path == "" || f.path == hostsPath() {
+		return false
+	}
+	return f.port != "" && f.port != "443"
+}
+
 // Sync 在自定义代理开着时写上 hosts 并开始转发，关掉时删掉。
-// Sync 写 hosts 并听 443。当前接管路径不调用；保留给测试，以及以后用户明确要求再覆盖直连子进程。
-// 在 mirrored 网络模式的 WSL 上，它曾让 WSLService 挂死。
+// 默认配置直接拒绝：不写系统 hosts，不听 443。关掉时仍会删掉旧版本留下的标记。
 func (f *Forwarder) Sync(on bool) error {
 	if !on {
 		return f.Stop()
+	}
+	if !f.isolated() {
+		return errDirectForwardRefused
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -62,8 +76,11 @@ func (f *Forwarder) Sync(on bool) error {
 	return nil
 }
 
-// Listen 只在本机 443 接着。hosts 还指着本机、又删不掉时用它，避免这几个名字中断。
+// Listen 只在测试用的临时端口上接着。系统 hosts 或 443 直接拒绝。
 func (f *Forwarder) Listen() error {
+	if !f.isolated() {
+		return errDirectForwardRefused
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.listenLocked()

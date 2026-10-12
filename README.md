@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><sub>在 Cursor 里用自己的模型 · 官方模型照常 · Cursor 和 Grok 走你的代理</sub></p>
+<p align="center"><sub>自己的模型用 Cursor 的 Agent · Cursor、Grok、Codex 走你的代理</sub></p>
 
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
@@ -24,7 +24,9 @@
 
 <br>
 
-cursor-inner 跑在你自己的电脑上。它把你配置的 OpenAI Chat 或 Anthropic 接口加进 Cursor 的模型列表：选这些模型时，由本机调用你的接口；选官方模型时，请求原样发往 Cursor。Cursor 和 Grok 的联网可以走你填的代理。支持 Windows、macOS 和 Linux，配置页有中文和英文。
+cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列表里，并用 Cursor 的 Agent 读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。选 Cursor 自带的模型时，请求仍发给 Cursor。
+
+接管 Cursor、Grok 和 Codex，让它们走你填的代理。系统代理往往兜不住这三个，有人便打开系统 TUN，其它程序也被带上。因此不必再改系统代理，也不必开系统 TUN，其它程序仍走原来的路。退出或意外结束时，Cursor 原来的代理设置会写回去。可用于 Windows、macOS 和 Linux，配置页可以切换中文和英文。
 
 <p align="center">
   <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
@@ -37,8 +39,8 @@ cursor-inner 跑在你自己的电脑上。它把你配置的 OpenAI Chat 或 An
 - **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
 - **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
-- **走你的代理。** 只填一个地址。Cursor 和 Grok 的联网走它；也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。
-- **官方地址不旁路。** Windows 上可以开 TUN 模式或严格模式，让应用自己直连的官方地址也进代理。开不了就继续用普通代理。
+- **走你的代理。** 只接管 Cursor、Grok 和 Codex，填一个地址即可。不必为了这三个去改系统代理，也不必开系统 TUN 把其它程序一起带上。也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。没在运行的 Codex 不会被拉起。
+- **仍有直连时。** 接管之后，若这三个里还有个别官方连接不走代理，可在 cursor-inner 里打开 TUN 模式或严格模式，只覆盖官方地址，不动系统里其它程序。开不了就继续用接管。
 - **更新和退出。** 有新版本时一键更新，Cursor 和 Grok 不用重启。退出或意外结束都会把 Cursor 原来的代理设置写回去。
 
 ## 安装
@@ -55,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.4`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.5`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -216,10 +218,8 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.4 ./build.sh linux
+VERSION=v0.5.5 ./build.sh linux
 ```
-
-推送 `v*.*.*` 标签后，GitHub Actions 会按 [CHANGELOG.md](CHANGELOG.md) 发布 Release。
 
 ## 致谢
 
