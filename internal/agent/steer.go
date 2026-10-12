@@ -38,7 +38,23 @@ func (s *Session) deliverAction(action *cursorpb.ConversationAction) {
 	switch {
 	case action.GetUserMessageAction() != nil:
 		message := action.GetUserMessageAction()
-		item = steer{kind: "break", user: message.GetUserMessage(), ctx: message.GetRequestContext()}
+		ctx := message.GetRequestContext()
+		var items []steer
+		for _, pre := range message.GetPrependUserMessages() {
+			if strings.TrimSpace(pre.GetText()) == "" {
+				continue
+			}
+			items = append(items, steer{kind: "break", user: pre, ctx: ctx})
+		}
+		if user := message.GetUserMessage(); user != nil && (strings.TrimSpace(user.GetText()) != "" || len(items) == 0) {
+			items = append(items, steer{kind: "break", user: user, ctx: ctx})
+		}
+		if len(items) == 0 {
+			return
+		}
+		slog.Debug("对话动作", "request", s.RequestID, "kind", "break", "n", len(items))
+		s.enqueue(items...)
+		return
 	case action.GetInjectContextAction() != nil:
 		inject := action.GetInjectContextAction()
 		if inject.GetExpectedRunId() != "" && inject.GetExpectedRunId() != s.RequestID {
@@ -65,13 +81,49 @@ func (s *Session) deliverAction(action *cursorpb.ConversationAction) {
 		item = steer{kind: "insert", text: text}
 	}
 	slog.Debug("对话动作", "request", s.RequestID, "kind", item.kind)
-	if item.injectionID != "" {
-		s.emit(injectionQueued(item.injectionID))
+	s.enqueue(item)
+}
+
+func (s *Session) enqueue(items ...steer) {
+	if len(items) == 0 {
+		return
 	}
+	for _, item := range items {
+		if item.injectionID != "" {
+			s.emit(injectionQueued(item.injectionID))
+		}
+	}
+	s.queueMu.Lock()
+	s.queued = append(s.queued, items...)
+	s.queueMu.Unlock()
 	select {
-	case s.steer <- item:
+	case s.steer <- struct{}{}:
 	default:
 	}
+}
+
+// pullQueued 把已经到达的消息按到达顺序收下。返回值表示其中有新的用户消息，当前工具应中止。
+func (s *Session) pullQueued() bool {
+	for {
+		select {
+		case <-s.steer:
+		default:
+			goto held
+		}
+	}
+held:
+	s.queueMu.Lock()
+	items := s.queued
+	s.queued = nil
+	s.queueMu.Unlock()
+	broke := false
+	for _, item := range items {
+		s.hold(item)
+		if item.kind == "break" {
+			broke = true
+		}
+	}
+	return broke
 }
 
 func actionText(action *cursorpb.ConversationAction) string {
@@ -100,33 +152,15 @@ func (s *Session) hold(item steer) {
 	switch item.kind {
 	case "insert":
 		s.inserts = append(s.inserts, item.text)
-	case "steer":
-		s.steers = append(s.steers, item)
+	case "steer", "break":
+		s.pending = append(s.pending, item)
 	case "summarize":
 		s.wantSummary = true
-	case "break":
-		s.breakUser = item.user
-		s.breakCtx = item.ctx
 	}
-}
-
-func (s *Session) turnContext() *cursorpb.RequestContext {
-	if s.breakCtx != nil {
-		return s.breakCtx
-	}
-	return s.reqCtx
 }
 
 func (s *Session) drainSteer(send Emit, messages []provider.Message) ([]provider.Message, bool, error) {
-	for {
-		select {
-		case item := <-s.steer:
-			s.hold(item)
-		default:
-			goto drained
-		}
-	}
-drained:
+	s.pullQueued()
 	steered := false
 	for _, text := range s.inserts {
 		messages = append(messages, provider.Message{Role: "user", Content: text})
@@ -135,9 +169,13 @@ drained:
 		}
 	}
 	s.inserts = nil
-	for _, item := range s.steers {
+	for _, item := range s.pending {
 		steered = true
-		messages = append(messages, userTurn(item.user, s.reqCtx))
+		ctx := item.ctx
+		if ctx == nil {
+			ctx = s.reqCtx
+		}
+		messages = append(messages, userTurn(item.user, ctx))
 		if err := send(appendedUser(item.user)); err != nil {
 			return messages, steered, err
 		}
@@ -147,16 +185,7 @@ drained:
 			}
 		}
 	}
-	s.steers = nil
-	if s.breakUser != nil {
-		steered = true
-		messages = append(messages, userTurn(s.breakUser, s.turnContext()))
-		if err := send(appendedUser(s.breakUser)); err != nil {
-			return messages, steered, err
-		}
-		s.breakUser = nil
-		s.breakCtx = nil
-	}
+	s.pending = nil
 	return messages, steered, nil
 }
 

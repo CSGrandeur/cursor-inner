@@ -134,17 +134,267 @@ func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteClos
 		}
 		return
 	}
-	noteRaw(toNet, buffered)
+	s.watchOfficial(client, up, buffered, runID, requestID, toNet, fromNet)
+}
+
+// watchOfficial 把已经判定为官方的连接继续对拼，但后到的每一轮仍要看模型。
+// 新的 run 是自定义模型时，这一轮和它前面还没送出的 meta 留在本机，不写给上游。
+// 已经在走官方的轮次继续原样转发。正文里出现过模型 id 不算这一轮要本地回答。
+func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requestID string, toNet, fromNet io.WriteCloser) {
 	if id := leakedModel(buffered, s.entries()); id != "" {
 		slog.Error("自定义模型的对话没有留在本机，已断开，不交给官方", "model", id)
 		return
 	}
-	if len(buffered) > 0 {
-		if _, err := up.Write(buffered); err != nil {
+	var upMu, clientMu sync.Mutex
+	writeUp := func(p []byte) error {
+		if len(p) == 0 {
+			return nil
+		}
+		upMu.Lock()
+		defer upMu.Unlock()
+		noteRaw(toNet, p)
+		_, err := up.Write(p)
+		return err
+	}
+	writeClient := func(p []byte) error {
+		if len(p) == 0 {
+			return nil
+		}
+		clientMu.Lock()
+		defer clientMu.Unlock()
+		noteRaw(fromNet, p)
+		_, err := client.Write(p)
+		return err
+	}
+	if err := writeUp(buffered); err != nil {
+		return
+	}
+	go func() {
+		for {
+			op, payload, raw, err := readWSFrame(up)
+			if err != nil {
+				return
+			}
+			if op == 0x9 {
+				pong := wsFrameBytes(0xA, payload)
+				_ = writeUp(pong)
+				continue
+			}
+			if op == 0x8 {
+				return
+			}
+			if err := writeClient(raw); err != nil {
+				return
+			}
+		}
+	}()
+	held := map[string]*heldFrames{}
+	metaReq := map[string]string{}
+	localRun := map[string]struct{}{}
+	officialRun := map[string]struct{}{}
+	markRun(officialRun, runID, requestID)
+	var cancelLocal []context.CancelFunc
+	defer func() {
+		for _, cancel := range cancelLocal {
+			cancel()
+		}
+	}()
+	for {
+		op, payload, raw, err := readWSFrame(client)
+		if err != nil {
 			return
 		}
+		if op == 0x8 {
+			return
+		}
+		if op == 0x9 {
+			if err := writeUp(raw); err != nil {
+				_ = writeClient(wsFrameBytes(0xA, payload))
+			}
+			continue
+		}
+		if op != 0x1 && op != 0x2 {
+			_ = writeUp(raw)
+			continue
+		}
+		frame := protox.ClassifyAgentPayload(payload)
+		switch frame.Kind {
+		case "meta":
+			if runMarked(localRun, frame) {
+				continue
+			}
+			if runMarked(officialRun, frame) {
+				_ = writeUp(raw)
+				continue
+			}
+			if frame.RunID != "" && frame.RequestID != "" {
+				metaReq[frame.RunID] = frame.RequestID
+			}
+			stashHeld(held, frame, raw)
+		case "agent":
+			if len(frame.Message) == 0 || s.hub == nil {
+				_ = writeUp(raw)
+				continue
+			}
+			var msg cursorpb.AgentClientMessage
+			if proto.Unmarshal(frame.Message, &msg) != nil {
+				_ = writeUp(raw)
+				continue
+			}
+			id := frame.RequestID
+			if id == "" {
+				id = frame.RunID
+			}
+			route, session, start := s.hub.Client(id, &msg)
+			if msg.GetRunRequest() != nil {
+				slog.Debug("Agents", "model", route.ModelID, "where", where(session != nil))
+			}
+			if session != nil && start {
+				ackRun, ackReq := ackIDs(id, frame, metaReq)
+				markRun(localRun, id, ackRun, ackReq)
+				dropHeld(held, frame)
+				cancelLocal = append(cancelLocal, s.serveLocalBeside(writeClient, session, id, ackRun, ackReq))
+				continue
+			}
+			if session != nil || route.Local {
+				markRun(localRun, id, frame.RunID, frame.RequestID)
+				dropHeld(held, frame)
+				continue
+			}
+			markRun(officialRun, id, frame.RunID, frame.RequestID)
+			for _, earlier := range dropHeld(held, frame) {
+				_ = writeUp(earlier)
+			}
+			_ = writeUp(raw)
+		default:
+			_ = writeUp(raw)
+		}
 	}
-	splice(client, up, toNet, fromNet)
+}
+
+type heldFrames struct {
+	raws [][]byte
+}
+
+func stashHeld(held map[string]*heldFrames, frame protox.AgentPayload, raw []byte) {
+	keys := frameKeys(frame)
+	var box *heldFrames
+	for _, key := range keys {
+		if held[key] != nil {
+			box = held[key]
+			break
+		}
+	}
+	if box == nil {
+		box = &heldFrames{}
+	}
+	box.raws = append(box.raws, raw)
+	for _, key := range keys {
+		held[key] = box
+	}
+}
+
+func dropHeld(held map[string]*heldFrames, frame protox.AgentPayload) [][]byte {
+	var box *heldFrames
+	for _, key := range frameKeys(frame) {
+		if held[key] != nil {
+			box = held[key]
+			break
+		}
+	}
+	if box == nil {
+		return nil
+	}
+	for key, value := range held {
+		if value == box {
+			delete(held, key)
+		}
+	}
+	return box.raws
+}
+
+func ackIDs(id string, frame protox.AgentPayload, metaReq map[string]string) (runID, requestID string) {
+	runID = frame.RunID
+	if runID == "" {
+		runID = id
+	}
+	requestID = metaReq[runID]
+	if requestID == "" {
+		requestID = frame.RequestID
+	}
+	if requestID == "" {
+		requestID = runID
+	}
+	return runID, requestID
+}
+
+func frameKeys(frame protox.AgentPayload) []string {
+	var keys []string
+	if frame.RunID != "" {
+		keys = append(keys, frame.RunID)
+	}
+	if frame.RequestID != "" && frame.RequestID != frame.RunID {
+		keys = append(keys, frame.RequestID)
+	}
+	return keys
+}
+
+func markRun(set map[string]struct{}, ids ...string) {
+	for _, id := range ids {
+		if id != "" {
+			set[id] = struct{}{}
+		}
+	}
+}
+
+func runMarked(set map[string]struct{}, frame protox.AgentPayload) bool {
+	for _, key := range frameKeys(frame) {
+		if _, ok := set[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// serveLocalBeside 在还连着官方的那条连接上回答后到的自定义模型。hello 已经完成，不再发第二次。
+func (s *Server) serveLocalBeside(writeClient func([]byte) error, session *agent.Session, id, runID, requestID string) context.CancelFunc {
+	s.countLocal()
+	if runID == "" {
+		runID = id
+	}
+	if requestID == "" {
+		requestID = runID
+	}
+	var seq uint64
+	var seqMu sync.Mutex
+	emit := func(m *cursorpb.AgentServerMessage) error {
+		raw, err := proto.Marshal(m)
+		if err != nil {
+			return err
+		}
+		seqMu.Lock()
+		n := seq
+		seq++
+		seqMu.Unlock()
+		return writeClient(wsFrameBytes(0x2, protox.EncodeAgentServer(runID, n, raw)))
+	}
+	_ = writeClient(wsFrameBytes(0x2, protox.EncodeAgentRunAccepted(runID, requestID)))
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer s.hub.Done(id)
+		d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
+		session.Proxy = s.proxy()
+		session.Web = s.webDial
+		if err == nil {
+			err = session.Run(ctx, d, emit)
+		}
+		if err != nil && ctx.Err() == nil {
+			_ = emit(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_InteractionUpdate{InteractionUpdate: &cursorpb.InteractionUpdate{
+				Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: provider.Explain(err)}},
+			}}})
+		}
+	}()
+	return cancel
 }
 
 func (s *Server) readAgentDecision(client, up net.Conn) (buffered []byte, session *agent.Session, id, runID, requestID string, helloRelayed, start bool) {

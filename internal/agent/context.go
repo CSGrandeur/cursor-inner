@@ -18,7 +18,33 @@ func userTurn(user *cursorpb.UserMessage, ctx *cursorpb.RequestContext) provider
 	if extra := selectedContext(user.GetSelectedContext()); extra != "" {
 		text += "\n\n" + extra
 	}
-	return provider.Message{Role: "user", Content: text, Images: selectedImages(user.GetSelectedContext())}
+	return provider.Message{Role: "user", Content: text, Shown: user.GetText(), Images: selectedImages(user.GetSelectedContext())}
+}
+
+// visibleUserText 是对话记录里该显示的原文。包装只留在给模型的 Content 里。
+func visibleUserText(message provider.Message) string {
+	if message.Shown != "" {
+		return message.Shown
+	}
+	return unwrapHarness(message.Content)
+}
+
+func unwrapHarness(content string) string {
+	const open = "<user_query>\n"
+	const close = "\n</user_query>"
+	if !strings.HasPrefix(content, "<timestamp>") {
+		return content
+	}
+	start := strings.Index(content, open)
+	if start < 0 {
+		return content
+	}
+	rest := content[start+len(open):]
+	end := strings.Index(rest, close)
+	if end < 0 {
+		return content
+	}
+	return rest[:end]
 }
 
 func selectedContext(selected *cursorpb.SelectedContext) string {

@@ -232,7 +232,7 @@ func toolNames(messages []provider.Message) map[string]string {
 }
 
 func putTurn(put func([]byte) ([]byte, error), turn []provider.Message, requestID string) ([]byte, error) {
-	user := &cursorpb.UserMessage{Text: turn[0].Content}
+	user := &cursorpb.UserMessage{Text: visibleUserText(turn[0])}
 	userRaw, err := proto.Marshal(user)
 	if err != nil {
 		return nil, err
@@ -383,7 +383,7 @@ func reusableTurn(prev *cursorpb.ConversationStateStructure, blobs map[string][]
 		return nil, false
 	}
 	var user cursorpb.UserMessage
-	if proto.Unmarshal(userRaw, &user) != nil || user.GetText() != turn[0].Content {
+	if proto.Unmarshal(userRaw, &user) != nil || user.GetText() != visibleUserText(turn[0]) {
 		return nil, false
 	}
 	if countSteps(turn) > len(agentTurn.GetSteps()) {
@@ -482,11 +482,16 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 	if err := json.Unmarshal(raw, &doc); err != nil || doc.Role == "" {
 		return provider.Message{}, 0, fmt.Errorf("checkpoint: root is not a Cursor message")
 	}
-	if len(doc.Content) > 0 && doc.Content[0] == '"' {
-		return provider.Message{}, 0, fmt.Errorf("checkpoint: root content is not a Cursor content array")
-	}
 	var parts []wirePart
-	if len(doc.Content) > 0 && string(doc.Content) != "null" {
+	if len(doc.Content) > 0 && doc.Content[0] == '"' {
+		var text string
+		if err := json.Unmarshal(doc.Content, &text); err != nil {
+			return provider.Message{}, 0, fmt.Errorf("checkpoint: root content is not a Cursor content array")
+		}
+		if text != "" {
+			parts = []wirePart{{Type: "text", Text: text}}
+		}
+	} else if len(doc.Content) > 0 && string(doc.Content) != "null" {
 		if err := json.Unmarshal(doc.Content, &parts); err != nil {
 			return provider.Message{}, 0, fmt.Errorf("checkpoint: root content is not a Cursor content array")
 		}

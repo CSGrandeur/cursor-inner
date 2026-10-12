@@ -37,10 +37,12 @@ type Message struct {
 	Truncated          bool       `json:"truncated,omitempty"`
 	Images             []Image    `json:"images,omitempty"`
 	// Card 是这条工具结果在 Cursor 里的卡片。不发给模型接口。
-	Card             *cursorpb.ToolCall `json:"-"`
-	PromptTokens     int                `json:"prompt_tokens,omitempty"`
-	CompletionTokens int                `json:"completion_tokens,omitempty"`
-	CacheTokens      int                `json:"cache_tokens,omitempty"`
+	Card *cursorpb.ToolCall `json:"-"`
+	// Shown 是用户原文。Content 里可能包了时间戳和 user_query，那只给模型看，不能写进对话记录。
+	Shown            string `json:"-"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	CacheTokens      int    `json:"cache_tokens,omitempty"`
 }
 
 // Image 是用户消息里附带的图片。

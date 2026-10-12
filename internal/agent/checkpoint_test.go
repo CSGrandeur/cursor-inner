@@ -34,6 +34,75 @@ func TestReadImageSurvivesTheCheckpoint(t *testing.T) {
 	}
 }
 
+func TestCheckpointKeepsHarnessOffTheTranscript(t *testing.T) {
+	msg := userTurn(&cursorpb.UserMessage{Text: "你好"}, nil)
+	if !strings.Contains(msg.Content, "<timestamp>") || !strings.Contains(msg.Content, "<user_query>\n你好\n</user_query>") {
+		t.Fatalf("model prompt lost the wrapper: %s", msg.Content)
+	}
+	messages := []provider.Message{
+		msg,
+		{Role: "assistant", Content: "在"},
+	}
+	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs := map[string][]byte{}
+	for _, blob := range built.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	var wrapper cursorpb.ConversationTurnStructure
+	if err := proto.Unmarshal(blobs[string(built.State.GetTurns()[0])], &wrapper); err != nil {
+		t.Fatal(err)
+	}
+	var user cursorpb.UserMessage
+	if err := proto.Unmarshal(blobs[string(wrapper.GetAgentConversationTurn().GetUserMessage())], &user); err != nil {
+		t.Fatal(err)
+	}
+	if user.GetText() != "你好" || strings.Contains(user.GetText(), "timestamp") || strings.Contains(user.GetText(), "user_query") {
+		t.Fatalf("transcript text %q", user.GetText())
+	}
+	restored, err := restoreMessages(built.State, blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored) < 1 || !strings.Contains(restored[0].Content, "<user_query>") {
+		t.Fatal("model history should keep the wrapper")
+	}
+	again, err := writeCheckpoint("system", "req", []provider.Message{{Role: "user", Content: msg.Content}, {Role: "assistant", Content: "在"}}, 0, 0, 0, "", 0, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs = map[string][]byte{}
+	for _, blob := range again.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	if err := proto.Unmarshal(blobs[string(again.State.GetTurns()[0])], &wrapper); err != nil {
+		t.Fatal(err)
+	}
+	if err := proto.Unmarshal(blobs[string(wrapper.GetAgentConversationTurn().GetUserMessage())], &user); err != nil {
+		t.Fatal(err)
+	}
+	if user.GetText() != "你好" {
+		t.Fatalf("restored wrapper leaked into the transcript: %q", user.GetText())
+	}
+}
+
+func TestStringRootContentStaysAMessage(t *testing.T) {
+	state := &cursorpb.ConversationStateStructure{RootPromptMessagesJson: [][]byte{[]byte("sys"), []byte("user")}}
+	blobs := map[string][]byte{
+		"sys":  []byte(`{"role":"system","content":"You are an AI coding assistant"}`),
+		"user": []byte(`{"role":"user","content":"ping"}`),
+	}
+	got, err := restoreMessages(state, blobs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Role != "user" || got[0].Content != "ping" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestTurnBlobIsACursorTurn(t *testing.T) {
 	messages := []provider.Message{
 		{Role: "user", Content: "第一句问了什么"},

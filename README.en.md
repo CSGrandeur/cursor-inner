@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.5`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.6`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -218,7 +218,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.5 ./build.sh linux
+VERSION=v0.5.6 ./build.sh linux
 ```
 
 ## Acknowledgements

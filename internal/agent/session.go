@@ -66,11 +66,11 @@ type Session struct {
 	dial             dialer.Func
 	mcp              []*cursorpb.McpToolDefinition
 	early            map[uint32]*cursorpb.ExecClientMessage
-	steer            chan steer
+	steer            chan struct{}
+	queueMu          sync.Mutex
+	queued           []steer
 	inserts          []string
-	steers           []steer
-	breakUser        *cursorpb.UserMessage
-	breakCtx         *cursorpb.RequestContext
+	pending          []steer
 	reqCtx           *cursorpb.RequestContext
 	wantSummary      bool
 	autoSummarized   bool
@@ -105,7 +105,7 @@ func newSession(requestID string, model config.Model, run *cursorpb.AgentRunRequ
 		stopped:   make(chan struct{}, 1),
 		argFails:  map[string]int{},
 		early:     map[uint32]*cursorpb.ExecClientMessage{},
-		steer:     make(chan steer, 8),
+		steer:     make(chan struct{}, 1),
 		loops:     newLoopTracker(),
 	}
 }
@@ -358,6 +358,12 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	summarizeOnly := s.run.GetAction().GetSummarizeAction() != nil
 	user := action.GetUserMessage()
 	if !summarizeOnly && user != nil {
+		for _, pre := range action.GetPrependUserMessages() {
+			if strings.TrimSpace(pre.GetText()) == "" {
+				continue
+			}
+			messages = append(messages, userTurn(pre, reqCtx))
+		}
 		messages = append(messages, userTurn(user, reqCtx))
 	}
 	s.reqCtx = reqCtx
@@ -515,13 +521,9 @@ next:
 					for _, call := range reply.ToolCalls[i-1:] {
 						messages = append(messages, provider.Message{Role: "tool", ToolCallID: call.ID, Content: "Interrupted because the user sent a new message.", IsError: true})
 					}
-					if s.breakUser != nil {
-						messages = append(messages, userTurn(s.breakUser, s.turnContext()))
-						if err := send(appendedUser(s.breakUser)); err != nil {
-							return err
-						}
-						s.breakUser = nil
-						s.breakCtx = nil
+					messages, _, err = s.drainSteer(send, messages)
+					if err != nil {
+						return err
 					}
 					continue next
 				}
@@ -1131,9 +1133,8 @@ func (s *Session) await(ctx context.Context, id uint32) (*cursorpb.ExecClientMes
 				return msg, nil
 			}
 			s.early[msg.GetId()] = msg
-		case item := <-s.steer:
-			s.hold(item)
-			if item.kind == "break" {
+		case <-s.steer:
+			if s.pullQueued() {
 				return nil, errBreak
 			}
 		case <-ctx.Done():

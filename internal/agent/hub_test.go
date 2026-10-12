@@ -652,6 +652,79 @@ func TestBreakReplacesTheOpenTool(t *testing.T) {
 	}
 }
 
+func TestEarlierMessageStaysBeforeTheLaterOne(t *testing.T) {
+	fm := &fakeModel{responses: []string{
+		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),
+		sse(`{"choices":[{"delta":{"content":"stopped"}}]}`),
+	}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, nil)
+	if _, err := hub.Bidi(bidi(t, "ord", runRequest("mine", "conv-ord", "read it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "ord")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan *cursorpb.AgentServerMessage, 32)
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+			out <- m
+			return nil
+		})
+	}()
+	for {
+		select {
+		case m := <-out:
+			if m.GetExecServerMessage().GetReadArgs() == nil {
+				continue
+			}
+			note := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
+				Action: &cursorpb.ConversationAction_InjectContextAction{InjectContextAction: &cursorpb.InjectContextAction{
+					InjectionId:   "inj-early",
+					ExpectedRunId: "ord",
+					Payload: &cursorpb.InjectContextAction_UserContext{UserContext: &cursorpb.UserContextInjection{UserMessage: &cursorpb.UserMessage{
+						Text: "这版不能通过", MessageId: "msg-early",
+					}}},
+				}},
+			}}}
+			if _, err := hub.Bidi(bidi(t, "ord", note)); err != nil {
+				t.Fatal(err)
+			}
+			action := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
+				Action: &cursorpb.ConversationAction_UserMessageAction{UserMessageAction: &cursorpb.UserMessageAction{
+					PrependUserMessages: []*cursorpb.UserMessage{{Text: "先看布局", MessageId: "msg-pre"}},
+					UserMessage:         &cursorpb.UserMessage{Text: "停止工作", MessageId: "msg-stop"},
+				}},
+			}}}
+			if _, err := hub.Bidi(bidi(t, "ord", action)); err != nil {
+				t.Fatal(err)
+			}
+		case err := <-done:
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fm.requests) != 2 {
+				t.Fatalf("requests=%d", len(fm.requests))
+			}
+			body := fm.requests[1]
+			early := strings.Index(body, "这版不能通过")
+			pre := strings.Index(body, "先看布局")
+			stop := strings.Index(body, "停止工作")
+			if early < 0 || pre < 0 || stop < 0 || !(early < pre && pre < stop) {
+				t.Fatalf("order early=%d pre=%d stop=%d\n%s", early, pre, stop, body)
+			}
+			return
+		case <-ctx.Done():
+			t.Fatal("ordered follow-up did not finish")
+		}
+	}
+}
+
 func TestSteerKeepsTheOpenTool(t *testing.T) {
 	fm := &fakeModel{responses: []string{
 		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`),

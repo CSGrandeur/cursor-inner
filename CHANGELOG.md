@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-12
+
+### Fixed
+
+- The chat transcript shows the text you typed. The timestamp and `user_query` tags are sent only to the model, and no longer appear in the message list.
+- Messages sent while a tool is still running stay in the order they arrived. After you tell the model to stop, an earlier message does not start the work again.
+- In one Agents chat, switching back to a custom model after an official model has answered stays on your model. The official turn is still forwarded as-is. Previously the rest of that connection was handed to Cursor, and the next custom-model turn came back as AI Model Not Found.
+
 ## [0.5.5] - 2026-10-12
 
 ### Fixed
@@ -273,7 +281,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...v0.5.3
