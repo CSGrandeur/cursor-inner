@@ -4,7 +4,6 @@ package grokbot
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -21,7 +20,7 @@ func windowsCandidates() []string {
 }
 
 func whereGrok() (string, error) {
-	out, err := exec.Command("where.exe", "Grok Bot.exe").Output()
+	out, err := Quiet("where.exe", "Grok Bot.exe").Output()
 	if err != nil {
 		return "", err
 	}

@@ -4,10 +4,10 @@ package codexbot
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"cursor-inner/internal/grokbot"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -28,7 +28,7 @@ func desktopLookups() []func() (string, error) {
 
 func appxCodex() (string, error) {
 	script := `$p = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { $p.InstallLocation }`
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", script).Output()
+	out, err := grokbot.Quiet("powershell.exe", "-NoProfile", "-Command", script).Output()
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +44,7 @@ func appxCodex() (string, error) {
 
 func whereCodex() (string, error) {
 	for _, name := range []string{"Codex.exe", "ChatGPT.exe"} {
-		out, err := exec.Command("where.exe", name).Output()
+		out, err := grokbot.Quiet("where.exe", name).Output()
 		if err != nil {
 			continue
 		}

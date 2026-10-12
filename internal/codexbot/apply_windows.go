@@ -81,7 +81,7 @@ func desktopShells(procs []process) []process {
 
 func running() ([]process, error) {
 	script := `Get-CimInstance Win32_Process -Filter "Name = 'Codex.exe' OR Name = 'ChatGPT.exe'" | Select-Object ProcessId, ExecutablePath, CommandLine | ConvertTo-Json -Compress`
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", script).Output()
+	out, err := grokbot.Quiet("powershell.exe", "-NoProfile", "-Command", script).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func stop(shells []process) error {
 		if p.ProcessID <= 0 {
 			continue
 		}
-		out, err := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(p.ProcessID)).CombinedOutput()
+		out, err := grokbot.Quiet("taskkill", "/F", "/T", "/PID", strconv.Itoa(p.ProcessID)).CombinedOutput()
 		if err == nil {
 			continue
 		}

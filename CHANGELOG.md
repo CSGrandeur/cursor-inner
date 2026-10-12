@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-10-12
+
+### Fixed
+
+- Checking whether Grok or Codex is already using the proxy no longer flashes a console window every few seconds.
+
 ## [0.5.6] - 2026-10-12
 
 ### Fixed
@@ -281,7 +287,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...v0.5.4

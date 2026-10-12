@@ -75,7 +75,7 @@ func cmds(procs []process) []string {
 
 func running() ([]process, error) {
 	script := `Get-CimInstance Win32_Process -Filter "Name = 'Grok Bot.exe'" | Select-Object ExecutablePath, CommandLine | ConvertTo-Json -Compress`
-	out, err := exec.Command("powershell.exe", "-NoProfile", "-Command", script).Output()
+	out, err := Quiet("powershell.exe", "-NoProfile", "-Command", script).Output()
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func running() ([]process, error) {
 }
 
 func stop() error {
-	out, err := exec.Command("taskkill", "/F", "/T", "/IM", "Grok Bot.exe").CombinedOutput()
+	out, err := Quiet("taskkill", "/F", "/T", "/IM", "Grok Bot.exe").CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err == nil {
 		return nil
