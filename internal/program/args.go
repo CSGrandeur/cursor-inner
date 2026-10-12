@@ -18,6 +18,9 @@ type options struct {
 	watch      int
 	handover   string
 	version    bool
+	background bool // 不开控制台窗口，只留通知区域图标（Windows）
+	holder     int  // --console-holder 的主进程 pid
+	holderFile string
 }
 
 func classicConsole(args []string) bool {
@@ -47,6 +50,14 @@ func parseArgs(args []string) options {
 			}
 		case "--version":
 			opt.version = true
+		case "--background":
+			opt.background = true
+		case "--console-holder":
+			if i+2 < len(args) {
+				opt.holder, _ = strconv.Atoi(args[i+1])
+				opt.holderFile = args[i+2]
+				i += 2
+			}
 		case "--handover":
 			if i+1 < len(args) {
 				i++

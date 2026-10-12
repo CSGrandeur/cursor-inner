@@ -90,22 +90,33 @@ type Capabilities struct {
 	TextToolMode bool   `json:"text_tool_mode,omitempty"` // 端点不接受原生工具，改走文本工具协议
 }
 
+// Desktop 是 Windows 上托盘和控制台窗口的设置。零值就是老行为：开着控制台窗口，弹通知。
+type Desktop struct {
+	// Background 为真时启动不开控制台窗口，只留通知区域图标；需要时从托盘菜单打开。
+	Background bool `json:"background,omitempty"`
+	// Quiet 为真时不弹气泡通知（更新完成、更新失败、泄漏告警）。图标和提示文字照常变化。
+	Quiet bool `json:"quiet,omitempty"`
+}
+
 type File struct {
-	Takeover     bool     `json:"takeover"`
-	TakeoverGrok bool     `json:"takeover_grok"`
-	Autostart    bool     `json:"autostart"`
-	Proxy        Proxy    `json:"proxy"`
-	Image        ImageAPI `json:"image,omitempty"`
-	Models       []Model  `json:"models"`
+	Takeover      bool     `json:"takeover"`
+	TakeoverGrok  bool     `json:"takeover_grok"`
+	TakeoverCodex bool     `json:"takeover_codex"`
+	Autostart     bool     `json:"autostart"`
+	Proxy         Proxy    `json:"proxy"`
+	Desktop       Desktop  `json:"desktop,omitzero"`
+	Image         ImageAPI `json:"image,omitempty"`
+	Models        []Model  `json:"models"`
 }
 
 func Default() File {
 	return File{
-		Takeover:     true,
-		TakeoverGrok: true,
-		Autostart:    false,
-		Proxy:        Proxy{Enabled: true},
-		Models:       []Model{},
+		Takeover:      true,
+		TakeoverGrok:  true,
+		TakeoverCodex: true,
+		Autostart:     false,
+		Proxy:         Proxy{Enabled: true},
+		Models:        []Model{},
 	}
 }
 
@@ -136,7 +147,8 @@ func Load(dir string) (*Store, error) {
 		if err := json.Unmarshal(raw, &data); err != nil {
 			return nil, err
 		}
-		data.TakeoverGrok = takeoverGrokOrDefault(raw, data.TakeoverGrok)
+		data.TakeoverGrok = missingKeyDefaultsOn(raw, "takeover_grok", data.TakeoverGrok)
+		data.TakeoverCodex = missingKeyDefaultsOn(raw, "takeover_codex", data.TakeoverCodex)
 	}
 	if data.Models == nil {
 		data.Models = []Model{}
@@ -163,16 +175,23 @@ func Peek(dir string) (File, bool) {
 	return f, true
 }
 
-// takeoverGrokOrDefault 把旧配置里没有的接管 Grok 开关当成开。显式 false 保持关闭。
-func takeoverGrokOrDefault(raw []byte, parsed bool) bool {
+// missingKeyDefaultsOn 把旧配置里没有的接管开关当成开。显式 false 保持关闭。
+func missingKeyDefaultsOn(raw []byte, key string, parsed bool) bool {
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &probe); err != nil {
 		return true
 	}
-	if _, ok := probe["takeover_grok"]; !ok {
+	if _, ok := probe[key]; !ok {
 		return true
 	}
 	return parsed
+}
+
+// Dir 是这份配置所在的数据目录。不同目录的实例各自记自己是否接管过 Grok / Codex。
+func (s *Store) Dir() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return filepath.Dir(s.path)
 }
 
 func (s *Store) Get() File {

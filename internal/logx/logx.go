@@ -27,6 +27,24 @@ type warnState struct {
 	flushed bool
 }
 
+// FileOnly 加在一条日志的属性里，表示它只写进 inner.log、不上控制台：
+// 控制台上已经有更合适的显示（例如自更新的进度条和阶段行），再打一遍就重复了。
+var FileOnly = slog.Bool(fileOnlyKey, true)
+
+const fileOnlyKey = "_file_only"
+
+func fileOnly(r slog.Record) bool {
+	only := false
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == fileOnlyKey {
+			only = a.Value.Kind() == slog.KindBool && a.Value.Bool()
+			return false
+		}
+		return true
+	})
+	return only
+}
+
 func Setup(console, file io.Writer, verbose bool) {
 	h := &split{console: console, file: file, verbose: verbose, warns: map[string]*warnState{}}
 	slog.SetDefault(slog.New(h))
@@ -40,7 +58,7 @@ func (s *split) Handle(_ context.Context, r slog.Record) error {
 		fmt.Fprintln(s.file, line)
 	}
 	emitSinks(r)
-	show := r.Level >= slog.LevelInfo || s.verbose
+	show := (r.Level >= slog.LevelInfo || s.verbose) && !fileOnly(r)
 	if r.Level == slog.LevelWarn {
 		show = s.admitWarn(r.Message, show)
 	}
@@ -82,7 +100,9 @@ func format(r slog.Record) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s %s", r.Time.Format("2006-01-02 15:04:05"), levelName(r.Level), r.Message)
 	r.Attrs(func(a slog.Attr) bool {
-		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+		if a.Key != fileOnlyKey {
+			fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+		}
 		return true
 	})
 	return b.String()

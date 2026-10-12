@@ -26,6 +26,7 @@ import (
 	"cursor-inner/internal/mitm"
 	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
+	"cursor-inner/internal/updateview"
 	"cursor-inner/internal/web"
 )
 
@@ -67,6 +68,10 @@ func Main(version string) {
 		fmt.Println(version)
 		return
 	}
+	if opt.holder > 0 {
+		runConsoleHolder(opt.holder, opt.holderFile)
+		return
+	}
 	if opt.watch > 0 {
 		dir := opt.dataDir
 		if dir == "" {
@@ -92,10 +97,15 @@ func Main(version string) {
 	if succ == nil && dir != "" && rejectIfRunning(dir) {
 		return
 	}
-	if handoffToClassicConsole() {
-		return
+	// 后台运行：不开控制台窗口，只留通知区域图标（只有 Windows 有托盘）。交接时旧进程用 --background 把
+	// 「控制台此刻收着」传过来；否则看配置。
+	background := traySupported && (opt.background || peekBackground(dir))
+	if !background {
+		if handoffToClassicConsole() {
+			return
+		}
+		bindConsoleIO()
 	}
-	bindConsoleIO()
 
 	if dir == "" {
 		var err error
@@ -141,6 +151,11 @@ func Main(version string) {
 	}
 	term := console.New(os.Stdout, logFile)
 	defer term.Close()
+	term.SetLiveProgress(os.Getenv("CURSOR_INNER_LIVE_PROGRESS") == "1")
+	if background {
+		term.Detach()
+		concealConsoleAtStart()
+	}
 	log.SetFlags(0)
 	if logFile != nil {
 		log.SetOutput(logFile)
@@ -221,20 +236,32 @@ func Main(version string) {
 	}
 
 	server := &http.Server{Handler: web.HandlerVersion(application, version), ReadHeaderTimeout: 10 * time.Second}
+	server.RegisterOnShutdown(func() { web.CloseStreams(server.Handler) })
 	webRL := &relisten{srv: server, ln: ln}
 	go func() { _ = server.Serve(ln) }()
 	upd := newUpdateGlue(version, dir, opt.debug, store, life, proxy, application, webRL, &release, term)
+	hub := newTrayHub(version, opt.debug, uiChinese())
+	hub.status = upd.updater.Status
+	hub.alerts = application.Alerts
+	hub.traffic = func() (int, string) { t := proxy.Traffic(); return t.Leaks, t.LastLeak }
+	hub.quiet = func() bool { return store.Get().Desktop.Quiet }
+	hub.send = trayBalloon
 	application.SetUpdater(upd.updater)
-	setTrayUpdate(upd.trayCheck)
+	go updateview.Run(context.Background(), upd.updater, term)
 	if !opt.debug && succ == nil {
 		_ = openBrowser(url)
 	}
-	openPage := func() {
-		log.Printf("打开配置页 %s", url)
-		_ = openBrowser(url)
+	openPage := func(page string) {
+		target := url
+		if page != "" {
+			target += "#" + page
+		}
+		log.Printf("打开配置页 %s", target)
+		_ = openBrowser(target)
 	}
-	term.OnEnter(openPage)
-	installConsoleLink(term, openPage)
+	setTrayUpdate(func() { upd.trayCheck(openPage) })
+	term.OnEnter(func() { openPage("") })
+	installConsoleLink(term, func() { openPage("") })
 
 	shutdown := func() {
 		removeTrayIcon()
@@ -251,7 +278,25 @@ func Main(version string) {
 		os.Exit(0)
 	}
 	watchConsole(shutdown)
-	prepareResident(term, !opt.debug, openPage, quit)
+	if prepareResident(residentOptions{
+		Term:  term,
+		Open:  openPage,
+		Quit:  quit,
+		Feed:  func() trayInput { return hub.input(time.Now()) },
+		Quiet: hub.quiet,
+		Defer: succ != nil,
+	}) {
+		application.SetTray(func(d config.Desktop) {
+			if d.Background {
+				hideConsole()
+			} else {
+				go showConsole()
+			}
+		})
+		go runTrayHub(hub, upd)
+	} else if background {
+		showConsole() // 图标没挂上：不能什么界面都没有
+	}
 	application.OnQuit(func() {
 		log.Printf("从配置页退出")
 		go func() {
@@ -327,11 +372,13 @@ func Main(version string) {
 	}
 	if !opt.debug {
 		application.SyncGrok()
+		application.SyncCodex()
 		go func() {
 			tick := time.NewTicker(5 * time.Second)
 			defer tick.Stop()
 			for range tick.C {
 				application.SyncGrok()
+				application.SyncCodex()
 			}
 		}()
 	}
@@ -345,7 +392,14 @@ func Main(version string) {
 			if err := succ.WaitConfirmed(ctx, os.Getpid()); err != nil {
 				return // 旧进程会结束本进程并回滚
 			}
-			log.Printf("已更新到 %s", version)
+			// 交接确认之后才算更新成功（之前旧进程还可能回滚）。控制台打一行总结，日志记一条。
+			slog.Info("已更新到 "+version, "from", succ.Plan.FromVersion, logx.FileOnly)
+			term.Line(fmt.Sprintf("✓ 已从 %s 热交接到 %s", succ.Plan.FromVersion, version))
+			// 旧进程确认后才显示图标：旧进程这时正删掉它的图标，通知区域里始终只有一个。
+			showTrayIcon()
+			if !hub.quiet() {
+				trayBalloon(updatedBalloon(uiChinese(), opt.debug, succ.Plan.FromVersion, version))
+			}
 			if !opt.debug {
 				if err := startWatchdog(dir); err != nil {
 					slog.Warn(fmt.Sprintf("退出兜底没有挂上：%v", err))
@@ -357,12 +411,47 @@ func Main(version string) {
 	select {}
 }
 
+// peekBackground 只读地看配置里有没有打开「后台运行」。
+func peekBackground(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	f, ok := config.Peek(dir)
+	return ok && f.Desktop.Background
+}
+
+// runTrayHub 给托盘喂数据：订阅更新快照（失败时弹通知、图标马上变），每 2 秒看一次告警和泄漏计数。
+func runTrayHub(hub *trayHub, upd *updateGlue) {
+	go func() {
+		w := upd.updater.Watch()
+		defer w.Close()
+		for {
+			st, err := w.Next(context.Background())
+			if err != nil {
+				return
+			}
+			hub.onUpdate(st)
+			trayKick()
+		}
+	}()
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for now := range tick.C {
+		hub.poll(now)
+	}
+}
+
 // openInnerLog 打开本次运行的 inner.log。正常启动时清空重写（过大先轮转）；自更新交接时接在后面写，
 // 不截断：旧进程还开着这个文件，下载、校验、换路径、交接的记录都在里面，清空了就没法追查这次更新。
+// 两种都用追加模式打开：交接时新旧两个进程同时在写，各自的写入位置会互相覆盖，追加模式下每次写都落在文件末尾。
+// 清空单独做、不和 O_APPEND 一起传：Windows 上 O_TRUNC|O_APPEND 会带上普通写权限，写入位置是进程自己的偏移，
+// 交接时新进程的第一行会被旧进程接着写的内容盖掉开头（实测丢了「2026-10-12 0」13 个字节）。
 func openInnerLog(path string, handover bool) (*os.File, error) {
-	if handover {
-		return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if !handover {
+		_ = logx.Rotate(path)
+		if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+			_ = f.Close()
+		}
 	}
-	_ = logx.Rotate(path)
-	return os.Create(path)
+	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 }

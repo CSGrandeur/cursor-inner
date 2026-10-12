@@ -74,7 +74,8 @@ func consoleMouseHookProc(nCode, wParam, lParam uintptr) uintptr {
 	if int32(nCode) >= 0 && (wParam == wmMouseDown || wParam == wmMouseDbl) && trayReady.Load() && !trayConcealed.Load() && lParam != 0 {
 		hs := (*msllHookStruct)(hookPointer(lParam))
 		root := ancestorRoot(windowFromPoint(hs.x, hs.y))
-		if root != 0 && concealCaptionClose(windowClass(root), hitTest(root, hs.x, hs.y)) {
+		// 低级钩子看得到全桌面的点击：只拦本进程自己的控制台，别的经典控制台（包括另一份 cursor-inner）照常关闭。
+		if root != 0 && root == consoleWindow() && concealCaptionClose(windowClass(root), hitTest(root, hs.x, hs.y)) {
 			concealConsoleWindow(root)
 			return 1
 		}
@@ -87,7 +88,7 @@ func consoleKeyHookProc(nCode, wParam, lParam uintptr) uintptr {
 	if int32(nCode) >= 0 && (wParam == wmKeyDown || wParam == wmSysKeyDown) && trayReady.Load() && !trayConcealed.Load() && lParam != 0 {
 		ks := (*kbdllHookStruct)(hookPointer(lParam))
 		fg, _, _ := procGetForegroundWindow.Call()
-		if concealAltF4(windowClass(fg), uintptr(ks.vkCode), uintptr(ks.flags)) {
+		if fg != 0 && fg == consoleWindow() && concealAltF4(windowClass(fg), uintptr(ks.vkCode), uintptr(ks.flags)) {
 			concealConsoleWindow(fg)
 			return 1
 		}
@@ -110,15 +111,17 @@ func concealConsoleWindow(hwnd uintptr) {
 	noteConcealed()
 }
 
+// noteConcealed 第一次点叉收起时提示一次：程序还在通知区域。
 func noteConcealed() {
+	if residentQuiet != nil && residentQuiet() {
+		return
+	}
 	if !trayNoted.CompareAndSwap(false, true) {
 		return
 	}
-	text := "Still running in the notification area. Right-click the icon to quit."
-	if uiChinese() {
-		text = "仍在任务栏通知区域运行。右键图标可以选择退出。"
-	}
-	shellNotify(nimModify, 0x1|0x2|0x4, text)
+	zh := uiChinese()
+	trayBalloon(balloon{Title: "cursor-inner", Text: pick(zh, "仍在任务栏通知区域运行。单击图标打开配置页，右键可以退出。",
+		"Still running in the notification area. Click the icon for settings; right-click to quit.")})
 }
 
 func windowFromPoint(x, y int32) uintptr {

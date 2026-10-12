@@ -89,20 +89,64 @@
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: none; }
   }
-  .addr {
-    display: inline-flex; align-items: center; gap: 8px;
-    height: 28px; padding: 0 12px;
-    border: 1px solid var(--line-strong); border-radius: 999px;
-    color: var(--muted); text-decoration: none;
-    font-family: var(--mono); font-size: 12px;
-    transition: color .15s, border-color .15s, background .15s;
-  }
-  .addr:hover { color: var(--text); border-color: var(--faint); background: var(--raise); }
   .top-right { display: flex; align-items: center; gap: 8px; }
   .gone { min-height: 70vh; display: grid; place-content: center; gap: 8px; text-align: center; color: var(--muted); }
   .gone h2 { color: var(--text); font-size: 15px; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.on { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
+
+  /* 顶部状态条：平时是灰字，异常的那一项变色。 */
+  .status {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 16px;
+    min-height: 24px; padding: 0 2px;
+    color: var(--muted); font-size: 12px; line-height: 1.4;
+  }
+  .status .st {
+    display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+    color: inherit; text-decoration: none; white-space: nowrap;
+  }
+  .status .st:hover { color: var(--text); }
+  .status .st .k { color: var(--faint); }
+  .status .st.bad, .status .st.bad .k { color: var(--bad); }
+  .status .st[hidden], .status .pill[hidden] { display: none; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 1px 8px; border-radius: 999px; white-space: nowrap;
+    font-size: 11px; font-weight: 500; text-decoration: none;
+    color: var(--signal); background: var(--signal-soft);
+  }
+  .pill.bad { color: var(--bad); background: var(--bad-soft); }
+  .pill .mono { font-size: 11px; }
+
+  .tabs {
+    display: flex; gap: 2px; padding: 0 8px;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    position: relative; flex: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 38px; padding: 0 12px;
+    border: 0; border-radius: 0; background: transparent;
+    color: var(--muted); font-weight: 500;
+  }
+  .tabs button:hover { color: var(--text); background: transparent; }
+  .tabs button[hidden] { display: none; }
+  .tabs button[aria-selected="true"] { color: var(--text); font-weight: 600; }
+  .tabs button[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px;
+    height: 2px; border-radius: 2px; background: var(--text);
+  }
+  .tabs button:focus-visible { outline: 2px solid var(--signal); outline-offset: -4px; border-radius: 8px; }
+  .tabs .count { font-weight: 400; }
+  .tab-dot { display: none; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .tab-dot.warn { display: block; background: var(--signal); }
+  .tab-dot.bad { display: block; background: var(--bad); }
+  .pane[hidden] { display: none; }
+  .pane { animation: pane-in .18s ease-out both; }
+  @keyframes pane-in { from { opacity: 0; } to { opacity: 1; } }
 
   .panel {
     background: var(--panel);
@@ -113,14 +157,13 @@
     overflow: hidden;
     animation: panel-in .4s cubic-bezier(.2, .8, .2, 1) both;
   }
-  .panel:nth-of-type(2) { animation-delay: .05s; }
   @keyframes panel-in {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: none; }
   }
   .panel-head {
     display: flex; align-items: baseline; gap: 8px;
-    padding: 10px 16px 6px;
+    padding: 10px 16px 4px;
   }
   h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; }
   .count {
@@ -128,6 +171,10 @@
     padding: 1px 7px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line);
   }
   .hint { margin-left: auto; color: var(--faint); font-size: 12px; }
+  .only-cursor {
+    font-size: 12px; font-weight: 600; color: var(--signal);
+    background: var(--signal-soft); border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+  }
 
   .row {
     display: grid; grid-template-columns: 5.5em minmax(0, 1fr) max-content;
@@ -137,6 +184,7 @@
   html[lang="en"] .row { grid-template-columns: 9.2em minmax(0, 1fr) max-content; }
   .row > h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-top: 2px; }
   .row + .row { border-top: 1px solid var(--line); }
+  .row[hidden] { display: none; }
   .copy {
     display: flex; flex-direction: column; gap: 2px;
     min-width: 0; padding-top: 1px;
@@ -144,10 +192,21 @@
   .desc, .meta {
     margin: 0; min-width: 0;
   }
+  /* 一行短说明，长说明在「?」的悬停提示里。 */
   .desc {
+    display: flex; align-items: center; gap: 6px;
     color: var(--faint); font-size: 12px; line-height: 1.45;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
   }
+  .desc > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.qa {
+    flex: none; width: 15px; height: 15px; padding: 0;
+    display: inline-grid; place-items: center;
+    border: 1px solid var(--line-strong); border-radius: 50%;
+    color: var(--faint); background: transparent;
+    font: 600 10px/1 var(--sans); cursor: help;
+  }
+  button.qa:hover, button.qa:focus-visible, button.qa[aria-expanded="true"] { color: var(--text); border-color: var(--faint); background: var(--raise); }
+  button.qa:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
   .meta {
     color: var(--muted); font-size: 12px; line-height: 1.4;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -159,6 +218,30 @@
     min-height: 24px; padding-top: 2px;
   }
   .switch-gap { width: 34px; height: 20px; flex: none; }
+  /* 更新进度：阶段 + 进度条 + 数字。数字和控制台进度条来自同一份快照。 */
+  .upbar { display: grid; gap: 4px; max-width: 560px; margin: 4px 0 2px; }
+  .upbar[hidden] { display: none; }
+  .upbar-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 1.4; }
+  .upsteps { display: flex; flex-wrap: wrap; gap: 0 6px; margin: 0; padding: 0; list-style: none; color: var(--faint); }
+  .upsteps li + li::before { content: "›"; margin-right: 6px; color: var(--faint); font-weight: 400; }
+  .upsteps li.done { color: var(--muted); }
+  .upsteps li.now { color: var(--text); font-weight: 600; }
+  .upsteps li.bad { color: var(--bad); font-weight: 600; }
+  .uppct { font-family: var(--mono); font-size: 12px; color: var(--text); white-space: nowrap; }
+  .uptrack { position: relative; height: 6px; border-radius: 999px; background: var(--raise); box-shadow: 0 0 0 1px var(--line-strong) inset; overflow: hidden; }
+  .upfill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--signal); border-radius: inherit; transition: width .25s linear, background-color .2s; }
+  .upbar.wait .upfill { animation: up-wait 1.6s ease-in-out infinite; }
+  .upbar.ok .upfill { background: var(--good); }
+  .upbar.bad .upfill { background: var(--bad); }
+  @keyframes up-wait { 50% { opacity: .5; } }
+  .upinfo { font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.4; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .upbar.bad .upinfo { color: var(--bad); }
+  pre.notes {
+    max-width: 640px; max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 8px 10px;
+    white-space: pre-wrap; font: 12px/1.5 var(--sans); color: var(--muted);
+    background: var(--raise); border: 1px solid var(--line); border-radius: 7px;
+  }
+  pre.notes[hidden] { display: none; }
 
   .switch { position: relative; width: 34px; height: 20px; flex: none; }
   .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -277,8 +360,9 @@
   td.ops .sm { padding: 0 8px; }
   td.ops .sm + .sm { margin-left: 4px; }
   .mini { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; white-space: nowrap; }
-  input.token { width: 100%; height: 26px; padding: 0 6px; text-align: center; }
-  .actions input.token { width: 5.6em; }
+  input.token { width: 100%; height: 26px; padding: 0 6px; text-align: center; appearance: textfield; }
+  input.token::-webkit-outer-spin-button, input.token::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .actions input.token { width: calc(8ch + 16px); box-sizing: border-box; }
   .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
   .credit { margin: 22px 2px 0; color: var(--faint); font-size: 12px; }
   .credit a { color: inherit; text-decoration: none; }
@@ -315,7 +399,7 @@
   .toast.ok { border-color: var(--good); }
   .toast.err { border-color: var(--bad); color: var(--bad); }
   .hover-tip {
-    position: fixed; z-index: 20; max-width: 280px;
+    position: fixed; z-index: 20; max-width: 320px;
     padding: 8px 10px; border-radius: 8px;
     background: var(--panel); color: var(--text);
     border: 1px solid var(--line-strong); box-shadow: var(--shadow);
@@ -324,7 +408,9 @@
 
   @media (max-width: 860px) {
     main { padding: 0 16px 32px; }
-    .top { height: auto; padding: 12px 0 4px; flex-wrap: wrap; }
+    .top { height: auto; padding: 12px 0 6px; flex-wrap: wrap; row-gap: 8px; }
+    .top-right { flex-wrap: wrap; gap: 6px; }
+    .top-right button { white-space: nowrap; }
     .row, html[lang="en"] .row {
       grid-template-columns: 1fr;
       row-gap: 6px;
@@ -335,6 +421,13 @@
     .grid { grid-template-columns: 1fr 1fr; }
     #proxy-address, #image-url, #image-model, #image-key { width: 100%; }
     .hint { display: none; }
+    .upbar { max-width: none; }
+    .upinfo { white-space: normal; }
+    .desc { display: block; }
+    .desc > span { white-space: normal; }
+    .desc button.qa { display: inline-grid; vertical-align: -3px; margin-left: 4px; }
+    .status { gap: 2px 12px; padding: 4px 0; }
+    .tabs button { padding: 0 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -389,10 +482,13 @@
   <header class="top">
     <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
     <div class="top-right">
-      <a class="addr" id="listen" href="/"><i class="dot" id="live-dot"></i><span id="listen-text"></span></a>
       <button id="open-cursor" type="button" class="sm launch" data-i18n-title="openCursorTitle" title="启动 Cursor，不关闭 cursor-inner">
         <img class="app-icon" alt="" aria-hidden="true" width="16" height="16" src="data:image/png;base64,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">
         <span data-i18n="openCursor">启动 Cursor</span>
+      </button>
+      <button id="open-codex" type="button" class="sm launch" data-i18n-title="openCodexTitle" title="启动 Codex，不关闭 cursor-inner">
+        <img class="app-icon" alt="" aria-hidden="true" width="16" height="16" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAJ4ElEQVR42sWXeVAUdxbHX/cczAUKwwwgznANl0OCCAiIKCpH1KBEVhSjgKBoDiJe4chBjOuaitHEJKuJRxJ1RRfRLAoqqMgqqKBAUNAIiHLJOQwwMEfPdL/8EU0Zg1XR2q28qv6n61fdn/d95w/gLzbieQ4jItnY2MihKIrDYrEItVpoCgqSUQRB0P9XAERkqdVqEZvNtjM3N7cFAAsAIAFghKKoHpVK9dDOzm4AAEy/fZgg8H8CgIhslUplIxaLPQHAq/3hQ0Vba6fUZDSxpVLxoLu74gEA3NFqtS1sNlvL5XIJjcZA9fd3DZIkOSCTyQwEQTAvBICIZG9vr41EIvFraLwXmXeiOLKru1+BSALDMMDQJrC0FKlmRwTXhoQE1gDA4CNl9ADQBQDNvb29TRKJpJcgCNNzA9TV1YmUSqXPpUtXl/3rSMFyownYfKF5gdDcvNpqrEgo5HMDW1vafYc0Gp6bq6xjaGiEr9fpzHh8nsbFafy9uXNmXbe2trqsVqurLC0tO0aDYD/r5xcvXmQrlUqbjo6OwENHTr1OM6Rqkr/f6tSU6CsAMA4APHR6Pbltx57xDJIOt+qa7ZEgHrBZLD3dO2TX2tYbfLm8ym/R3yLtw8Nn0M3NzXpE7Hk6N9ijyd7X1yfUmkxyAJiYe6xw0bBGKwiPDH0naVl0JQCEMAzjd/BQXvDl8qoQE02AQCA4HTJt6pGEhLmtg1rQXrp0k6m4UhbW0Xo/a/8PJxaSJEs9a9a09jNnzgwAgOGZIUBEoq2tzVImk00AgMD6+p9Dt3+xfzaLzanfu/sfSwFAXlB4LrHwTGn44JDegs/n17p5un+bnrasHgCcVCqVp1gsHgCAmwBQt/dAfuj5onPf8Pkc7Q/7P38bAM4SBDHwTAXq6+uFSqXSfXh4OHLT5u2L6283KYTCMeDkZPkAAAx79hwMKjp/NUYgFKpc3d0/SV2TUmQtAhtKr1+w97sjwWVXqvykEquuxMTYCz7eXtdXJsxvbG9pvlhdfWtOztETPksWLzj/yGn8A0Bubi5LqVTaGAyGoJTVG1Z2dqlsvLyU9Q8fdipNJiMCAKMaGLJksVi4NG7+sciIkAoACC0oKI48drzQu6d3kC+RSprut3TKP9q043WfiZ5e72etLX8jZal2+Yp1WFd/1+VRhfzOfnvB4/HMAMA+M2tzbEtrp01AUOCXH2Rv3GYw6AHx1zJmkSSj1Y4QHu6O8sam5kWr33r3ja92HQw0UCbYuOGNUwe/25YVszAmUWg+tqSsvNp7wcLkVfknTytJAkCvpywAgA+wkBwVICoqitPQ0OReVX1rslRqXfvJ5vXbm+/eNphMRmAYBgEAjEYjyTAm+Hznt35r0j5cfO9eh8jCwmJAq9Xy/1taKu/p6YlIiHtFkHNgx8czZoavMZmIpoOH8jw1w8OEi7OcAACnc+dSRKMCAACeLb6o0Bsowt9v0gUA0NA0sowUBUjTbADgIjJoNBrhp9qfxaIx4rz5i5JC/KfOnsXli/JKSq96xyemJu7ZeyAVAOa+l550/0DODyu9ff23I6KhsPDspO7u7uCwsDCb3Nxc1tMABACYOjq6hMjQ6OoqHwEALpIsSqfXMVbWlhYA4Mkz447V63WwMHbB57mHd8anJoVVp6fOq87L+So+JjZmu1ZnYO/afcD71XlLVhcUnF0pMQfPXV98+PW06aEftLd3WWVkfhwLAOPHjBnDG00BPZfH66YoI6Ed1soBQNzd3TtkpCiytaVdDgChCoWzg1Y7Ag4ySfsjaPLRQ8jtJa00bYLAoIBqrc44nPnelqikFW+n9vf3e2zZlHbYxcXpSu3N+perqn7yjIiIYP8BgM1mMz4+k68hMlhWfnUKAPh6TnAfGCdzKKqpueUwP/r15deuXZcDMigSCeUA4HitoUF048YNcwBwtJFayQwGA7g4y8pKzh1b4ubhUVNVdcursrLGFgB0AUH+ZRRlgvMlpU5PluFjAKRpmlgwb/qV8TJ5cfmVCteSkstxE9ycJuXn7dsaPmdeRmePuqfgdLGMpk2ERqPxAICwAFfXMF9f3xkAEK4d0U2iDHpQq/u5AHDf3s76DofLRjMzMwQAvsLZgUJksLNTxQMA4+Mm+LuSYLHIkYzMrK3WUmlX2rqMyEOHc5cDQPinm9PqjublpgQGz/gn10wwuHHjh3PSMza9NTQ8vEyvN0S/m569Yv36rJk0TT/eAzg6nZ5DGSiCJEkzAJD19/W5GCmKMDcXdTzZjp/shMgwSIQEed4OmTK59HDOvxdnZGT7H8v90WX9hnc8pocEle/btbnw2o07zSeOH4/Pzz/lfelyuZwkCF5Xdx94T/T+ubHhrofRaAQAQAIQadoIIpHQGQAE585fnEKwSDpk+oxyNovFjKrAY5CmpnsCgYAP8YkJF5ruPeCsSH4rJmV12putbR1xgX6etuEzp7aKrcYaVSo1j6KJqi2ffLYqM2PtcYqiAICgAQCRYQiaZsDHx9vz8JHj0RWVVQ4KN48fI2ZOrqAZhnycB6ON4xGSzR7Q63SYvHxx2apVqTuSk5OXFhWVxF2/Xq0Yb2+nqq6pFVtaWnfMjlqwd+e2zFIAsL5WUTWdoihUqwf1AEATJMlGZHDN2nTfwsKz9lLbcXff3/JZJkkShieH4NMKEAKBQOfi4lqp1xuIQ4dyZjiOF5IXio5mJK/aEE2SvKt1dxrZvpOn7j2Qk5u8c1tmBQAE5+b+J3nduvRoDodLGI3YCABmPB5PoNFoiPz8Qntbe8fitzdujZ76km0T4u+H0WgbEoGIjl7ewW2ubt7Ugwcd3yNiMiJOGdLitIqa5lhEnIuIGyorq469GhX70MZWgW6eAS3LkrLebGjpdkHEmHnzY5tc3X0Gd31/chkimj3D4VGN5HI5sDbz0yVyRyW+/HKgvvD0+TOI+CUifoSIH7W2tuelrc1okdg44bjx7lRc/Jp9N5sG/BDRBRGj79xp3CWTe2D4KwsPi8Xi3xx7nnWd5PF4EJ+StcJZ4dNvN06BkwNC6ah5sf1h4fNHHJ0mINfMEhOWv9mGiF8j4lJETETE9K6u3n1+/iEDcseXho6eLPdHRAIgm3yRrZhgsVi4ZXex8mze/oT2lqbpeoNOyiJZGolUqurv6w4dYyGkoqLm3FJOUKpNDJI3Kq/bnTxV6Kk3GA1Rr8UlfffN33MoiiIBgHnRiwv5a4NiAyJy7iOORUQ+InJfi0td4egy8baVtQPa2CnQxk6BEhtnRuk97cL67N2hHA7nT8X8T8QFCQCCeNoLgiSgn2bGrn9nh09Ha4MDh2tGeb0UcHfrB0tqH63ff8rz50gMfOrsH6GeUu6FZYfng8omAYAFACRkZ5PPm+1/uf0Ch+qh4JVo2c4AAAAASUVORK5CYII=">
+        <span data-i18n="openCodex">启动 Codex</span>
       </button>
       <button id="open-grok" type="button" class="sm launch" data-i18n-title="openGrokTitle" title="启动 Grok，不关闭 cursor-inner">
         <img class="app-icon" alt="" aria-hidden="true" width="16" height="16" src="data:image/png;base64,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">
@@ -405,171 +501,223 @@
     </div>
   </header>
 
-  <section class="panel" aria-label="settings">
-    <div class="row" id="update-row" hidden>
-      <h2 data-i18n="update">更新</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="updateDesc">启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。</p>
-        <p class="meta" id="update-status"></p>
-        <p class="meta warn" id="update-warn"></p>
-        <pre class="meta" id="update-notes" hidden style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:6px 0 0"></pre>
+  <div class="status" id="status">
+    <a class="st" id="st-version" href="#update"><span class="mono" id="st-ver"></span></a>
+    <a class="st" id="listen" href="#network"><i class="dot" id="live-dot"></i><span id="st-take"></span></a>
+    <a class="st" id="st-proxy" href="#network"><span class="k" data-i18n="proxy">代理</span><span id="st-proxy-v"></span></a>
+    <a class="st" id="st-tun" href="#network" hidden><span class="k">TUN</span><span id="st-tun-v"></span></a>
+    <a class="pill" id="st-update" href="#update" hidden></a>
+  </div>
+
+  <section class="panel" aria-label="cursor-inner">
+    <nav class="tabs" role="tablist" data-i18n-aria="tabsLabel" aria-label="设置">
+      <button type="button" role="tab" id="tab-models" data-tab="models" aria-controls="pane-models" aria-selected="true"><span data-i18n="tabModels">模型</span><span class="count" id="model-count">0</span><i class="tab-dot"></i></button>
+      <button type="button" role="tab" id="tab-network" data-tab="network" aria-controls="pane-network" aria-selected="false" tabindex="-1"><span data-i18n="tabNetwork">网络</span><i class="tab-dot"></i></button>
+      <button type="button" role="tab" id="tab-general" data-tab="general" aria-controls="pane-general" aria-selected="false" tabindex="-1"><span data-i18n="tabGeneral">通用</span><i class="tab-dot"></i></button>
+      <button type="button" role="tab" id="tab-update" data-tab="update" aria-controls="pane-update" aria-selected="false" tabindex="-1"><span data-i18n="tabUpdate">更新</span><i class="tab-dot"></i></button>
+    </nav>
+
+    <div class="pane" role="tabpanel" id="pane-models" aria-labelledby="tab-models">
+      <div class="panel-head">
+        <h2 data-i18n="models">自定义模型</h2>
+        <span class="only-cursor" data-i18n="modelsOnly">仅支持 Cursor</span>
+        <span class="hint" data-i18n="modelsHint">测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置</span>
       </div>
-      <div class="tail"><button id="update-check" type="button" class="sm" data-i18n="updateCheck">检查更新</button> <button id="update-apply" type="button" class="sm" data-i18n="updateApply" hidden>更新</button></div>
+      <div class="table-scroll">
+      <table id="model-table">
+        <colgroup>
+          <col class="c-name"><col><col class="c-test"><col class="c-sw"><col class="c-sw"><col class="c-sw"><col class="c-num"><col class="c-num"><col class="c-ops">
+        </colgroup>
+        <thead>
+          <tr>
+            <th data-i18n="colModel" data-i18n-tip="tipModel">模型</th>
+            <th data-i18n="colEndpoint" data-i18n-tip="tipEndpoint">接口</th>
+            <th data-i18n="colLastTest" data-i18n-tip="tipLastTest">上次测试</th>
+            <th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy">代理</th>
+            <th class="mid" data-i18n="colReason" data-i18n-tip="tipReason">推理</th>
+            <th class="mid" data-i18n="colFast" data-i18n-tip="tipFast">Fast</th>
+            <th class="mid" data-i18n="colContext" data-i18n-tip="tipContext">上下文</th>
+            <th class="mid" data-i18n="colMax" data-i18n-tip="tipMax">最大</th>
+            <th class="ops" data-i18n="colOps" data-i18n-tip="tipOps">操作</th>
+          </tr>
+        </thead>
+        <tbody id="models"></tbody>
+      </table>
+      </div>
+      <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
+
+      <form id="model-form" class="add">
+        <h3 id="form-title" data-i18n="addModel">添加模型</h3>
+        <div class="grid">
+          <label class="field"><span data-i18n="displayName">显示名</span><input name="display_name" type="text" required></label>
+          <label class="field"><span data-i18n="type">类型</span>
+            <select name="type">
+              <option value="openai-chat">OpenAI Chat</option>
+              <option value="openai-responses">OpenAI Responses</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </label>
+          <label class="field"><span data-i18n="modelName">模型名</span><input name="model" type="text" required spellcheck="false" class="mono"></label>
+          <label class="field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
+          <label class="field"><span data-i18n="apiKey">密钥</span>
+            <span class="secret">
+              <input id="api-key" name="api_key" type="password" required autocomplete="off" class="mono">
+              <button id="reveal-key" type="button" aria-label="显示密钥" title="显示密钥">
+                <svg id="eye-off" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                  <circle cx="8" cy="8" r="1.6"/>
+                  <path d="M3 13 13 3"/>
+                </svg>
+                <svg id="eye-on" hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                  <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                  <circle cx="8" cy="8" r="1.6"/>
+                </svg>
+              </button>
+            </span>
+          </label>
+          <label class="field"><span data-i18n="promptCacheKey">缓存键</span><input name="prompt_cache_key" type="text" spellcheck="false" class="mono" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <label class="field"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它模型 id，逗号分隔"></label>
+        </div>
+        <div class="actions">
+          <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
+          <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
+          <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
+          <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <span class="spacer"></span>
+          <button id="form-clear" type="button" data-i18n="clear">清空</button>
+          <button id="draft-test" type="button" data-i18n="test">测试</button>
+          <button id="model-submit" class="primary" type="submit" data-i18n="add">添加</button>
+        </div>
+      </form>
     </div>
-    <div class="row">
-      <h2 data-i18n="takeoverCursor">接管 Cursor</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="takeoverCursorDesc">写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。</p>
-        <p class="meta" id="takeover-meta"></p>
-      </div>
-      <div class="tail"><label class="switch"><input id="takeover-cursor" type="checkbox" data-i18n-aria="takeoverCursor" aria-label="接管 Cursor"><span></span></label></div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="takeoverGrok">接管 Grok</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="takeoverGrokDesc">写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。</p>
-        <p class="meta" id="grok-meta"></p>
-      </div>
-      <div class="tail"><label class="switch"><input id="takeover-grok" type="checkbox" data-i18n-aria="takeoverGrok" aria-label="接管 Grok"><span></span></label></div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="tun">TUN 模式</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="tunDesc">用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。</p>
-        <p class="desc" id="tun-status"></p>
-      </div>
-      <div class="tail"><button id="tun-on" type="button" class="sm" data-i18n="tunOn">开启</button> <button id="tun-off" type="button" class="sm" data-i18n="tunOff">关闭</button></div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="strict">严格模式</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="strictDesc">用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。</p>
-      </div>
-      <div class="tail"><button id="strict-on" type="button" class="sm" data-i18n="strictOn">开启</button> <button id="strict-off" type="button" class="sm" data-i18n="strictOff">关闭</button></div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="proxy">代理</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="proxyDesc">一个出站地址。没写协议时自动识别 socks5 或 http，留空则直连。只改地址时不必关 Cursor。</p>
-        <p class="meta" id="proxy-meta"></p>
-      </div>
-      <div class="tail">
-        <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false">
-        <button id="proxy-save" type="button" data-i18n="save">保存</button>
-        <label class="switch"><input id="proxy-on" type="checkbox" data-i18n-aria="proxy" aria-label="代理"><span></span></label>
-      </div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="scope">代理范围</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="scopeDesc">全局：Cursor 和 Grok Bot 的联网全部走上面的代理。仅官方：只有 Grok、x.ai、Cursor 等官方地址走代理，其余直连。回环和局域网始终直连。</p>
-        <p class="meta" id="scope-meta"></p>
-      </div>
-      <div class="tail">
-        <div class="seg" id="scope" role="group" data-i18n-aria="scope" aria-label="代理范围">
-          <button type="button" data-scope="global" data-i18n="scopeGlobal" aria-pressed="true">全局</button>
-          <button type="button" data-scope="official" data-i18n="scopeOfficial" aria-pressed="false">仅官方</button>
+
+    <div class="pane" role="tabpanel" id="pane-network" aria-labelledby="tab-network" hidden>
+      <div class="row">
+        <h2 data-i18n="proxy">代理</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="proxyDesc"></span><button type="button" class="qa" data-i18n-tip="proxyTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="proxy-meta"></p>
+        </div>
+        <div class="tail">
+          <input id="proxy-address" type="text" placeholder="127.0.0.1:1080" autocomplete="off" spellcheck="false" data-i18n-aria="proxy">
+          <button id="proxy-save" type="button" data-i18n="save">保存</button>
+          <label class="switch"><input id="proxy-on" type="checkbox" data-i18n-aria="proxy" aria-label="代理"><span></span></label>
         </div>
       </div>
-    </div>
-    <div class="row">
-      <h2 data-i18n="image">出图</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="imageDesc">OpenAI 兼容出图接口，供 GenerateImage。密钥留空表示不改。</p>
-        <p class="meta" id="image-meta"></p>
+      <div class="row">
+        <h2 data-i18n="scope">代理范围</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="scopeDesc"></span><button type="button" class="qa" data-i18n-tip="scopeTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="scope-meta"></p>
+        </div>
+        <div class="tail">
+          <div class="seg" id="scope" role="group" data-i18n-aria="scope" aria-label="代理范围">
+            <button type="button" data-scope="global" data-i18n="scopeGlobal" aria-pressed="true">全局</button>
+            <button type="button" data-scope="official" data-i18n="scopeOfficial" aria-pressed="false">仅官方</button>
+          </div>
+        </div>
       </div>
-      <div class="tail">
-        <input id="image-url" type="text" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false">
-        <input id="image-model" type="text" placeholder="dall-e-3" autocomplete="off" spellcheck="false">
-        <input id="image-key" type="password" data-i18n-placeholder="apiKey" placeholder="密钥" autocomplete="off" spellcheck="false">
-        <button id="image-save" type="button" data-i18n="save">保存</button>
-        <span class="switch-gap"></span>
+      <div class="row">
+        <h2 data-i18n="takeoverCursor">接管 Cursor</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="takeoverCursorDesc"></span><button type="button" class="qa" data-i18n-tip="takeoverCursorTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="takeover-meta"></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="takeover-cursor" type="checkbox" data-i18n-aria="takeoverCursor" aria-label="接管 Cursor"><span></span></label></div>
+      </div>
+      <div class="row">
+        <h2 data-i18n="takeoverGrok">接管 Grok</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="takeoverGrokDesc"></span><button type="button" class="qa" data-i18n-tip="takeoverGrokTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="grok-meta"></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="takeover-grok" type="checkbox" data-i18n-aria="takeoverGrok" aria-label="接管 Grok"><span></span></label></div>
+      </div>
+      <div class="row">
+        <h2 data-i18n="takeoverCodex">接管 Codex</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="takeoverCodexDesc"></span><button type="button" class="qa" data-i18n-tip="takeoverCodexTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="codex-meta"></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="takeover-codex" type="checkbox" data-i18n-aria="takeoverCodex" aria-label="接管 Codex"><span></span></label></div>
+      </div>
+      <div class="row">
+        <h2 data-i18n="tun">TUN 模式</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="tunDesc"></span><button type="button" class="qa" data-i18n-tip="tunTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="tun-status"></p>
+        </div>
+        <div class="tail"><button id="tun-on" type="button" class="sm" data-i18n="tunOn">开启</button> <button id="tun-off" type="button" class="sm" data-i18n="tunOff">关闭</button></div>
+      </div>
+      <div class="row">
+        <h2 data-i18n="strict">严格模式</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="strictDesc"></span><button type="button" class="qa" data-i18n-tip="strictTip" data-i18n-aria="more">?</button></p>
+        </div>
+        <div class="tail"><button id="strict-on" type="button" class="sm" data-i18n="strictOn">开启</button> <button id="strict-off" type="button" class="sm" data-i18n="strictOff">关闭</button></div>
       </div>
     </div>
-    <div class="row">
-      <h2 data-i18n="autostart">开机启动</h2>
-      <div class="copy">
-        <p class="desc" data-i18n="autostartDesc">登录后自动启动，只保留一条启动项。</p>
-        <p class="meta" id="boot-meta"></p>
+
+    <div class="pane" role="tabpanel" id="pane-general" aria-labelledby="tab-general" hidden>
+      <div class="row">
+        <h2 data-i18n="image">出图</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="imageDesc"></span><button type="button" class="qa" data-i18n-tip="imageTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="image-meta"></p>
+        </div>
+        <div class="tail">
+          <input id="image-url" type="text" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false" data-i18n-aria="baseUrl">
+          <input id="image-model" type="text" placeholder="dall-e-3" autocomplete="off" spellcheck="false" data-i18n-aria="modelName">
+          <input id="image-key" type="password" data-i18n-placeholder="apiKey" data-i18n-aria="apiKey" placeholder="密钥" autocomplete="off" spellcheck="false">
+          <button id="image-save" type="button" data-i18n="save">保存</button>
+          <span class="switch-gap"></span>
+        </div>
       </div>
-      <div class="tail"><label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label></div>
+      <div class="row">
+        <h2 data-i18n="autostart">开机启动</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="autostartDesc"></span></p>
+          <p class="meta" id="boot-meta"></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="autostart" type="checkbox" data-i18n-aria="autostart" aria-label="开机启动"><span></span></label></div>
+      </div>
+      <div class="row desk-row" hidden>
+        <h2 data-i18n="background">后台运行</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="backgroundDesc"></span><button type="button" class="qa" data-i18n-tip="backgroundTip" data-i18n-aria="more">?</button></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="background" type="checkbox" data-i18n-aria="background" aria-label="后台运行"><span></span></label></div>
+      </div>
+      <div class="row desk-row" hidden>
+        <h2 data-i18n="notify">通知</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="notifyDesc"></span><button type="button" class="qa" data-i18n-tip="notifyTip" data-i18n-aria="more">?</button></p>
+        </div>
+        <div class="tail"><label class="switch"><input id="notify" type="checkbox" data-i18n-aria="notify" aria-label="通知"><span></span></label></div>
+      </div>
     </div>
+
+    <div class="pane" role="tabpanel" id="pane-update" aria-labelledby="tab-update" hidden>
+      <div class="row" id="update-row">
+        <h2 data-i18n="update">更新</h2>
+        <div class="copy">
+          <p class="desc"><span data-i18n="updateDesc"></span><button type="button" class="qa" data-i18n-tip="updateTip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="update-status"></p>
+          <div class="upbar" id="update-bar" hidden>
+            <div class="upbar-head"><ol class="upsteps" id="up-steps"></ol><span class="uppct" id="up-pct"></span></div>
+            <div class="uptrack" id="up-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="upfill" id="up-fill"></div></div>
+            <div class="upinfo" id="up-info"></div>
+          </div>
+          <p class="meta warn" id="update-warn"></p>
+          <pre class="notes" id="update-notes" hidden></pre>
+        </div>
+        <div class="tail"><button id="update-check" type="button" class="sm" data-i18n="updateCheck">检查更新</button> <button id="update-apply" type="button" class="sm primary" data-i18n="updateApply" hidden>更新</button></div>
+      </div>
+    </div>
+
   </section>
 
-  <section class="panel">
-    <div class="panel-head">
-      <h2 data-i18n="models">自定义模型</h2>
-      <span class="count" id="model-count">0</span>
-      <span class="hint" data-i18n="modelsHint">测试会流式请求 1 到 120 的数字，记录速度、首字和输出</span>
-    </div>
-    <div class="table-scroll">
-    <table id="model-table">
-      <colgroup>
-        <col class="c-name"><col><col class="c-test"><col class="c-sw"><col class="c-sw"><col class="c-sw"><col class="c-num"><col class="c-num"><col class="c-ops">
-      </colgroup>
-      <thead>
-        <tr>
-          <th data-i18n="colModel" data-i18n-tip="tipModel">模型</th>
-          <th data-i18n="colEndpoint" data-i18n-tip="tipEndpoint">接口</th>
-          <th data-i18n="colLastTest" data-i18n-tip="tipLastTest">上次测试</th>
-          <th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy">代理</th>
-          <th class="mid" data-i18n="colReason" data-i18n-tip="tipReason">推理</th>
-          <th class="mid" data-i18n="colFast" data-i18n-tip="tipFast">Fast</th>
-          <th class="mid" data-i18n="colContext" data-i18n-tip="tipContext">上下文</th>
-          <th class="mid" data-i18n="colMax" data-i18n-tip="tipMax">最大</th>
-          <th class="ops" data-i18n="colOps" data-i18n-tip="tipOps">操作</th>
-        </tr>
-      </thead>
-      <tbody id="models"></tbody>
-    </table>
-    </div>
-    <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
-
-    <form id="model-form" class="add">
-      <h3 id="form-title" data-i18n="addModel">添加模型</h3>
-      <div class="grid">
-        <label class="field"><span data-i18n="displayName">显示名</span><input name="display_name" type="text" required></label>
-        <label class="field"><span data-i18n="type">类型</span>
-          <select name="type">
-            <option value="openai-chat">OpenAI Chat</option>
-            <option value="openai-responses">OpenAI Responses</option>
-            <option value="anthropic">Anthropic</option>
-          </select>
-        </label>
-        <label class="field"><span data-i18n="modelName">模型名</span><input name="model" type="text" required spellcheck="false" class="mono"></label>
-        <label class="field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
-        <label class="field"><span data-i18n="apiKey">密钥</span>
-          <span class="secret">
-            <input id="api-key" name="api_key" type="password" required autocomplete="off" class="mono">
-            <button id="reveal-key" type="button" aria-label="显示密钥" title="显示密钥">
-              <svg id="eye-off" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
-                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
-                <circle cx="8" cy="8" r="1.6"/>
-                <path d="M3 13 13 3"/>
-              </svg>
-              <svg id="eye-on" hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
-                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
-                <circle cx="8" cy="8" r="1.6"/>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <label class="field"><span data-i18n="promptCacheKey">缓存键</span><input name="prompt_cache_key" type="text" spellcheck="false" class="mono" data-i18n-placeholder="optional" placeholder="可选"></label>
-        <label class="field"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它模型 id，逗号分隔"></label>
-      </div>
-      <div class="actions">
-        <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
-        <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
-        <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
-        <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
-        <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
-        <span class="spacer"></span>
-        <button id="form-clear" type="button" data-i18n="clear">清空</button>
-        <button id="draft-test" type="button" data-i18n="test">测试</button>
-        <button id="model-submit" class="primary" type="submit" data-i18n="add">添加</button>
-      </div>
-    </form>
-  </section>
   <p class="credit">MIT · <a href="https://github.com/CSGrandeur/cursor-inner">CSGrandeur</a></p>
 </main>
 <div class="toast" id="banner" role="status"></div>
@@ -582,21 +730,25 @@
 const MESSAGES = {
   zh: {
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
-    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", update: "更新", updateDesc: "启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upDownloading: "正在下载 {pct}", upEta: "剩余约 {eta}", upSec: "{n} 秒", upMin: "{n} 分钟", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "清单 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
-    tun: "TUN 模式", tunDesc: "用 sing-box TUN 只把官方端点（grok、x.ai、Cursor、cursorvm 等）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
-    strict: "严格模式", strictDesc: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（grok、x.ai、Cursor），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
+    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", openCodex: "启动 Codex", openCodexTitle: "启动 Codex，不关闭 cursor-inner", codexStarted: "已启动 Codex", update: "更新", updateDesc: "只装签名有效的版本，更新时 Grok 和 Cursor 不用重启。", updateTip: "启动时检查一次 GitHub 和 Gitee 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upSec: "{n} 秒", upMin: "{n} 分钟", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "清单 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", upApplying: "更新到 {latest}", upStepSign: "验签清单", upStepDownload: "下载", upStepVerify: "校验", upStepPreflight: "自检", upStepHandover: "热交接", upEtaLeft: "剩余约 {eta}", upMeasuring: "测速中", upTrying: "{route}，并行试{probe}", upInfoVerify: "核对大小和 sha256", upInfoPreflight: "试运行新版本 {latest} --version", upInfoHandover: "新版本 {latest} 接过本机端口，Grok 和 Cursor 不需要重启", upInfoDone: "已交给 {latest}，正在连接新版本…", upInfoFailed: "停在「{step}」，当前版本继续运行", upUpdated: "已从 {from} 更新到 {to}", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
+    tun: "TUN 模式", tunDesc: "在网络层只把官方端点转进代理，需要管理员授权。", tunTip: "用 sing-box TUN 只把官方端点（Grok、x.ai、Cursor、OpenAI）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
+    strict: "严格模式", strictDesc: "用防火墙禁止 Grok Bot 和 Cursor 直连官方端点，需要管理员授权。", strictTip: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（Grok、x.ai、Cursor、OpenAI），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
-    takeoverCursor: "接管 Cursor", takeoverCursorDesc: "写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。",
-    takeoverGrok: "接管 Grok", takeoverGrokDesc: "写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。",
+    takeoverCursor: "接管 Cursor", takeoverCursorDesc: "写入 Cursor 的代理设置；开关时会关掉正在运行的 Cursor。", takeoverCursorTip: "写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。",
+    takeoverGrok: "接管 Grok", takeoverGrokDesc: "给 Grok Bot 加代理启动参数；没在运行不会拉起。", takeoverGrokTip: "写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。",
+    takeoverCodex: "接管 Codex", takeoverCodexDesc: "给 Codex 加上代理启动参数；没在运行不会拉起。", takeoverCodexTip: "窗口走 --proxy-server，接口和 WebSocket 走这个进程的 HTTPS_PROXY。已带当前代理的不关。没在运行不会拉起。不写系统环境变量。",
     grokOn: "正在运行的 Grok Bot 走上面的代理。", grokNoProxy: "代理没开，不会给 Grok Bot 加代理。", grokOff: "不接管。",
-    proxy: "代理", proxyDesc: "一个出站地址。没写协议时自动识别 socks5 或 http，留空则直连。只改地址时不必关 Cursor。",
+    codexOn: "正在运行的 Codex 走上面的代理。", codexNoProxy: "代理没开，不会给 Codex 加代理。", codexOff: "不接管。",
+    proxy: "代理", proxyDesc: "出站代理地址，留空直连。", proxyTip: "一个出站地址。没写协议时自动识别 socks5 或 http，留空则直连。只改地址时不必关 Cursor。",
     scope: "代理范围", scopeGlobal: "全局", scopeOfficial: "仅官方",
-    scopeDesc: "全局：Cursor 和 Grok Bot 的联网全部走上面的代理。仅官方：只有 Grok、x.ai、Cursor 等官方地址走代理，其余直连。回环和局域网始终直连。",
+    scopeDesc: "全部流量走代理，或只让官方地址走代理。", scopeTip: "全局：Cursor 和 Grok Bot 的联网全部走上面的代理。仅官方：只有 Grok、x.ai、Cursor、OpenAI 的地址走代理，其余直连。回环和局域网始终直连。",
     scopeHot: "切换即时生效，Cursor 和 Grok Bot 都不用重开。", scopeRestart: "切换后 Cursor 即时生效；代理是普通 HTTP，Grok Bot 会自动重开一次。", scopeIdle: "代理没开，两种范围都直连。",
-    image: "出图", imageDesc: "OpenAI 兼容出图接口，供 GenerateImage。密钥留空表示不改。",
+    image: "出图", imageDesc: "OpenAI 兼容出图接口，供 GenerateImage。", imageTip: "OpenAI 兼容出图接口，供 GenerateImage。密钥留空表示不改。",
     imageEmpty: "未配置，模型看不到 GenerateImage。", imageReady: "已配置 {model}{hint}",
     save: "保存", autostart: "开机启动", autostartDesc: "登录后自动启动，只保留一条启动项。",
-    models: "自定义模型", modelsHint: "测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置",
+    background: "后台运行", backgroundDesc: "启动时不开控制台窗口，只留通知区域图标。", backgroundTip: "启动时不开控制台窗口，只留通知区域图标。单击图标打开配置页，右键可显示控制台或退出。",
+    notify: "通知", notifyDesc: "更新结果和泄漏告警弹系统通知。", notifyTip: "更新完成或失败、官方端点可能泄漏时弹系统通知。关掉后图标颜色和悬停提示照常变化。",
+    models: "自定义模型", modelsOnly: "仅支持 Cursor", modelsHint: "测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置",
     promptCacheKey: "缓存键", fallback: "备用模型", fallbackHint: "其它模型 id，逗号分隔",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试", colProxy: "代理", colReason: "推理", colFast: "Fast", colContext: "上下文", colMax: "最大", colOps: "操作",
     tipModel: "上面是显示名，下面是请求使用的模型名。点击模型名复制，悬停可看被截断的全名。",
@@ -627,25 +779,30 @@ const MESSAGES = {
     capToolsNative: "支持原生工具调用", capToolsText: "不支持原生工具调用，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "不支持工具调用",
     capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试失败：{error}",
     ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
+    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
     switchLang: "EN"
   },
   en: {
     openCursor: "Open Cursor", openCursorTitle: "Open Cursor without quitting cursor-inner", cursorStarted: "Cursor is starting",
-    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", update: "Update", updateDesc: "Checks the GitHub and Gitee releases once at startup and only installs correctly signed versions. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upDownloading: "Downloading {pct}", upEta: "about {eta} left", upSec: "{n} s", upMin: "{n} min", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upCheckFailed: "Update check failed", upApplyFailed: "Update did not complete", upFrom: "manifest {source} · {route}", upRouteDefault: "default network", upRouteProxy: "proxy", upVerified: "signature verified", upMirror: "package {source}", upSkipped: "{source} not used: {reason}", upManual: "This build has no built-in update key, so it cannot update itself. Download {latest} from the Releases page.", upKeep: "Nothing was downloaded or replaced; the current version keeps running.", upE_sig_missing: "The update manifest is not signed and was rejected.", upE_sig_invalid: "The update manifest failed signature verification (it may have been tampered with) and was rejected.", upE_key_unknown: "The update manifest is not signed by a trusted key and was rejected.", upE_expired: "The update manifest has expired and was rejected.", upE_rollback: "The update source offered an older version than one seen before (possibly a replayed manifest); ignored.", upE_bad_manifest: "The update source returned an invalid manifest; rejected.", upE_checksum: "The downloaded package does not match the SHA256 in the signed manifest and was deleted.", upE_network: "Could not reach the update sources.", upDetail: "Details: {error}", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
-    tun: "TUN mode", tunDesc: "Uses a sing-box TUN to route only official endpoints (grok, x.ai, Cursor, cursorvm, etc.) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure.", tunOn: "Turn on", tunOff: "Turn off", tunAsked: "Administrator approval requested; see the PowerShell window for the result",
-    strict: "Strict mode", strictDesc: "Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (grok, x.ai, Cursor). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps.", strictOn: "Turn on", strictOff: "Turn off", strictAsked: "Administrator approval requested; see the PowerShell window for the result",
+    openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", openCodex: "Open Codex", openCodexTitle: "Open Codex without quitting cursor-inner", codexStarted: "Codex is starting", update: "Update", updateDesc: "Installs signed releases only; Grok and Cursor keep running.", updateTip: "Checks the GitHub and Gitee releases once at startup and only installs correctly signed versions. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upSec: "{n} s", upMin: "{n} min", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upCheckFailed: "Update check failed", upApplyFailed: "Update did not complete", upFrom: "manifest {source} · {route}", upRouteDefault: "default network", upRouteProxy: "proxy", upVerified: "signature verified", upMirror: "package {source}", upSkipped: "{source} not used: {reason}", upManual: "This build has no built-in update key, so it cannot update itself. Download {latest} from the Releases page.", upKeep: "Nothing was downloaded or replaced; the current version keeps running.", upE_sig_missing: "The update manifest is not signed and was rejected.", upE_sig_invalid: "The update manifest failed signature verification (it may have been tampered with) and was rejected.", upE_key_unknown: "The update manifest is not signed by a trusted key and was rejected.", upE_expired: "The update manifest has expired and was rejected.", upE_rollback: "The update source offered an older version than one seen before (possibly a replayed manifest); ignored.", upE_bad_manifest: "The update source returned an invalid manifest; rejected.", upE_checksum: "The downloaded package does not match the SHA256 in the signed manifest and was deleted.", upE_network: "Could not reach the update sources.", upDetail: "Details: {error}", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", upApplying: "Updating to {latest}", upStepSign: "Manifest signed", upStepDownload: "Download", upStepVerify: "Verify", upStepPreflight: "Self-test", upStepHandover: "Handover", upEtaLeft: "about {eta} left", upMeasuring: "measuring", upTrying: "{route}, also trying {probe}", upInfoVerify: "checking size and sha256", upInfoPreflight: "test-running {latest} --version", upInfoHandover: "{latest} is taking over the local ports; Grok and Cursor keep running", upInfoDone: "Handed over to {latest}; connecting to the new version…", upInfoFailed: "Stopped at {step}; the current version keeps running", upUpdated: "Updated from {from} to {to}", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
+    tun: "TUN mode", tunDesc: "Routes only official endpoints into the proxy at the network layer. Needs admin.", tunTip: "Uses a sing-box TUN to route only official endpoints (Grok, x.ai, Cursor, OpenAI) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure.", tunOn: "Turn on", tunOff: "Turn off", tunAsked: "Administrator approval requested; see the PowerShell window for the result",
+    strict: "Strict mode", strictDesc: "Firewall blocks direct official-endpoint access by Grok Bot and Cursor. Needs admin.", strictTip: "Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (Grok, x.ai, Cursor, OpenAI). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps.", strictOn: "Turn on", strictOff: "Turn off", strictAsked: "Administrator approval requested; see the PowerShell window for the result",
     quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
-    takeoverCursor: "Take over Cursor", takeoverCursorDesc: "Writes Cursor's proxy settings. A running window does not see that, so turning it on or off closes Cursor — open it again yourself. Custom models are appended to the list.",
-    takeoverGrok: "Take over Grok", takeoverGrokDesc: "Sets launch args and HTTPS_PROXY. A process that already has the current proxy is left alone; a bare window from the login page can exit on its own. Not started if it is not already running.",
+    takeoverCursor: "Take over Cursor", takeoverCursorDesc: "Writes Cursor's proxy settings; toggling closes a running Cursor.", takeoverCursorTip: "Writes Cursor's proxy settings. A running window does not see that, so turning it on or off closes Cursor — open it again yourself. Custom models are appended to the list.",
+    takeoverGrok: "Take over Grok", takeoverGrokDesc: "Adds proxy launch args to Grok Bot; never starts it.", takeoverGrokTip: "Sets launch args and HTTPS_PROXY. A process that already has the current proxy is left alone; a bare window from the login page can exit on its own. Not started if it is not already running.",
+    takeoverCodex: "Take over Codex", takeoverCodexDesc: "Adds proxy launch args to Codex; never starts it.", takeoverCodexTip: "The window uses --proxy-server. The API and WebSocket use this process's HTTPS_PROXY. A process that already has the current proxy is left alone. Not started if it is not already running. User environment variables are not changed.",
     grokOn: "A running Grok Bot uses the proxy above.", grokNoProxy: "The proxy is off, so Grok Bot is left direct.", grokOff: "Not taken over.",
-    proxy: "Proxy", proxyDesc: "One outbound address. A bare host:port is detected as socks5 or http. Empty means direct. Changing only the address does not close Cursor.",
+    codexOn: "A running Codex uses the proxy above.", codexNoProxy: "The proxy is off, so Codex is left direct.", codexOff: "Not taken over.",
+    proxy: "Proxy", proxyDesc: "Outbound proxy address; empty means direct.", proxyTip: "One outbound address. A bare host:port is detected as socks5 or http. Empty means direct. Changing only the address does not close Cursor.",
     scope: "Proxy scope", scopeGlobal: "Global", scopeOfficial: "Official only",
-    scopeDesc: "Global: all Cursor and Grok Bot traffic uses the proxy above. Official only: only Grok, x.ai, Cursor and other official endpoints use it; everything else connects directly. Loopback and LAN are always direct.",
+    scopeDesc: "Send all traffic, or only official endpoints, through the proxy.", scopeTip: "Global: all Cursor and Grok Bot traffic uses the proxy above. Official only: only Grok, x.ai, Cursor and OpenAI addresses use it; everything else connects directly. Loopback and LAN are always direct.",
     scopeHot: "Takes effect immediately; Cursor and Grok Bot keep running.", scopeRestart: "Cursor switches immediately; with a plain HTTP proxy, Grok Bot restarts once.", scopeIdle: "The proxy is off, so both scopes connect directly.",
-    image: "Images", imageDesc: "OpenAI-compatible endpoint for GenerateImage. Leave the key blank to keep it.",
+    image: "Images", imageDesc: "OpenAI-compatible image endpoint for GenerateImage.", imageTip: "OpenAI-compatible endpoint for GenerateImage. Leave the key blank to keep it.",
     imageEmpty: "Not configured. The model will not see GenerateImage.", imageReady: "Configured {model}{hint}",
     save: "Save", autostart: "Start at login", autostartDesc: "Starts at login, and keeps a single entry.",
-    models: "Custom models", modelsHint: "Tests probe tools, reasoning, images and cache, record speed, and can auto-fill settings",
+    background: "Run in background", backgroundDesc: "No console window at startup; notification-area icon only.", backgroundTip: "Starts without a console window and keeps only the notification-area icon. Click the icon for settings; right-click to show the console or quit.",
+    notify: "Notifications", notifyDesc: "System notifications for update results and leak warnings.", notifyTip: "Shows a system notification when an update finishes or fails, or when official endpoints may leak. The icon and its tooltip still change when this is off.",
+    models: "Custom models", modelsOnly: "Cursor only", modelsHint: "Tests probe tools, reasoning, images and cache, record speed, and can auto-fill settings",
     promptCacheKey: "Cache key", fallback: "Fallback", fallbackHint: "Other model ids, comma-separated",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test", colProxy: "Proxy", colReason: "Reasoning", colFast: "Fast", colContext: "Context", colMax: "Max", colOps: "Actions",
     tipModel: "Display name on top, request model name below. Click the model name to copy it. Hover to read a truncated name.",
@@ -676,6 +833,7 @@ const MESSAGES = {
     capToolsNative: "Native tool calls supported", capToolsText: "Native tool calls not supported; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calls not supported",
     capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test failed: {error}",
     ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
+    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
     switchLang: "中文"
   }
 };
@@ -700,7 +858,7 @@ function applyLang() {
   document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
-    if (node.classList.contains("desc")) node.title = node.textContent;
+    if (node.parentElement && node.parentElement.classList.contains("desc")) node.title = node.textContent; // 窄屏被截断时悬停可看全文
   });
   document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = t(node.dataset.i18nTitle); });
   document.querySelectorAll("[data-i18n-aria]").forEach((node) => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
@@ -710,6 +868,7 @@ function applyLang() {
   syncReveal();
   syncFormMode();
   if (lastState) render(lastState);
+  renderStatus();
 }
 
 const banner = document.querySelector("#banner");
@@ -975,13 +1134,10 @@ function render(state) {
   lastState = state;
   hoverTip.hidden = true;
   tipAnchor = null;
-  const listen = document.querySelector("#listen");
-  document.querySelector("#listen-text").textContent = state.listen_url || "";
   const tunNode = document.querySelector("#tun-status");
-  if (tunNode) tunNode.textContent = (state.tunnel && tr(state.tunnel.detail)) || "";
-  listen.href = state.listen_url || "/";
-  document.querySelector("#live-dot").className = "dot" + (state.takeover_active ? " on" : "");
-  listen.title = state.takeover_active ? t("liveOn") : t("liveOff");
+  tunNode.textContent = (state.tunnel && tr(state.tunnel.detail)) || "";
+  tunNode.className = "meta" + (state.tunnel && state.tunnel.status === TUN_FAILED ? " warn" : "");
+  tunNode.title = tunNode.textContent;
 
   document.querySelector("#takeover-cursor").checked = !!state.takeover;
   const meta = document.querySelector("#takeover-meta");
@@ -998,6 +1154,10 @@ function render(state) {
   document.querySelector("#takeover-grok").checked = !!state.takeover_grok;
   grokMeta.textContent = state.takeover_grok ? (state.proxy && state.proxy.effective ? t("grokOn") : t("grokNoProxy")) : t("grokOff");
   grokMeta.title = grokMeta.textContent;
+  const codexMeta = document.querySelector("#codex-meta");
+  document.querySelector("#takeover-codex").checked = !!state.takeover_codex;
+  codexMeta.textContent = state.takeover_codex ? (state.proxy && state.proxy.effective ? t("codexOn") : t("codexNoProxy")) : t("codexOff");
+  codexMeta.title = codexMeta.textContent;
 
   document.querySelector("#proxy-on").checked = !!state.proxy.enabled;
   const address = document.querySelector("#proxy-address");
@@ -1026,6 +1186,12 @@ function render(state) {
   const bootMeta = document.querySelector("#boot-meta");
   bootMeta.textContent = tr(state.autostart.detail);
   bootMeta.title = bootMeta.textContent;
+  const desk = state.desktop || {};
+  for (const row of document.querySelectorAll(".desk-row")) row.hidden = !desk.tray;
+  document.querySelector("#background").checked = !!desk.background;
+  document.querySelector("#notify").checked = desk.notify !== false;
+
+  renderStatus();
 
   const box = document.querySelector("#models");
   box.replaceChildren();
@@ -1134,6 +1300,14 @@ document.querySelector("#takeover-cursor").addEventListener("change", (event) =>
 document.querySelector("#takeover-grok").addEventListener("change", (event) => {
   act(() => send("/api/takeover", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target: "grok", enabled: event.target.checked})}));
 });
+document.querySelector("#takeover-codex").addEventListener("change", (event) => {
+  act(() => send("/api/takeover", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({target: "codex", enabled: event.target.checked})}));
+});
+for (const [id, key] of [["#background", "background"], ["#notify", "notify"]]) {
+  document.querySelector(id).addEventListener("change", (event) => {
+    act(() => send("/api/desktop", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({[key]: event.target.checked})}));
+  });
+}
 document.querySelector("#autostart").addEventListener("change", (event) => {
   act(() => send("/api/autostart", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({enabled: event.target.checked})}));
 });
@@ -1192,6 +1366,13 @@ document.querySelector("#open-grok").addEventListener("click", () => {
   act(async () => {
     await send("/api/grok", {method: "POST"});
     toast(t("grokStarted"), "ok");
+    return null;
+  });
+});
+document.querySelector("#open-codex").addEventListener("click", () => {
+  act(async () => {
+    await send("/api/codex", {method: "POST"});
+    toast(t("codexStarted"), "ok");
     return null;
   });
 });
@@ -1257,12 +1438,138 @@ document.querySelector("#reveal-key").addEventListener("click", () => {
 document.addEventListener("mouseover", (event) => {
   const node = event.target.closest ? event.target.closest("[data-tip]") : null;
   if (node === tipAnchor) return;
-  tipAnchor = node;
-  const text = node && node.dataset.tip;
-  if (!text) {
-    hoverTip.hidden = true;
+  if (!node) {
+    if (tipAnchor && !(tipAnchor.classList.contains("qa") && tipAnchor === document.activeElement)) hideTip();
     return;
   }
+  showTip(node);
+});
+document.addEventListener("mouseout", (event) => {
+  if (!tipAnchor) return;
+  const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest("[data-tip]") : null;
+  if (next === tipAnchor) return;
+  if (tipAnchor.classList.contains("qa") && tipAnchor === document.activeElement) return; // 键盘或点按打开的，留着
+  hideTip();
+});
+// —— 标签页与状态条 ——
+// 当前标签记在 URL hash（#models / #network / #update / #general）：刷新、热交接后的自动刷新、托盘直达都停在同一个标签。
+const TABS = ["models", "network", "general", "update"];
+const TUN_STARTING = 1, TUN_ON = 2, TUN_FAILED = 3; // 与 internal/tunnel.State 一致
+const tabButtons = [...document.querySelectorAll('.tabs [role="tab"]')];
+let upMissing = false; // 后端没有更新器（/api/update 不可用）：隐藏「更新」标签
+function tabFromHash() {
+  const name = decodeURIComponent(location.hash.replace(/^#/, "")).toLowerCase();
+  if (name === "update" && upMissing) return "models";
+  return TABS.includes(name) ? name : "models";
+}
+function showTab(name, focus) {
+  for (const button of tabButtons) {
+    const on = button.dataset.tab === name;
+    button.setAttribute("aria-selected", String(on));
+    button.tabIndex = on ? 0 : -1;
+    document.getElementById(button.getAttribute("aria-controls")).hidden = !on;
+    if (on && focus) button.focus();
+  }
+  hideTip();
+}
+function selectTab(name, focus) {
+  if (("#" + name) !== location.hash) history.replaceState(null, "", "#" + name);
+  showTab(name, focus);
+}
+for (const button of tabButtons) {
+  button.addEventListener("click", () => selectTab(button.dataset.tab));
+  button.addEventListener("keydown", (event) => {
+    const shown = tabButtons.filter(b => !b.hidden);
+    const i = shown.indexOf(button);
+    let next = null;
+    if (event.key === "ArrowRight") next = shown[(i + 1) % shown.length];
+    else if (event.key === "ArrowLeft") next = shown[(i - 1 + shown.length) % shown.length];
+    else if (event.key === "Home") next = shown[0];
+    else if (event.key === "End") next = shown[shown.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    selectTab(next.dataset.tab, true);
+  });
+}
+window.addEventListener("hashchange", () => showTab(tabFromHash()));
+showTab(tabFromHash());
+
+function setDot(tab, kind) {
+  const dot = document.querySelector("#tab-" + tab + " .tab-dot");
+  dot.className = "tab-dot" + (kind ? " " + kind : "");
+}
+// 各标签要不要亮点：bad 是出了问题，warn 是值得看一眼（有新版本）。
+function networkProblem(state) {
+  if (!state) return false;
+  const proxy = state.proxy || {};
+  return !!tr(state.last_error) || !!tr(state.catalog_warning)
+    || (state.takeover && !state.takeover_active)
+    || (proxy.enabled && !proxy.effective)
+    || (state.tunnel && state.tunnel.status === TUN_FAILED);
+}
+function updateLevel(st) {
+  if (!st) return "";
+  if (st.error_code === "no_key") return "warn";
+  if (st.error && (st.state === "failed" || upTrust.includes(st.error_code))) return st.latest || upTrust.includes(st.error_code) ? "bad" : "";
+  if ((st.sources || []).some(s => upTrust.includes(s.code))) return "bad";
+  if (st.state === "available" || upApplying.includes(st.state) || st.state === "done") return "warn";
+  return "";
+}
+function renderStatus() {
+  const state = lastState;
+  const st = upLast;
+  const ver = document.querySelector("#st-ver");
+  ver.textContent = upCurrent || "";
+  document.querySelector("#st-version").title = upCurrent ? t("stVersion", {v: upCurrent}) : "";
+  if (state) {
+    const take = document.querySelector("#listen");
+    const takeBad = !!tr(state.last_error) || (state.takeover && !state.takeover_active);
+    document.querySelector("#live-dot").className = "dot" + (takeBad ? " bad" : state.takeover_active ? " on" : "");
+    document.querySelector("#st-take").textContent = takeBad ? t("stTakeBad") : state.takeover_active ? t("stTakeOn") : t("stTakeOff");
+    take.classList.toggle("bad", takeBad);
+    take.title = [state.takeover_active ? t("liveOn") : t("liveOff"), state.takeover_active && state.mitm_url ? t("mitm", {url: state.mitm_url}) : "", tr(state.last_error)].filter(Boolean).join("\n");
+
+    const proxy = state.proxy || {};
+    const pv = document.querySelector("#st-proxy-v");
+    const proxyBad = proxy.enabled && !proxy.effective;
+    pv.className = proxy.effective ? "mono" : "";
+    pv.textContent = proxy.effective ? (proxy.address || "") + (proxy.scope === "official" ? " · " + t("stOfficial") : "")
+      : proxyBad ? t("stProxyBad") : t("stDirect");
+    const pnode = document.querySelector("#st-proxy");
+    pnode.classList.toggle("bad", proxyBad);
+    pnode.title = proxy.effective ? t(proxy.scope === "official" ? "proxyOnOfficial" : "proxyOn") : t("proxyOff");
+
+    const tun = (state.tunnel && state.tunnel.status) || 0;
+    const tnode = document.querySelector("#st-tun");
+    tnode.hidden = ![TUN_STARTING, TUN_ON, TUN_FAILED].includes(tun);
+    tnode.classList.toggle("bad", tun === TUN_FAILED);
+    document.querySelector("#st-tun-v").textContent = tun === TUN_ON ? t("stTunOn") : tun === TUN_FAILED ? t("stTunFailed") : t("stTunStarting");
+    tnode.title = tr(state.tunnel && state.tunnel.detail);
+
+    setDot("network", networkProblem(state) ? "bad" : "");
+    setDot("models", (state.models || []).some(m => m.last_test && !m.last_test.ok) ? "bad" : "");
+    const bootBad = state.autostart && state.autostart.mode === "run-key"; // 登录任务没写进去，退回了启动项
+    setDot("general", bootBad ? "warn" : "");
+  }
+  // 更新：标签小点 + 状态条徽标（有新版本、更新中、失败）。
+  const level = updateLevel(st);
+  setDot("update", level);
+  const pill = document.querySelector("#st-update");
+  let text = "";
+  if (st && level) {
+    if (st.state === "available" && !st.error) text = t("stUpAvail", {latest: st.latest || ""});
+    else if (upApplying.includes(st.state) || st.state === "done") text = t("stUpBusy", {pct: st.state === "downloading" ? (st.percent || 0) + "%" : "…"});
+    else if (level === "bad") text = t("stUpFailed");
+    else if (st.latest) text = t("stUpAvail", {latest: st.latest});
+  }
+  pill.hidden = !text || upMissing;
+  pill.textContent = text;
+  pill.className = "pill" + (level === "bad" ? " bad" : "");
+}
+
+// —— 悬停提示 ——
+// 带 data-tip 的元素悬停时显示；「?」按钮还支持键盘聚焦和点按（触屏没有悬停）。
+function placeTip(node, text) {
   hoverTip.textContent = text;
   hoverTip.hidden = false;
   const rect = node.getBoundingClientRect();
@@ -1275,58 +1582,151 @@ document.addEventListener("mouseover", (event) => {
   if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 6);
   hoverTip.style.left = left + "px";
   hoverTip.style.top = top + "px";
-});
-document.addEventListener("mouseout", (event) => {
-  if (!tipAnchor) return;
-  const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest("[data-tip]") : null;
-  if (next === tipAnchor) return;
+}
+function showTip(node) {
+  if (node === tipAnchor && !hoverTip.hidden) return;
+  if (tipAnchor && tipAnchor.classList.contains("qa")) tipAnchor.setAttribute("aria-expanded", "false");
+  tipAnchor = node;
+  const text = node && node.dataset.tip;
+  if (!text) { hoverTip.hidden = true; return; }
+  if (node.classList.contains("qa")) node.setAttribute("aria-expanded", "true");
+  placeTip(node, text);
+}
+function hideTip() {
+  if (tipAnchor && tipAnchor.classList && tipAnchor.classList.contains("qa")) tipAnchor.setAttribute("aria-expanded", "false");
   tipAnchor = null;
   hoverTip.hidden = true;
+}
+document.addEventListener("click", (event) => {
+  const qa = event.target.closest ? event.target.closest("button.qa") : null;
+  if (qa) { showTip(qa); return; } // 触屏没有悬停：点按显示，点别处或 Esc 关闭
+  if (tipAnchor && tipAnchor.classList.contains("qa")) hideTip();
 });
-applyLang();
-load();
+document.addEventListener("focusin", (event) => {
+  if (event.target.classList && event.target.classList.contains("qa")) showTip(event.target);
+});
+document.addEventListener("focusout", (event) => {
+  if (event.target === tipAnchor) hideTip();
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !hoverTip.hidden) hideTip(); });
+window.addEventListener("scroll", () => { if (!hoverTip.hidden) hideTip(); }, {passive: true});
 
 // —— 更新 ——
-const upRow = document.querySelector("#update-row");
+// 状态来自后端同一份快照：优先用 /api/update/events（SSE）实时推送，后端不支持或连不上时退回轮询。
+// 百分比和剩余秒数由后端算好（percent、eta），这里和控制台进度条只负责排版，数字一致。
 let upPoll = null;
+let upES = null;
+let upNoStream = false;
+let upLast = null;      // 最近一条快照
+let upCurrent = "";     // 本页面连着的进程版本；变了说明已经交接到新进程
+let upApplied = null;   // 最近一次更新过程里的最后一条快照，失败时用来把进度条停在出错的阶段
 const upTrust = ["sig_missing", "sig_invalid", "key_unknown", "expired", "rollback", "bad_manifest", "checksum"];
 const upNames = {github: "GitHub", gitee: "Gitee"};
 const upName = n => upNames[n] || n;
+const upApplying = ["downloading", "verifying", "preflight", "waiting_idle", "handover"];
+const upStepKeys = ["upStepSign", "upStepDownload", "upStepVerify", "upStepPreflight", "upStepHandover"];
+const upStepOf = {downloading: 1, verifying: 2, preflight: 3, waiting_idle: 4, handover: 4, done: 5};
 function upReason(code, error) {
   const k = "upE_" + code;
   return code && (MESSAGES[lang][k] || MESSAGES.zh[k]) ? t(k) : (error || "");
 }
-function upSpeed(bps) {
-  return bps >= 1 << 20 ? (bps / (1 << 20)).toFixed(1) + " MB/s" : Math.max(1, Math.round(bps / 1024)) + " KB/s";
+// 排版规则与 internal/updateview/format.go 一致：不到 1 MB 用整数 KB，否则一位小数的 MB。
+const MIB = 1 << 20;
+function upSize(n) {
+  if (n >= MIB) return (n / MIB).toFixed(1) + " MB";
+  if (!(n > 0)) return "0 KB";
+  return Math.max(1, Math.floor((n + 512) / 1024)) + " KB";
+}
+function upSizePair(done, total) {
+  if (!(total > 0)) return upSize(done);
+  if (total >= MIB) return (done / MIB).toFixed(1) + " / " + upSize(total);
+  return Math.floor((done + 512) / 1024) + " / " + upSize(total);
+}
+function upSpeed(bps) { return upSize(bps) + "/s"; }
+function upEta(sec) { return sec < 90 ? t("upSec", {n: sec}) : t("upMin", {n: Math.ceil(sec / 60)}); }
+function upRouteName(r) { return ({default: t("upRouteDefault"), proxy: t("upRouteProxy")})[r] || r || ""; }
+// 进度条下面那行，与控制台进度条右边的文字同一套内容。
+function upInfo(st) {
+  switch (st.state) {
+    case "downloading": {
+      const parts = [upSizePair(st.done || 0, st.total || 0)];
+      if (st.speed > 0) {
+        parts.push(upSpeed(st.speed));
+        if (st.eta > 0) parts.push(t("upEtaLeft", {eta: upEta(st.eta)}));
+      } else parts.push(t("upMeasuring"));
+      let route = upRouteName(st.dl_route);
+      if (st.dl_probe) route = t("upTrying", {route, probe: upRouteName(st.dl_probe)});
+      if (route) parts.push(route);
+      return parts.join(" · ");
+    }
+    case "verifying": return t("upInfoVerify");
+    case "preflight": return t("upInfoPreflight", {latest: st.latest});
+    case "waiting_idle": return t("upWaiting");
+    case "handover": return t("upInfoHandover", {latest: st.latest});
+    case "done": return t("upInfoDone", {latest: st.latest});
+  }
+  return "";
+}
+function renderBar(st) {
+  const bar = document.querySelector("#update-bar");
+  const applying = upApplying.includes(st.state) || st.state === "done";
+  if (applying) upApplied = st;
+  else if (st.state === "checking" || st.state === "up_to_date") upApplied = null;
+  // 更新失败后后端回到「有新版本」并带着错误：进度条停在出错的阶段，标红。
+  const failed = !applying && upApplied && st.error && (st.state === "failed" || st.state === "available");
+  if (!applying && !failed) { bar.hidden = true; return; }
+  const shown = applying ? st : upApplied;
+  bar.hidden = false;
+  const step = upStepOf[shown.state] ?? 1;
+  const steps = document.querySelector("#up-steps");
+  steps.replaceChildren(...upStepKeys.map((key, i) => {
+    const li = document.createElement("li");
+    li.textContent = t(key);
+    li.className = i < step ? "done" : i === step ? (failed ? "bad" : "now") : "";
+    return li;
+  }));
+  const downloading = shown.state === "downloading";
+  const pct = downloading ? (shown.percent || 0) : 100;
+  document.querySelector("#up-pct").textContent = downloading || failed ? pct + "%" : (shown.state === "done" ? "✓" : "100%");
+  document.querySelector("#up-fill").style.width = pct + "%";
+  document.querySelector("#up-track").setAttribute("aria-valuenow", String(pct));
+  bar.classList.toggle("wait", !failed && ["verifying", "preflight", "waiting_idle", "handover"].includes(shown.state));
+  bar.classList.toggle("ok", !failed && shown.state === "done");
+  bar.classList.toggle("bad", !!failed);
+  const info = document.querySelector("#up-info");
+  info.textContent = failed ? t("upInfoFailed", {step: t(upStepKeys[step])}) : upInfo(shown); // 原因在下面的错误行里，不重复
+  info.title = info.textContent;
 }
 function renderUpdate(st) {
-  upRow.hidden = false;
+  if (!st) return;
+  // 进程换了（热交接完成）：刷新页面，换成新版本的页面和标题。
+  if (st.current && upCurrent && st.current !== upCurrent) {
+    try { sessionStorage.setItem("cursor-inner-updated", JSON.stringify({from: upCurrent, to: st.current})); } catch (_) {}
+    location.reload();
+    return;
+  }
+  if (st.current) upCurrent = st.current;
+  // 同一进程里序号只增不减：POST 的返回和推送交错时丢掉旧的。
+  if (upLast && st.seq && upLast.seq && st.seq < upLast.seq && st.current === upLast.current) return;
+  upLast = st;
   const status = document.querySelector("#update-status");
   const warn = document.querySelector("#update-warn");
   const notes = document.querySelector("#update-notes");
   const apply = document.querySelector("#update-apply");
-  const pct = st.total ? Math.floor(100 * st.done / st.total) + "%" : "";
-  // 下载中：进度 · 速度 · 剩余时间（速度来自后端的滑动窗口，路径换了以后也会跟着变）。
-  let dl = "";
-  if (st.state === "downloading" && st.speed > 0) {
-    dl = " · " + upSpeed(st.speed);
-    const left = st.total > st.done ? (st.total - st.done) / st.speed : 0;
-    if (left >= 1) dl += " · " + t("upEta", {eta: left < 90 ? t("upSec", {n: Math.ceil(left)}) : t("upMin", {n: Math.ceil(left / 60)})});
-  }
   const code = st.error_code || "";
+  const applying = upApplying.includes(st.state);
   const text = {
     checking: t("upChecking"), up_to_date: t("upUpToDate", {current: st.current}),
     available: t("upAvailable", {latest: st.latest, current: st.current}),
-    downloading: t("upDownloading", {pct}) + dl, waiting_idle: t("upWaiting"),
-    handover: t("upHandover"), done: t("upDone"), failed: st.latest ? t("upApplyFailed") : t("upCheckFailed")
-  }[st.state] || "";
+    waiting_idle: t("upApplying", {latest: st.latest}), handover: t("upHandover"), done: t("upDone"),
+    failed: st.latest ? t("upApplyFailed") : t("upCheckFailed")
+  }[st.state] || (applying ? t("upApplying", {latest: st.latest}) : "");
   const extra = [];
-  const routeName = {default: t("upRouteDefault"), proxy: t("upRouteProxy")};
-  const route = (st.state === "downloading" && st.dl_route) || st.route;
-  if (st.source && st.state !== "failed") extra.push(t("upFrom", {source: upName(st.source), route: routeName[route] || route || ""}));
+  if (st.source && st.state !== "failed") extra.push(t("upFrom", {source: upName(st.source), route: upRouteName(st.route)}));
   if (st.mirror && st.mirror !== st.source) extra.push(t("upMirror", {source: upName(st.mirror)}));
   if (st.signed && st.state !== "failed") extra.push(t("upVerified"));
   status.textContent = text + (extra.length ? " · " + extra.join(" · ") : "");
+  renderBar(st);
   // 第二行：失败原因、没有公钥时的手动下载提示、某个源被弃用的原因。验签类问题用醒目颜色。
   const lines = [];
   if (code === "no_key") lines.push(t("upManual", {latest: st.latest || ""}));
@@ -1344,15 +1744,29 @@ function renderUpdate(st) {
   warn.textContent = lines.join("\n");
   warn.style.whiteSpace = "pre-line";
   warn.classList.toggle("warn", upTrust.includes(code) || (st.sources || []).some(s => upTrust.includes(s.code)) || code === "no_key");
-  const showNotes = st.notes && (st.state === "available" || st.state === "downloading" || st.state === "waiting_idle");
+  const showNotes = st.notes && (st.state === "available" || applying);
   notes.hidden = !showNotes;
   notes.textContent = showNotes ? st.notes : "";
   apply.hidden = st.state !== "available" || st.can_apply === false;
-  const busyNow = ["checking", "downloading", "waiting_idle", "handover", "done"].includes(st.state);
+  const busyNow = st.state === "checking" || applying || st.state === "done";
   document.querySelector("#update-check").disabled = busyNow;
-  if (busyNow && !upPoll) upPoll = setInterval(pollUpdate, 1500);
-  if (!busyNow && upPoll) { clearInterval(upPoll); upPoll = null; }
+  // 推送连着时不轮询；推送断了（交接空窗、后端不支持）才轮询。
+  const live = upES && upES.readyState === 1;
+  if (busyNow && !live && !upPoll) upPoll = setInterval(pollUpdate, 1000);
+  if ((!busyNow || live) && upPoll) { clearInterval(upPoll); upPoll = null; }
   if (st.state === "done") waitNewVersion(st.current);
+  renderStatus();
+}
+function upStream() {
+  if (upES || upNoStream || !window.EventSource) return;
+  upES = new EventSource("/api/update/events");
+  upES.onopen = () => { if (upPoll) { clearInterval(upPoll); upPoll = null; } };
+  upES.onmessage = (e) => { try { renderUpdate(JSON.parse(e.data)); } catch (_) {} };
+  upES.onerror = () => {
+    // 连接断开时浏览器会自己重连（交接时会连到新进程）；返回 404 之类会直接关闭，那就退回轮询。
+    if (upES.readyState === 2) { upES = null; upNoStream = true; }
+    if (upLast) renderUpdate(upLast);
+  };
 }
 async function pollUpdate() {
   try { renderUpdate(await send("/api/update")); } catch (_) { /* 交接空窗里请求失败是正常的 */ }
@@ -1365,17 +1779,21 @@ async function waitNewVersion(old) {
     await new Promise(r => setTimeout(r, 1000));
     try {
       const v = await send("/api/version");
-      if (v.version && v.version !== old) { location.reload(); return; }
+      if (v.version && v.version !== old) {
+        try { sessionStorage.setItem("cursor-inner-updated", JSON.stringify({from: old, to: v.version})); } catch (_) {}
+        location.reload();
+        return;
+      }
     } catch (_) {}
   }
 }
 async function checkUpdate(auto) {
   try {
-    renderUpdate({state: "checking", current: ""});
+    renderUpdate({state: "checking", current: upCurrent});
     renderUpdate(await send("/api/update/check", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({auto})}));
   } catch (err) {
     if (!auto) showError(err.message);
-    upRow.hidden = true;
+    if (upLast) renderUpdate(upLast); else renderStatus();
   }
 }
 document.querySelector("#update-check").addEventListener("click", () => checkUpdate(false));
@@ -1384,8 +1802,26 @@ document.querySelector("#update-apply").addEventListener("click", async () => {
   if (!st || !confirm(t("upConfirm", {latest: st.latest}))) return;
   try { renderUpdate(await send("/api/update/apply", {method: "POST"})); } catch (err) { showError(err.message); }
 });
+document.querySelector("#lang").addEventListener("click", () => { if (upLast) { const st = upLast; upLast = null; renderUpdate(st); } });
+// 刚热交接过来：提示一次「已从 A 更新到 B」。
+try {
+  const done = JSON.parse(sessionStorage.getItem("cursor-inner-updated") || "null");
+  sessionStorage.removeItem("cursor-inner-updated");
+  if (done && done.to) toast(t("upUpdated", {from: done.from, to: done.to}), "ok");
+} catch (_) {}
+applyLang();
+load();
 // 每次 cursor-inner 启动只自动检查一次（后端去重）；页面只是触发与展示。
-send("/api/update").then(st => { if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true); }).catch(() => {});
+send("/api/update").then(st => {
+  if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true);
+  upStream();
+}).catch(() => {
+  // 没有更新器（例如预览后端）：藏起「更新」标签，版本号从 /api/version 拿。
+  upMissing = true;
+  document.querySelector("#tab-update").hidden = true;
+  if (location.hash === "#update") selectTab("models");
+  send("/api/version").then(v => { if (v.version && !upCurrent) { upCurrent = v.version; renderStatus(); } }).catch(() => {});
+});
 </script>
 </body>
 </html>

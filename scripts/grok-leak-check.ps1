@@ -41,14 +41,16 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
   'x.ai', 'www.x.ai', 'api.x.ai', 'accounts.x.ai', 'auth.x.ai', 'console.x.ai', 'docs.x.ai', 'grok.x.ai', 'cdn.x.ai',
   'spacexai.com', 'www.spacexai.com',
   'cursor.com', 'www.cursor.com', 'api.cursor.com', 'downloads.cursor.com', 'docs.cursor.com', 'forum.cursor.com', 'authenticator.cursor.sh',
   'cursor.sh', 'api1.cursor.sh', 'api2.cursor.sh', 'api3.cursor.sh', 'api4.cursor.sh', 'api5.cursor.sh', 'repo42.cursor.sh', 'metrics.cursor.sh', 'prod.authentication.cursor.sh',
-  'marketplace.cursorapi.com', 'cursor-cdn.com', 'anysphere.co'
+  'marketplace.cursorapi.com', 'cursor-cdn.com', 'anysphere.co',
+  'openai.com', 'api.openai.com', 'auth.openai.com', 'chatgpt.com', 'ab.chatgpt.com', 'chat.openai.com',
+  'oaistatic.com', 'cdn.oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com'
 )
 foreach ($region in 'us', 'eu', 'ap') { foreach ($n in 1..30) { $OfficialHosts += "$region$n.cursorvm.com" } }
 

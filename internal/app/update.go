@@ -41,6 +41,14 @@ func (a *App) UpdateStatus() (selfupdate.Status, error) {
 	return a.upd.Status(), nil
 }
 
+// WatchUpdate 订阅更新进度（配置页的实时推送用，和控制台进度条是同一份数据）。
+func (a *App) WatchUpdate() (*selfupdate.Watch, error) {
+	if a.upd == nil {
+		return nil, errNoUpdater
+	}
+	return a.upd.Watch(), nil
+}
+
 // CheckUpdate 检查一次。auto 为真是配置页打开时的启动检查，每个进程只跑一次。
 func (a *App) CheckUpdate(auto bool) (selfupdate.Status, error) {
 	if a.upd == nil {

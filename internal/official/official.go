@@ -1,7 +1,7 @@
 // Package official 是官方端点清单，以及「代理范围：仅官方」时按目标决定走代理还是直连的规则。
 //
-// 规则只朝安全的方向放宽：官方域名、TUN 的 fake-ip 段、认不出的 IP 一律走代理；
-// 只有回环、LAN/WSL 私网段，以及确认不是官方的域名才直连。
+// 先有名字，再对名单。名单里的域名、TUN 的 fake-ip 段、没有域名的公网 IP 走代理；
+// 回环、LAN/WSL 私网，以及名单以外的域名直连。协议本身不决定走法。
 package official
 
 import (
@@ -20,6 +20,12 @@ var Suffixes = []string{
 	"cursor-cdn.com",
 	"cursorvm.com",
 	"anysphere.co",
+	// OpenAI 帮助中心里列出的第一方后缀。Stripe、Sentry、Intercom 这类第三方不在名单里。
+	"openai.com",
+	"chatgpt.com",
+	"oaistatic.com",
+	"oaiusercontent.com",
+	"oaistatsig.com",
 }
 
 // alsoProxy 是用来解析官方域名的 DoH 服务。严格模式和泄漏检查脚本经 Grok 的代理地址查询它们，
@@ -57,8 +63,10 @@ const (
 	Proxy Route = iota
 	// Direct：直连。
 	Direct
-	// Inspect：域名不是官方的，先看连接上客户端发的第一段数据（TLS SNI 或 HTTP Host）再定。
+	// Inspect：拨号目标不是官方域名，先看客户端第一段数据里的 TLS SNI 或 HTTP Host。
 	Inspect
+	// ByDial：这段数据里没有主机名。用拨号目标上的名字决定，不因为协议认不出来改走代理。
+	ByDial
 )
 
 func (r Route) String() string {
@@ -67,6 +75,8 @@ func (r Route) String() string {
 		return "direct"
 	case Inspect:
 		return "inspect"
+	case ByDial:
+		return "bydial"
 	}
 	return "proxy"
 }
@@ -111,7 +121,7 @@ func ForHost(host string) Route {
 				return Direct
 			}
 		}
-		// 写死的公网 IP 认不出是谁，宁可走代理。
+		// 公网 IP 没有域名，对不上名单。官方客户端有时直接连 IP，所以走代理。
 		return Proxy
 	}
 	if matchSuffix(h, Suffixes) || matchSuffix(h, alsoProxy) {
@@ -123,10 +133,10 @@ func ForHost(host string) Route {
 	return Inspect
 }
 
-// sniffName 把客户端声明的名字（SNI 或 Host）换算成走法：认不出是官方的名字才直连。
+// sniffName 把客户端声明的名字（SNI 或 Host）换算成走法。空名字交给拨号目标。
 func sniffName(name string) Route {
 	if strings.TrimSpace(name) == "" {
-		return Proxy
+		return ByDial
 	}
 	if r := ForHost(name); r != Inspect {
 		return r
@@ -134,13 +144,12 @@ func sniffName(name string) Route {
 	return Direct
 }
 
-// MaxInspect 是判断前最多缓存的客户端数据量。超过还判断不了就走代理。
+// MaxInspect 是判断前最多缓存的客户端数据量。超过还没有主机名，就用拨号目标上的名字。
 const MaxInspect = 16 << 10
 
-// InspectFirst 看客户端发出的第一段数据，决定走法。done 为假表示数据还不完整，等更多再看。
-//   - TLS：取 ClientHello 的 SNI；没有 SNI 走代理；
-//   - 明文 HTTP：取 Host（或绝对形式请求行里的主机）；
-//   - 别的协议认不出，走代理。
+// InspectFirst 从客户端第一段数据里取主机名。done 为假表示数据还不完整，等更多再看。
+// TLS 取 ClientHello 的 SNI，明文 HTTP 取 Host（或绝对形式请求行里的主机）。
+// 没有主机名时返回 ByDial：SSH、没有 SNI、没有 Host 都用拨号目标上的名字，不另作兜底。
 func InspectFirst(b []byte) (route Route, name string, done bool) {
 	if len(b) == 0 {
 		return Proxy, "", false
@@ -151,7 +160,7 @@ func InspectFirst(b []byte) (route Route, name string, done bool) {
 			return Proxy, "", false
 		}
 		if !ok {
-			return Proxy, "", true
+			return ByDial, "", true
 		}
 		return sniffName(sni), sni, true
 	}
@@ -162,7 +171,7 @@ func InspectFirst(b []byte) (route Route, name string, done bool) {
 		}
 		return sniffName(host), host, true
 	}
-	return Proxy, "", true
+	return ByDial, "", true
 }
 
 var methods = []string{"GET ", "POST ", "PUT ", "HEAD ", "DELETE ", "OPTIONS ", "PATCH ", "TRACE "}

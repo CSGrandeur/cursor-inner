@@ -30,20 +30,23 @@ type starter interface {
 }
 
 type App struct {
-	store    *config.Store
-	life     *takeover.Service
-	boot     starter
-	exe      string
-	mu       sync.Mutex
-	listen   string
-	bootErr  i18n.Text
-	quit     func()
-	shutdown sync.Once
-	bridge   grokbot.Bridge
-	tun      *tunnel.Manager
-	upd      *selfupdate.Updater
-	frozen   atomic.Bool
-	isolated atomic.Bool
+	store       *config.Store
+	life        *takeover.Service
+	boot        starter
+	exe         string
+	mu          sync.Mutex
+	listen      string
+	bootErr     i18n.Text
+	quit        func()
+	shutdown    sync.Once
+	bridge      grokbot.Bridge
+	codexBridge grokbot.Bridge
+	tun         *tunnel.Manager
+	upd         *selfupdate.Updater
+	frozen      atomic.Bool
+	isolated    atomic.Bool
+
+	trayApply func(config.Desktop) // 托盘挂上后才有，见 SetTray
 }
 
 // Isolate 用于 --debug 调试实例：之后不再关闭或重开正在运行的 Grok Bot。
@@ -130,6 +133,7 @@ func (a *App) State() (web.View, error) {
 		ListenURL:      a.listenURL(),
 		Takeover:       cfg.Takeover,
 		TakeoverGrok:   cfg.TakeoverGrok,
+		TakeoverCodex:  cfg.TakeoverCodex,
 		TakeoverActive: snap.Active,
 		MitmURL:        snap.URL,
 		CA:             snap.CA,
@@ -137,6 +141,7 @@ func (a *App) State() (web.View, error) {
 		LastError:      snap.Problem,
 		CatalogWarning: snap.Warning,
 		Autostart:      a.boot.Current(a.exe),
+		Desktop:        a.desktopView(cfg),
 	}
 	view.Proxy.Enabled = cfg.Proxy.Enabled
 	view.Proxy.Address = cfg.Proxy.Address
@@ -200,6 +205,15 @@ func (a *App) SetTakeover(target string, enabled bool) error {
 		}
 		a.SyncGrok()
 		return nil
+	case "codex":
+		if err := a.store.Update(func(f *config.File) error {
+			f.TakeoverCodex = enabled
+			return nil
+		}); err != nil {
+			return err
+		}
+		a.SyncCodex()
+		return nil
 	default:
 		return i18n.E("未知的接管目标", "Unknown takeover target")
 	}
@@ -222,6 +236,7 @@ func (a *App) SetProxy(enabled bool, address string) error {
 	}
 	a.life.SyncDirect()
 	a.SyncGrok()
+	a.SyncCodex()
 	return nil
 }
 

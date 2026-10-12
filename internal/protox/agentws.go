@@ -4,6 +4,7 @@ package protox
 type AgentPayload struct {
 	Kind      string
 	RequestID string
+	RunID     string // run_start 里的 run_id；客户端确认时要和 request_id 一起原样回写
 	Seq       uint64
 	HasSeq    bool
 	Message   []byte
@@ -20,7 +21,8 @@ func ClassifyAgentPayload(p []byte) AgentPayload {
 	}
 	switch fields[0].Num {
 	case 2:
-		return AgentPayload{Kind: "meta", RequestID: StringField(Child(Child(p, 2), 1), 1)}
+		ident := Child(Child(p, 2), 1)
+		return AgentPayload{Kind: "meta", RequestID: StringField(ident, 2), RunID: StringField(ident, 1)}
 	case 3:
 		item := Child(p, 3)
 		out := AgentPayload{Kind: "agent", RequestID: StringField(item, 1), Message: Child(item, 3)}
@@ -52,9 +54,17 @@ func EncodeAgentServer(requestID string, seq uint64, msg []byte) []byte {
 	return AppendBytes(nil, 3, item)
 }
 
+// EncodeAgentRunAccepted 回写 run_start 里的 run_id 和 request_id。两边都必须是客户端原来的值。
+func EncodeAgentRunAccepted(runID, requestID string) []byte {
+	if requestID == "" {
+		requestID = runID
+	}
+	ident := AppendString(nil, 1, runID)
+	ident = AppendString(ident, 2, requestID)
+	return AppendBytes(nil, 2, AppendBytes(nil, 1, ident))
+}
+
 // EncodeAgentMetaAck 回写客户端带来的请求编号。服务端确认里这两处是同一个值。
 func EncodeAgentMetaAck(requestID string) []byte {
-	pair := AppendString(nil, 1, requestID)
-	pair = AppendString(pair, 2, requestID)
-	return AppendBytes(nil, 2, AppendBytes(nil, 1, pair))
+	return EncodeAgentRunAccepted(requestID, requestID)
 }

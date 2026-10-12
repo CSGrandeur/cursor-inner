@@ -631,6 +631,17 @@ func TestBreakReplacesTheOpenTool(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Run 结束时 Abort 可能还排在 out 里没读到（select 在两个通道都就绪时随机选），先读完。
+			for drained := false; !drained; {
+				select {
+				case m := <-out:
+					if m.GetExecServerControlMessage().GetAbort() != nil {
+						aborted = true
+					}
+				default:
+					drained = true
+				}
+			}
 			if !aborted || len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "do this instead") {
 				t.Fatalf("aborted=%v requests=%d", aborted, len(fm.requests))
 			}

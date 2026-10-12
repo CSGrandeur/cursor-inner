@@ -102,22 +102,29 @@ func TestE2ETamperedPackage(t *testing.T) {
 	gh, ghSrv := newFakeRelease(t, k, "v0.5.0", []byte("v0.5.0"))
 	gt, gtSrv := newFakeRelease(t, k, "v0.5.0", []byte("v0.5.0"))
 	gt.giteeTag = "v0.5.0"
-	gh.files[pkg] = []byte("v0.5.X") // 同样长度、内容被改
 	e := newE2E(t)
 	u := e.updater("v0.4.0", []TrustedKey{k.key}, githubSource(ghSrv), giteeSource(gtSrv))
-	if st := u.Check(context.Background(), false); st.State != StateAvailable {
+	st := u.Check(context.Background(), false)
+	if st.State != StateAvailable {
 		t.Fatalf("%+v", st)
 	}
-	// 一个镜像的包被篡改：丢掉它，换另一个镜像。
+	// 一个镜像的包被篡改：丢掉它，换另一个镜像。两个源版本相同时选响应快的那个，
+	// 所以篡改检查时选中的那个（否则选中的就是好的，测不到换镜像）。
+	bad, good, other := gh, gt, "gitee"
+	if st.Source == "gitee" {
+		bad, good, other = gt, gh, "github"
+	}
+	bad.files[pkg] = []byte("v0.5.X") // 同样长度、内容被改
 	if err := u.Apply(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if e.exeContent() != "v0.5.0" || gh.hit(pkg)+gt.hit(pkg) < 2 {
-		t.Fatalf("exe=%q hits gh=%d gitee=%d", e.exeContent(), gh.hit(pkg), gt.hit(pkg))
+	if e.exeContent() != "v0.5.0" || bad.hit(pkg) == 0 || good.hit(pkg) == 0 {
+		t.Fatalf("exe=%q hits bad=%d good=%d", e.exeContent(), bad.hit(pkg), good.hit(pkg))
 	}
-	if m := u.Status().Mirror; m != "gitee" && gh.hit(pkg) == 0 {
-		t.Fatalf("mirror %s", m)
+	if m := u.Status().Mirror; m != other {
+		t.Fatalf("mirror %s, want %s", m, other)
 	}
+	gh.files[pkg] = []byte("v0.5.X")
 
 	// 两边的包都被篡改：不换文件、不交接、不留文件，报校验失败。
 	gt.files[pkg] = []byte("evil!!")

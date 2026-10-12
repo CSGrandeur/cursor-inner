@@ -83,6 +83,7 @@ type Session struct {
 	seenBlobs        map[string]struct{}
 	baseState        *cursorpb.ConversationStateStructure
 	kv               chan *cursorpb.KvClientMessage
+	finished         atomic.Bool
 	summaries        uint32
 	summaryText      string
 	notifyMu         sync.Mutex
@@ -279,7 +280,11 @@ func (s *Session) Stop() {
 type Emit func(*cursorpb.AgentServerMessage) error
 
 // Run 执行完整的模型与工具循环，返回后由调用方写结束帧。
+// Finished 表示这一轮模型循环已经返回。之后同一条 run 上新开的连接是恢复，不是新的一轮。
+func (s *Session) Finished() bool { return s.finished.Load() }
+
 func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr error) {
+	defer s.finished.Store(true)
 	s.dial = dial
 	turnStarted := time.Now()
 	var mu sync.Mutex

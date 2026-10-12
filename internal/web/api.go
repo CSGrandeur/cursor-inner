@@ -28,6 +28,7 @@ type View struct {
 	ListenURL      string          `json:"listen_url"`
 	Takeover       bool            `json:"takeover"`
 	TakeoverGrok   bool            `json:"takeover_grok"`
+	TakeoverCodex  bool            `json:"takeover_codex"`
 	TakeoverActive bool            `json:"takeover_active"`
 	MitmURL        string          `json:"mitm_url"`
 	CA             string          `json:"ca"`
@@ -38,6 +39,7 @@ type View struct {
 	Image          ImageView       `json:"image"`
 	Autostart      autostart.State `json:"autostart"`
 	Tunnel         TunnelView      `json:"tunnel"`
+	Desktop        DesktopView     `json:"desktop"`
 	Models         []ModelView     `json:"models"`
 }
 
@@ -55,6 +57,13 @@ type ProxyView struct {
 	Bridged   bool   `json:"bridged"` // 地址本身就要经本机代理桥（socks / 带认证）：切换范围时 Grok Bot 不用重开
 }
 
+// DesktopView 是托盘和控制台窗口的设置。Tray 为假（非 Windows，或托盘没挂上）时配置页不显示这两行。
+type DesktopView struct {
+	Tray       bool `json:"tray"`
+	Background bool `json:"background"`
+	Notify     bool `json:"notify"`
+}
+
 type TunnelView struct {
 	Status int       `json:"status"`
 	Detail i18n.Text `json:"detail"`
@@ -67,6 +76,8 @@ type Backend interface {
 	SetProxyScope(scope string) error
 	SetImage(baseURL, apiKey, model string) error
 	SetAutostart(enabled bool) error
+	// SetDesktop 改托盘相关设置；nil 表示这一项不改。
+	SetDesktop(background, notify *bool) error
 	AddModel(model config.Model) error
 	UpdateModel(id string, model config.Model) error
 	DeleteModel(id string) error
@@ -79,6 +90,7 @@ type Backend interface {
 	Quit() error
 	OpenCursor() error
 	OpenGrok() error
+	OpenCodex() error
 	SetStrictEgress(enabled bool) error
 	SetTunnel(enabled bool) error
 	OpenLogs() error

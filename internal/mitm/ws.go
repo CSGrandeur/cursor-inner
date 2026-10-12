@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -118,15 +119,26 @@ func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteClos
 	defer up.Close()
 	defer closeRaw(toNet)
 	defer closeRaw(fromNet)
-	buffered, local, localID := s.readAgentDecision(client)
+	buffered, local, localID, runID, requestID, helloRelayed, start := s.readAgentDecision(client, up)
 	_ = client.SetReadDeadline(time.Time{})
+	_ = up.SetReadDeadline(time.Time{})
 	if local != nil {
 		_ = up.Close()
 		noteRaw(toNet, buffered)
-		s.serveLocalAgent(client, local, localID, toNet, fromNet)
+		if start {
+			s.serveLocalAgent(client, local, localID, runID, requestID, helloRelayed, toNet, fromNet)
+		} else if local.Finished() {
+			s.serveLocalIdle(client, runID, requestID, helloRelayed, fromNet)
+		} else {
+			s.serveLocalAttach(client, localID, runID, requestID, helloRelayed, toNet, fromNet)
+		}
 		return
 	}
 	noteRaw(toNet, buffered)
+	if id := leakedModel(buffered, s.entries()); id != "" {
+		slog.Error("自定义模型的对话没有留在本机，已断开，不交给官方", "model", id)
+		return
+	}
 	if len(buffered) > 0 {
 		if _, err := up.Write(buffered); err != nil {
 			return
@@ -135,46 +147,172 @@ func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteClos
 	splice(client, up, toNet, fromNet)
 }
 
-func (s *Server) readAgentDecision(client net.Conn) ([]byte, *agent.Session, string) {
-	var buffered []byte
-	_ = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+func (s *Server) readAgentDecision(client, up net.Conn) (buffered []byte, session *agent.Session, id, runID, requestID string, helloRelayed, start bool) {
+	deadline := func() { _ = client.SetReadDeadline(time.Now().Add(3 * time.Second)) }
+	deadline()
 	for {
 		op, payload, raw, err := readWSFrame(client)
 		if err != nil {
-			return buffered, nil, ""
-		}
-		buffered = append(buffered, raw...)
-		if len(buffered) > 8<<20 || (op != 0x1 && op != 0x2 && op != 0x9) {
-			return buffered, nil, ""
+			return buffered, nil, "", runID, requestID, helloRelayed, false
 		}
 		if op == 0x9 {
 			_ = writeWSFrame(client, 0xA, payload)
-			_ = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+			if !helloRelayed {
+				deadline()
+			}
 			continue
 		}
+		if (op != 0x1 && op != 0x2) || len(buffered)+len(raw) > 8<<20 {
+			return append(buffered, raw...), nil, "", runID, requestID, helloRelayed, false
+		}
 		frame := protox.ClassifyAgentPayload(payload)
-		if frame.Kind == "hello" || frame.Kind == "meta" {
-			_ = client.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if frame.Kind == "hello" {
+			if !helloRelayed && up != nil {
+				if _, err := up.Write(raw); err != nil {
+					return buffered, nil, "", runID, requestID, false, false
+				}
+				if !relayServerData(up, client) {
+					return buffered, nil, "", runID, requestID, false, false
+				}
+				helloRelayed = true
+				// 客户端把这条连接放进池里，要等用户发送才发这一轮。这里再套短超时，超时后就会把整条连接交给官方。
+				_ = client.SetReadDeadline(time.Time{})
+			}
+			continue
+		}
+		buffered = append(buffered, raw...)
+		if frame.Kind == "meta" {
+			if frame.RunID != "" {
+				runID = frame.RunID
+			}
+			if frame.RequestID != "" {
+				requestID = frame.RequestID
+			}
+			if !helloRelayed {
+				deadline()
+			}
 			continue
 		}
 		if frame.Kind != "agent" || len(frame.Message) == 0 || s.hub == nil {
-			return buffered, nil, ""
+			// hello 之后模型还没出现。认不出的帧先留下，不能据此把整条连接交给官方。
+			if helloRelayed && s.hub != nil {
+				continue
+			}
+			return buffered, nil, "", runID, requestID, helloRelayed, false
 		}
 		var msg cursorpb.AgentClientMessage
 		if proto.Unmarshal(frame.Message, &msg) != nil || msg.GetRunRequest() == nil {
-			return buffered, nil, ""
+			if helloRelayed {
+				continue
+			}
+			return buffered, nil, "", runID, requestID, helloRelayed, false
 		}
-		_, session, start := s.hub.Client(frame.RequestID, &msg)
-		if start && session != nil {
-			return buffered, session, frame.RequestID
+		route, session, start := s.hub.Client(frame.RequestID, &msg)
+		slog.Debug("Agents", "model", route.ModelID, "where", where(session != nil))
+		if session != nil {
+			return buffered, session, frame.RequestID, runID, requestID, helloRelayed, start
 		}
-		return buffered, nil, ""
+		return buffered, nil, "", runID, requestID, helloRelayed, false
 	}
 }
 
-func (s *Server) serveLocalAgent(client net.Conn, session *agent.Session, id string, toNet, fromNet io.Writer) {
+// relayServerData 把上游的下一帧数据交给客户端。握手的 hello 必须先回到客户端，它才会发出这一轮的模型。
+func relayServerData(up, client net.Conn) bool {
+	_ = up.SetReadDeadline(time.Now().Add(3 * time.Second))
+	defer up.SetReadDeadline(time.Time{})
+	for {
+		op, payload, raw, err := readWSFrame(up)
+		if err != nil {
+			return false
+		}
+		if op == 0x9 {
+			_ = writeWSFrame(up, 0xA, payload)
+			continue
+		}
+		if op != 0x1 && op != 0x2 {
+			return false
+		}
+		_, err = client.Write(raw)
+		return err == nil
+	}
+}
+
+// serveLocalIdle 回答同一条已结束 run 上新开的连接。客户端会在回合结束后再发 resume，这条不能交给官方。
+func (s *Server) serveLocalIdle(client net.Conn, runID, requestID string, helloRelayed bool, fromNet io.Writer) {
+	if runID == "" {
+		runID = requestID
+	}
+	if requestID == "" {
+		requestID = runID
+	}
+	if !helloRelayed {
+		_ = writeLogged(client, fromNet, []byte{0x0a, 0x02, 0x08, 0x01})
+	}
+	_ = writeLogged(client, fromNet, protox.EncodeAgentRunAccepted(runID, requestID))
+	raw, err := proto.Marshal(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_InteractionUpdate{InteractionUpdate: &cursorpb.InteractionUpdate{
+		Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}},
+	}}})
+	if err == nil {
+		_ = writeLogged(client, fromNet, protox.EncodeAgentServer(runID, 0, raw))
+	}
+	for {
+		op, payload, _, err := readWSFrame(client)
+		if err != nil || op == 0x8 {
+			return
+		}
+		if op == 0x9 {
+			_ = writeWSFrame(client, 0xA, payload)
+		}
+	}
+}
+
+// serveLocalAttach 把后到的连接接到还在跑的本地会话上，不再另起一轮，也不交给官方。
+func (s *Server) serveLocalAttach(client net.Conn, id, runID, requestID string, helloRelayed bool, toNet, fromNet io.Writer) {
+	if runID == "" {
+		runID = id
+	}
+	if requestID == "" {
+		requestID = runID
+	}
+	if !helloRelayed {
+		_ = writeLogged(client, fromNet, []byte{0x0a, 0x02, 0x08, 0x01})
+	}
+	_ = writeLogged(client, fromNet, protox.EncodeAgentRunAccepted(runID, requestID))
+	for {
+		op, payload, raw, err := readWSFrame(client)
+		if err != nil || op == 0x8 {
+			return
+		}
+		noteRaw(toNet, raw)
+		if op == 0x9 {
+			_ = writeWSFrame(client, 0xA, payload)
+			continue
+		}
+		frame := protox.ClassifyAgentPayload(payload)
+		if frame.Kind != "agent" || len(frame.Message) == 0 {
+			continue
+		}
+		var msg cursorpb.AgentClientMessage
+		if proto.Unmarshal(frame.Message, &msg) != nil {
+			continue
+		}
+		use := id
+		if frame.RequestID != "" {
+			use = frame.RequestID
+		}
+		_, _, _ = s.hub.Client(use, &msg)
+	}
+}
+
+func (s *Server) serveLocalAgent(client net.Conn, session *agent.Session, id, runID, requestID string, helloRelayed bool, toNet, fromNet io.Writer) {
 	s.countLocal()
 	defer s.hub.Done(id)
+	if runID == "" {
+		runID = id
+	}
+	if requestID == "" {
+		requestID = runID
+	}
 	var mu sync.Mutex
 	var seq uint64
 	emit := func(m *cursorpb.AgentServerMessage) error {
@@ -184,12 +322,16 @@ func (s *Server) serveLocalAgent(client net.Conn, session *agent.Session, id str
 		}
 		mu.Lock()
 		defer mu.Unlock()
+		n := seq
 		seq++
-		return writeLogged(client, fromNet, protox.EncodeAgentServer(id, seq, raw))
+		// 客户端的序号从 0 起。从 1 起会被当成乱序丢掉，界面停在 Reconnecting。
+		return writeLogged(client, fromNet, protox.EncodeAgentServer(runID, n, raw))
 	}
 	mu.Lock()
-	_ = writeLogged(client, fromNet, []byte{0x0a, 0x02, 0x08, 0x01})
-	_ = writeLogged(client, fromNet, protox.EncodeAgentMetaAck(id))
+	if !helloRelayed {
+		_ = writeLogged(client, fromNet, []byte{0x0a, 0x02, 0x08, 0x01})
+	}
+	_ = writeLogged(client, fromNet, protox.EncodeAgentRunAccepted(runID, requestID))
 	mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

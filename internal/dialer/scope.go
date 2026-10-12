@@ -13,9 +13,9 @@ import (
 )
 
 // Scoped 返回 Cursor 和 Grok Bot 流量用的拨号。代理范围是全局时与 FromProxy 相同；
-// 「仅官方」时按目标分流：官方端点、fake-ip 段、写死的公网 IP 走代理，回环和私网直连，
-// 其它域名先看客户端发出的 TLS SNI / HTTP Host，确认不是官方才直连。
-// 自定义模型和 cursor-inner 自己的联网不用它。
+// 「仅官方」时按名字分流：名单里的域名、fake-ip 段、没有域名的公网 IP 走代理，回环和私网直连。
+// 其它域名先看 TLS SNI / HTTP Host；首包里没有主机名就用拨号目标上的名字。
+// 自定义模型和 cursor-inner 自己的联网不用它，各看模型自己的「走代理」。
 func Scoped(p config.Proxy) (Func, error) {
 	via, err := FromProxy(p)
 	if err != nil {
@@ -31,7 +31,8 @@ func Scoped(p config.Proxy) (Func, error) {
 // directDial 是「仅官方」时的直连拨号，测试里换成记录用的假拨号。
 var directDial = Direct
 
-// inspectWait 是等客户端第一段数据的时间。对方先说话的协议、或者一直不发数据，就走代理。
+// inspectWait 是等 TLS SNI 或 HTTP Host 的时间。到点还没有，就用拨号目标上的名字。
+// 名单里的域名在拨号时已经走代理，不会进到这里。
 var inspectWait = 3 * time.Second
 
 func split(via, direct Func) Func {
@@ -79,18 +80,36 @@ func newInspectConn(ctx context.Context, network, addr string, via, direct Func)
 	c.timer = time.AfterFunc(inspectWait, func() {
 		c.wmu.Lock()
 		defer c.wmu.Unlock()
-		c.decide(official.Proxy, "", "no client data")
+		route, name := c.dialRoute()
+		c.decide(route, name, "no client data")
 	})
 	c.mu.Unlock()
 	return c
 }
 
+// dialRoute 用拨号目标上的名字决定。名单以外的域名直连；没有域名的公网 IP 走代理。
+func (c *inspectConn) dialRoute() (official.Route, string) {
+	host, _, err := net.SplitHostPort(c.addr)
+	if err != nil {
+		host = c.addr
+	}
+	if r := official.ForHost(host); r != official.Inspect {
+		return r, host
+	}
+	return official.Direct, host
+}
+
 // decide 拨号并冲刷已缓存的数据。调用方必须持有 wmu。
+// route 为 ByDial 时改用拨号目标上的名字。
 func (c *inspectConn) decide(route official.Route, name, why string) {
 	c.mu.Lock()
 	if c.decided {
 		c.mu.Unlock()
 		return
+	}
+	if route == official.ByDial {
+		route, name = c.dialRoute()
+		why = "dial name"
 	}
 	c.decided = true
 	c.timer.Stop()
@@ -167,7 +186,8 @@ func (c *inspectConn) Write(p []byte) (int, error) {
 	}
 	why := "first bytes"
 	if !done {
-		route, why = official.Proxy, "too long to inspect"
+		route, name = c.dialRoute()
+		why = "too long to inspect"
 	}
 	c.decide(route, name, why)
 	if _, err, _ := c.current(); err != nil {
@@ -218,7 +238,7 @@ func (c *inspectConn) Close() error {
 	return nil
 }
 
-// CloseWrite：客户端说完了还没认出来，就按已有数据定（认不出走代理），再半关。
+// CloseWrite：客户端说完了还没有主机名，就用拨号目标上的名字，再半关。
 func (c *inspectConn) CloseWrite() error {
 	c.wmu.Lock()
 	if _, _, decided := c.current(); !decided {
@@ -226,7 +246,7 @@ func (c *inspectConn) CloseWrite() error {
 		route, name, done := official.InspectFirst(c.buf)
 		c.mu.Unlock()
 		if !done {
-			route = official.Proxy
+			route, name = c.dialRoute()
 		}
 		c.decide(route, name, "client closed write")
 	}

@@ -3,12 +3,17 @@ package app
 import (
 	"log/slog"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/i18n"
 )
+
+// grokApply 方便测试替换。生产路径就是 grokbot.Apply。
+var grokApply = grokbot.Apply
 
 // grokProxy 算出给 Grok Bot 的代理地址。
 //   - keep 为真：现在没法给出可靠地址（地址填错、桥起不来），保持 Grok Bot 现状，绝不改成直连。
@@ -65,14 +70,35 @@ func (a *App) SyncGrok() {
 		return
 	}
 	if !cfg.TakeoverGrok {
-		_ = grokbot.Apply("")
+		// 没接管过就什么也不做。另一个数据目录的实例若在这里清参数，会和主实例每 5 秒对拉一次。
+		if !a.ownsMark("grok.managed") {
+			return
+		}
+		if grokApply("") == nil {
+			a.dropMark("grok.managed")
+		}
 		return
 	}
 	proxyURL, keep := a.grokProxy(cfg)
 	if keep {
 		return
 	}
-	_ = grokbot.Apply(proxyURL)
+	if grokApply(proxyURL) == nil {
+		a.keepMark("grok.managed")
+	}
+}
+
+func (a *App) ownsMark(name string) bool {
+	_, err := os.Stat(filepath.Join(a.store.Dir(), name))
+	return err == nil
+}
+
+func (a *App) keepMark(name string) {
+	_ = os.WriteFile(filepath.Join(a.store.Dir(), name), []byte("1\n"), 0o644)
+}
+
+func (a *App) dropMark(name string) {
+	_ = os.Remove(filepath.Join(a.store.Dir(), name))
 }
 
 // OpenGrok 冷启动 Grok Bot。接管开着却给不出可靠代理时报错，不以直连方式启动。

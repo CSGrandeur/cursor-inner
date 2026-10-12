@@ -9,32 +9,38 @@ import (
 
 func TestForHost(t *testing.T) {
 	cases := map[string]Route{
-		"grok.com":           Proxy,
-		"API.X.AI.":          Proxy,
-		"us3.cursorvm.com":   Proxy,
-		"api2.cursor.sh":     Proxy,
-		"cloudflare-dns.com": Proxy,
-		"dns.google":         Proxy,
-		"198.18.0.7":         Proxy,
-		"198.19.255.1":       Proxy,
-		"[fc00::5]":          Proxy,
-		"203.0.113.9":        Proxy,
-		"2001:db8::1":        Proxy,
-		"":                   Proxy,
-		"127.0.0.1":          Direct,
-		"::1":                Direct,
-		"192.168.1.20":       Direct,
-		"172.20.3.4":         Direct,
-		"10.1.2.3":           Direct,
-		"fd12::1":            Direct,
-		"::ffff:192.168.1.1": Direct,
-		"localhost":          Direct,
-		"wsl.localhost":      Direct,
-		"printer.local":      Direct,
-		"book.example.com":   Inspect,
-		"notgrok.com":        Inspect,
-		"x.ai.example.com":   Inspect,
-		"github.com":         Inspect,
+		"grok.com":                 Proxy,
+		"API.X.AI.":                Proxy,
+		"us3.cursorvm.com":         Proxy,
+		"api2.cursor.sh":           Proxy,
+		"cloudflare-dns.com":       Proxy,
+		"dns.google":               Proxy,
+		"198.18.0.7":               Proxy,
+		"198.19.255.1":             Proxy,
+		"[fc00::5]":                Proxy,
+		"203.0.113.9":              Proxy,
+		"2001:db8::1":              Proxy,
+		"":                         Proxy,
+		"127.0.0.1":                Direct,
+		"::1":                      Direct,
+		"192.168.1.20":             Direct,
+		"172.20.3.4":               Direct,
+		"10.1.2.3":                 Direct,
+		"fd12::1":                  Direct,
+		"::ffff:192.168.1.1":       Direct,
+		"localhost":                Direct,
+		"wsl.localhost":            Direct,
+		"printer.local":            Direct,
+		"book.example.com":         Inspect,
+		"notgrok.com":              Inspect,
+		"x.ai.example.com":         Inspect,
+		"github.com":               Inspect,
+		"api.openai.com":           Proxy,
+		"ab.chatgpt.com":           Proxy,
+		"cdn.oaistatic.com":        Proxy,
+		"files.oaiusercontent.com": Proxy,
+		"auth.oaistatsig.com":      Proxy,
+		"api.stripe.com":           Inspect,
 	}
 	for host, want := range cases {
 		if got := ForHost(host); got != want {
@@ -74,6 +80,7 @@ func TestInspectTLS(t *testing.T) {
 		"book.example.com": Direct,
 		"api.x.ai":         Proxy,
 		"grok.com":         Proxy,
+		"api.openai.com":   Proxy,
 		"localhost":        Direct,
 	} {
 		hello := clientHello(t, sni)
@@ -88,8 +95,8 @@ func TestInspectTLS(t *testing.T) {
 			}
 		}
 	}
-	// 没有 SNI（按 IP 连）：认不出，走代理。
-	if got, _, done := InspectFirst(clientHello(t, "")); !done || got != Proxy {
+	// 没有 SNI：这段数据里没有主机名，交给拨号目标。
+	if got, _, done := InspectFirst(clientHello(t, "")); !done || got != ByDial {
 		t.Fatalf("no SNI: got %v done=%v", got, done)
 	}
 }
@@ -120,11 +127,11 @@ func TestInspectHTTPAndOther(t *testing.T) {
 		{"GET / HTTP/1.1\r\nHost: book.example.com\r\n\r\n", Direct, true},
 		{"GET / HTTP/1.1\r\nHost: api.x.ai:80\r\n\r\n", Proxy, true},
 		{"GET http://grok.com/x HTTP/1.1\r\nHost: book.example.com\r\n\r\n", Proxy, true},
-		{"GET / HTTP/1.1\r\n\r\n", Proxy, true},
+		{"GET / HTTP/1.1\r\n\r\n", ByDial, true},
 		{"GET / HTTP/1.1\r\nHost: book.example.com\r\n", Proxy, false},
 		{"GE", Proxy, false},
-		{"SSH-2.0-OpenSSH\r\n", Proxy, true},
-		{"\x05\x01\x00", Proxy, true},
+		{"SSH-2.0-OpenSSH\r\n", ByDial, true},
+		{"\x05\x01\x00", ByDial, true},
 	}
 	for _, c := range cases {
 		got, _, done := InspectFirst([]byte(c.in))
@@ -134,7 +141,7 @@ func TestInspectHTTPAndOther(t *testing.T) {
 	}
 	big := make([]byte, MaxInspect)
 	copy(big, "GET / HTTP/1.1\r\nX: ")
-	if got, _, done := InspectFirst(big); !done || got != Proxy {
+	if got, _, done := InspectFirst(big); !done || got != ByDial {
 		t.Fatalf("oversized header: %v %v", got, done)
 	}
 }

@@ -44,8 +44,9 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": version})
 	})
+	push := newStreams()
 	if up, ok := backend.(UpdateBackend); ok {
-		registerUpdate(mux, up)
+		registerUpdate(mux, up, push)
 	}
 	mux.HandleFunc("GET /api/state", func(w http.ResponseWriter, r *http.Request) {
 		view, err := backend.State()
@@ -124,6 +125,21 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 			return
 		}
 		if err := backend.SetAutostart(body.Enabled); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
+	mux.HandleFunc("PUT /api/desktop", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Background *bool `json:"background"`
+			Notify     *bool `json:"notify"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetDesktop(body.Background, body.Notify); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
@@ -280,6 +296,13 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("POST /api/codex", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.OpenCodex(); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("POST /api/logs", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.OpenLogs(); err != nil {
 			writeErr(w, http.StatusNotFound, err)
@@ -301,7 +324,7 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	return guard(mux)
+	return &handler{Handler: guard(mux), push: push}
 }
 
 func writeState(w http.ResponseWriter, backend Backend) {

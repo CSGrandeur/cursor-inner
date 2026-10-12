@@ -55,6 +55,8 @@ type Server struct {
 	localN     int
 	officialN  int
 	lastError  string
+	leakN      int
+	leakName   string
 	wsTLS      *tls.Config
 	conns      connCounter
 	released   string
@@ -68,6 +70,8 @@ type Traffic struct {
 	Local     int
 	Official  int
 	LastError string
+	Leaks     int    // 带着自定义模型转给官方的请求数（不含已改写掉的遥测类请求）
+	LastLeak  string // 最近一次带出去的自定义模型显示名
 }
 
 func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(string) (config.Model, bool), history *agent.History) *Server {
@@ -393,6 +397,11 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("BidiAppend", "request", route.RequestID, "model", route.ModelID, "where", where(route.Local))
 	}
 	if err != nil || !route.Local {
+		if id := leakedModel(body, s.entries()); id != "" {
+			slog.Error("自定义模型的对话没有留在本机，已拒绝交给官方", "path", r.URL.Path, "model", id)
+			http.Error(w, "local model was not answered locally", http.StatusBadGateway)
+			return
+		}
 		withBody(r, body)
 		s.forward(w, r)
 		return
@@ -421,6 +430,11 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("RunSSE 等不到 BidiAppend，转发官方", "request", id, "error", err)
 	}
 	if err != nil || session == nil {
+		if id := leakedModel(body, s.entries()); id != "" {
+			slog.Error("自定义模型的对话没有留在本机，已拒绝交给官方", "path", r.URL.Path, "model", id)
+			http.Error(w, "local model was not answered locally", http.StatusBadGateway)
+			return
+		}
 		withBody(r, body)
 		s.forward(w, r)
 		return
@@ -544,7 +558,15 @@ func (s *Server) warnCustomModel(path string, body []byte, encoding string) {
 		slog.Debug("转发给官方的请求带有自定义模型", "path", path, "model", id)
 		return
 	}
-	slog.Warn("转发给官方的请求带有自定义模型", "path", path, "model", id, "name", displayName(s.entries(), id))
+	name := displayName(s.entries(), id)
+	s.mu.Lock()
+	s.leakN++
+	s.leakName = name
+	if name == "" {
+		s.leakName = id
+	}
+	s.mu.Unlock()
+	slog.Warn("转发给官方的请求带有自定义模型", "path", path, "model", id, "name", name)
 }
 
 func (s *Server) rememberModel(path, id string) {
@@ -706,6 +728,8 @@ func (s *Server) Traffic() Traffic {
 		Local:     s.localN,
 		Official:  s.officialN,
 		LastError: s.lastError,
+		Leaks:     s.leakN,
+		LastLeak:  s.leakName,
 	}
 }
 

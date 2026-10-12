@@ -96,3 +96,20 @@ func TestAddSinkReceivesRecords(t *testing.T) {
 		t.Fatalf("sink did not receive record: %v", got)
 	}
 }
+
+// FileOnly：只进 inner.log，不上控制台；标记本身不写进日志。
+func TestFileOnlySkipsConsoleAndAttr(t *testing.T) {
+	var console, file bytes.Buffer
+	h := &split{console: &console, file: &file, warns: map[string]*warnState{}}
+	logger := slog.New(h)
+	logger.Info("检查更新", "latest", "v1.2.3", FileOnly)
+	logger.Error("更新失败：x", FileOnly)
+	logger.Info("普通行")
+	if strings.Contains(console.String(), "更新") || !strings.Contains(console.String(), "普通行") {
+		t.Fatalf("console=%q", console.String())
+	}
+	got := file.String()
+	if !strings.Contains(got, "检查更新 latest=v1.2.3") || !strings.Contains(got, "更新失败：x") || strings.Contains(got, "_file_only") {
+		t.Fatal(got)
+	}
+}

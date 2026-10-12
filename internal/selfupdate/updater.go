@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/logx"
 )
 
 // 状态机。
@@ -21,6 +23,8 @@ const (
 	StateUpToDate    = "up_to_date"
 	StateAvailable   = "available"
 	StateDownloading = "downloading"
+	StateVerifying   = "verifying"    // 下载完，整份重读核对大小和 sha256
+	StatePreflight   = "preflight"    // 跑一次新版本的 --version
 	StateWaitingIdle = "waiting_idle" // 有自定义模型回合在跑，等它结束
 	StateHandover    = "handover"
 	StateDone        = "done" // 已交给新进程，本进程正在排空
@@ -49,7 +53,14 @@ type Status struct {
 	Total     int64     `json:"total,omitempty"`
 	Speed     int64     `json:"speed,omitempty"`    // 下载速度，字节/秒（滑动窗口）
 	DLRoute   string    `json:"dl_route,omitempty"` // 下载安装包当前走的网络路径（可能和检查时不同）
+	DLProbe   string    `json:"dl_probe,omitempty"` // 正在并行试的另一条路径
+	Asset     string    `json:"asset,omitempty"`    // 正在下载的安装包文件名
+	DLMillis  int64     `json:"dl_ms,omitempty"`    // 下载用时，下载完成后才有
 	AutoDone  bool      `json:"auto_done"`
+	// 以下由 publishLocked 填写：控制台和配置页直接显示，不各自计算。
+	Percent int    `json:"percent"`       // 下载百分比，向下取整（不到 100% 不显示 100）
+	ETA     int64  `json:"eta,omitempty"` // 预计剩余秒数，向上取整；速度未知时为 0
+	Seq     uint64 `json:"seq"`           // 每次变化加一，订阅者用来丢弃过期快照
 }
 
 // Options 由 program 包注入，本包不认识接管、Grok 或 Cursor。
@@ -77,11 +88,12 @@ type Options struct {
 type Updater struct {
 	opt Options
 
-	mu      sync.Mutex
-	st      Status
-	results []sourceResult
-	best    int
-	running bool
+	mu       sync.Mutex
+	st       Status
+	results  []sourceResult
+	best     int
+	running  bool
+	watchers map[*Watch]struct{}
 }
 
 func New(opt Options) *Updater {
@@ -113,6 +125,7 @@ func (u *Updater) Status() Status {
 func (u *Updater) set(fn func(*Status)) {
 	u.mu.Lock()
 	fn(&u.st)
+	u.publishLocked()
 	u.mu.Unlock()
 }
 
@@ -144,7 +157,9 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 		u.st.AutoDone = true
 	}
 	u.running = true
-	u.st.State, u.st.Error = StateChecking, ""
+	u.st.State, u.st.Error, u.st.ErrorCode = StateChecking, "", ""
+	u.st.Done, u.st.Total, u.st.Speed, u.st.DLRoute, u.st.DLProbe, u.st.Asset, u.st.DLMillis = 0, 0, 0, "", "", "", 0
+	u.publishLocked()
 	u.mu.Unlock()
 	defer func() { u.mu.Lock(); u.running = false; u.mu.Unlock() }()
 
@@ -172,7 +187,7 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 		if code == "" {
 			code = CodeNetwork
 		}
-		slog.Warn("检查更新失败：" + err.Error())
+		slog.Warn("检查更新失败："+err.Error(), logx.FileOnly)
 		u.set(func(s *Status) {
 			s.State, s.Error, s.ErrorCode, s.CheckedAt, s.Sources = StateFailed, err.Error(), code, now, statuses
 			s.Latest, s.Notes, s.Published, s.Signed, s.KeyID, s.Source, s.Route, s.Mirror = "", "", "", false, "", "", "", ""
@@ -182,7 +197,7 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 	r := results[best]
 	m := r.manifest
 	noteSeen(u.opt.DataDir, m.Version, now)
-	slog.Info("检查更新", "latest", m.Version, "source", r.src.Name, "route", r.route.Name, "key", r.keyID)
+	slog.Info("检查更新", "latest", m.Version, "source", r.src.Name, "route", r.route.Name, "key", r.keyID, logx.FileOnly)
 	u.mu.Lock()
 	u.results, u.best = results, best
 	u.st.Mirror = ""
@@ -202,6 +217,7 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 	} else {
 		u.st.State = StateUpToDate
 	}
+	u.publishLocked()
 	st := u.st
 	u.mu.Unlock()
 	return st
@@ -266,14 +282,18 @@ func (u *Updater) Apply(ctx context.Context) error {
 	}
 	results, best := u.results, u.best
 	u.running = true
-	u.st.State, u.st.Error = StateDownloading, ""
-	u.st.Done, u.st.Total, u.st.Speed, u.st.DLRoute = 0, 0, 0, ""
+	u.st.State, u.st.Error, u.st.ErrorCode = StateDownloading, "", ""
+	u.st.Done, u.st.Total, u.st.Speed, u.st.DLRoute, u.st.DLProbe, u.st.Asset, u.st.DLMillis = 0, 0, 0, "", "", "", 0
+	if a, err := results[best].manifest.Pick(u.opt.GOOS, u.opt.GOARCH); err == nil {
+		u.st.Asset, u.st.Total = a.Name, a.Size
+	}
+	u.publishLocked()
 	u.mu.Unlock()
 	defer func() { u.mu.Lock(); u.running = false; u.mu.Unlock() }()
 
 	err := u.apply(ctx, results, best)
 	if err != nil {
-		slog.Error("更新失败：" + err.Error())
+		slog.Error("更新失败："+err.Error(), logx.FileOnly)
 		u.set(func(s *Status) { s.State, s.Error, s.ErrorCode = StateFailed, err.Error(), ErrorCode(err) })
 		// 失败后仍可以重试。
 		u.set(func(s *Status) {
@@ -294,17 +314,30 @@ func (u *Updater) apply(ctx context.Context, results []sourceResult, best int) e
 		return err
 	}
 	dir := filepath.Join(u.opt.DataDir, "update")
+	began := time.Now()
 	staged, used, fails, err := DownloadMirrors(ctx, mirrorsFor(results, best, a, u.Routes()), a, dir, u.opt.Download, func(p Progress) {
-		u.set(func(s *Status) { s.Done, s.Total, s.Speed, s.DLRoute = p.Done, p.Total, p.Rate, p.Route })
+		u.set(func(s *Status) {
+			if p.Verifying {
+				// 下载阶段到此结束；用时只算到开始校验，校验失败换源重下时会被下一次覆盖。
+				s.State, s.Done, s.Total, s.Speed, s.DLProbe = StateVerifying, p.Total, p.Total, 0, ""
+				s.DLMillis = time.Since(began).Milliseconds()
+				return
+			}
+			s.State = StateDownloading
+			s.Done, s.Total, s.Speed, s.DLProbe = p.Done, p.Total, p.Rate, p.Probe
+			if p.Route != "" {
+				s.DLRoute = p.Route
+			}
+		})
 	})
 	for _, f := range fails {
-		slog.Warn("更新包下载失败，换下一个源", "source", f.Mirror, "err", f.Err.Error())
+		slog.Warn("更新包下载失败，换下一个源", logx.FileOnly, "source", f.Mirror, "err", f.Err.Error())
 	}
 	if err != nil {
 		return err
 	}
-	slog.Info("更新包已下载并校验", "source", used, "sha256", a.SHA256)
-	u.set(func(s *Status) { s.Mirror = used })
+	slog.Info("更新包已下载并校验", "source", used, "sha256", a.SHA256, logx.FileOnly)
+	u.set(func(s *Status) { s.Mirror, s.State = used, StatePreflight })
 	defer os.Remove(staged)
 	pre := u.opt.Preflight
 	if pre == nil {

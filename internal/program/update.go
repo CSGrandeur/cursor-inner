@@ -20,9 +20,11 @@ import (
 	"cursor-inner/internal/app"
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/console"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/mitm"
 	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
+	"cursor-inner/internal/web"
 )
 
 // relisten 让配置页的监听可以交出、收回（地址不变，浏览器里的页面刷新即可）。
@@ -42,6 +44,10 @@ func (r *relisten) Release() error {
 	r.addr = r.ln.Addr().String()
 	err := r.ln.Close()
 	r.ln = nil
+	// 浏览器手里的长连接（keep-alive 空闲连接、配置页的进度推送）还连着本进程：
+	// 关掉它们，页面下一次请求和推送重连就会连到接过监听的新进程。
+	r.srv.SetKeepAlivesEnabled(false)
+	web.CloseStreams(r.srv.Handler)
 	return err
 }
 
@@ -56,6 +62,7 @@ func (r *relisten) Reclaim() error {
 		return err
 	}
 	r.ln = ln
+	r.srv.SetKeepAlivesEnabled(true)
 	go func() { _ = r.srv.Serve(ln) }()
 	return nil
 }
@@ -155,11 +162,12 @@ type updateGlue struct {
 	web     *relisten
 	release *func()
 	term    *console.Console
+	store   *config.Store
 	updater *selfupdate.Updater
 }
 
 func newUpdateGlue(version, dir string, debug bool, store *config.Store, life *takeover.Service, proxy *mitm.Server, application *app.App, web *relisten, release *func(), term *console.Console) *updateGlue {
-	g := &updateGlue{version: version, dir: dir, exe: executable(), life: life, proxy: proxy, app: application, web: web, release: release, term: term}
+	g := &updateGlue{version: version, dir: dir, exe: executable(), life: life, proxy: proxy, app: application, web: web, release: release, term: term, store: store}
 	keys, err := selfupdate.TrustedKeys()
 	if err != nil {
 		slog.Warn(err.Error())
@@ -177,7 +185,6 @@ func newUpdateGlue(version, dir string, debug bool, store *config.Store, life *t
 		Keys:     keys,
 		Sources:  debugSources(debug),
 	})
-	_ = store
 	return g
 }
 
@@ -207,7 +214,12 @@ func (g *updateGlue) handover(ctx context.Context, to string) error {
 		Dir: selfupdate.HandoverDir(g.dir),
 		Spawn: func(p selfupdate.Plan) error {
 			args := append(passthroughArgs(os.Args[1:]), "--handover", selfupdate.HandoverDir(g.dir).PlanPath(), "--data-dir", g.dir)
-			return spawnDetached(g.exe, args...)
+			// 控制台此刻收着（后台运行或点叉收起）：新进程也不开窗口，免得更新时突然弹出来。
+			hidden := consoleHidden()
+			if hidden {
+				args = append(args, "--background")
+			}
+			return spawnDetached(g.exe, hidden, args...)
 		},
 		Kill:         selfupdate.KillProcess,
 		Alive:        selfupdate.ProcessAlive,
@@ -216,7 +228,7 @@ func (g *updateGlue) handover(ctx context.Context, to string) error {
 		ReadyTimeout: 30 * time.Second,
 		OKTimeout:    30 * time.Second,
 	}
-	log.Printf("开始交接到 %s", to)
+	slog.Info("开始交接到 "+to, logx.FileOnly) // 控制台由进度视图显示「热交接」
 	ack, err := c.Run(ctx, plan)
 	if err != nil {
 		g.app.Freeze(false)
@@ -257,6 +269,7 @@ func checkSuccessor(ctx context.Context, ack selfupdate.Ack, plan selfupdate.Pla
 // 不调用 Shutdown：接管已经交给新进程，不能还原 Cursor 设置。
 func (g *updateGlue) drainAndExit() {
 	removeTrayIcon()
+	concealForExit()
 	deadline := time.Now().Add(10 * time.Minute)
 	for g.proxy.ActiveConns() > 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Second)
@@ -279,55 +292,15 @@ func (g *updateGlue) cleanupOld(justHandedOver bool) {
 	}()
 }
 
-// trayCheck 是托盘菜单「检查更新」：有新版本时弹确认框。
-func (g *updateGlue) trayCheck() {
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-	st := g.updater.Check(ctx, false)
-	cancel()
-	zh := uiChinese()
-	switch st.State {
-	case selfupdate.StateAvailable:
-		if !st.CanApply {
-			msg := "cursor-inner " + st.Latest + " is available, but this build has no built-in update key, so it cannot update itself. Download it from the Releases page."
-			if zh {
-				msg = "cursor-inner " + st.Latest + " 已发布，但此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载。"
-			}
-			infoDialog(msg)
-			return
-		}
-		notes := st.Notes
-		if len([]rune(notes)) > 600 {
-			notes = string([]rune(notes)[:600]) + "…"
-		}
-		q := fmt.Sprintf("Update cursor-inner %s → %s?\n\n%s\n\nGrok and Cursor keep running during the update.", st.Current, st.Latest, notes)
-		if zh {
-			q = fmt.Sprintf("要把 cursor-inner 从 %s 更新到 %s 吗？\n\n%s\n\n更新期间 Grok 和 Cursor 不需要重启。", st.Current, st.Latest, notes)
-		}
-		if !confirmDialog(q) {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
+// trayCheck 是托盘菜单「检查更新」：后台检查一次，同时打开配置页的「更新」标签。
+// 结果、更新说明和「更新」按钮都在页面上（实时推送），不再弹原生对话框。
+func (g *updateGlue) trayCheck(open func(page string)) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 		defer cancel()
-		if err := g.updater.Apply(ctx); err != nil {
-			msg := "Update failed; still running the current version.\n\n" + err.Error()
-			if zh {
-				msg = "更新没有完成，仍在运行当前版本。\n\n" + err.Error()
-			}
-			infoDialog(msg)
-		}
-	case selfupdate.StateUpToDate:
-		msg := "cursor-inner " + st.Current + " is up to date."
-		if zh {
-			msg = "cursor-inner " + st.Current + " 已是最新版本。"
-		}
-		infoDialog(msg)
-	default:
-		msg := "Could not check for updates.\n\n" + st.Error
-		if zh {
-			msg = "检查更新失败。\n\n" + st.Error
-		}
-		infoDialog(msg)
-	}
+		g.updater.Check(ctx, false)
+	}()
+	open(pageUpdate)
 }
 
 // debugSources：只有 --debug 调试实例才认 CURSOR_INNER_UPDATE_MANIFEST（逗号分隔，可以写多个清单地址演练镜像切换），

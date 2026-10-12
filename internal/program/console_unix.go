@@ -27,6 +27,8 @@ func bindConsoleIO() {}
 
 func consoleHidden() bool { return false }
 
+func concealConsoleAtStart() {}
+
 func watchConsole(func()) {}
 
 func startWatchdog(dir string) error {

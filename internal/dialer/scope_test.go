@@ -102,12 +102,16 @@ func TestSplitRoutesByTarget(t *testing.T) {
 		{"127.0.0.1:8080", nil, "direct"},
 		{"192.168.3.4:22", nil, "direct"},
 		{"localhost:3000", nil, "direct"},
+		{"api.openai.com:443", nil, "proxy"},
+		{"chatgpt.com:443", nil, "proxy"},
 		{"book.example.com:443", hello(t, "book.example.com"), "direct"},
 		{"book.example.com:443", hello(t, "api.x.ai"), "proxy"},
-		{"book.example.com:443", hello(t, ""), "proxy"},
+		{"book.example.com:443", hello(t, "api.openai.com"), "proxy"},
+		{"book.example.com:443", hello(t, ""), "direct"},
+		{"github.com:22", []byte("SSH-2.0-OpenSSH\r\n"), "direct"},
 		{"book.example.com:80", []byte("GET / HTTP/1.1\r\nHost: book.example.com\r\n\r\n"), "direct"},
 		{"book.example.com:80", []byte("GET / HTTP/1.1\r\nHost: grok.com\r\n\r\n"), "proxy"},
-		{"book.example.com:5222", []byte("<stream:stream>"), "proxy"},
+		{"book.example.com:5222", []byte("<stream:stream>"), "direct"},
 	}
 	for _, c := range cases {
 		r := &route{}
@@ -151,7 +155,7 @@ func firstN(b []byte, n int) string {
 	return string(b)
 }
 
-func TestSplitSilentClientGoesThroughProxy(t *testing.T) {
+func TestSplitSilentClientUsesDialName(t *testing.T) {
 	old := inspectWait
 	inspectWait = 50 * time.Millisecond
 	defer func() { inspectWait = old }()
@@ -163,7 +167,7 @@ func TestSplitSilentClientGoesThroughProxy(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	if calls := r.got(); len(calls) != 1 || !strings.HasPrefix(calls[0], "proxy ") {
+	if calls := r.got(); len(calls) != 1 || !strings.HasPrefix(calls[0], "direct ") {
 		t.Fatalf("calls %v", calls)
 	}
 	conn.Close()

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-12
+
+### Added
+
+- Settings switch Take over Codex, on when `takeover_codex` is missing. On Windows a running Codex desktop app is restarted with the configured proxy (`--proxy-server` for the window, `HTTPS_PROXY` / `ALL_PROXY` / `WS_PROXY` on that process for the app-server). It is not started if it is not already running, and a Codex CLI started in a terminal is left alone. Checked on a Microsoft Store install: the window is `ChatGPT.exe`, the app-server is a child `codex.exe`, and with a SOCKS proxy both use the local HTTP bridge. Turning the switch off restarts the window without those arguments.
+- Self-update progress bar in the terminal and on the settings page, both fed by one progress source so the numbers always match. The terminal shows a single in-place line with a bar, percentage, downloaded/total size, speed, time left and the network path, plus a timestamped status line at each step (check → manifest signature → download → sha256 → self-test → hot handover, route switches and failures). It works in the Windows classic console, Windows Terminal and Unix terminals; when the output is not a terminal it prints a plain line every 10% or 15 s instead. Ordinary log lines are printed above the live line without breaking it, and the progress itself never goes into `inner.log`. The settings page shows a step list and a real progress bar pushed over Server-Sent Events (`GET /api/update/events`, with polling as a fallback); after the hot handover it reconnects, reloads and says "Updated from A to B". Checked on 2026-10-11 in an isolated `--classic-console --debug` Windows instance against a local signed release throttled to 96 KB/s with a 1 MB/s proxy: default network → also trying proxy → switched to proxy and resumed → 15.5 MB in 20.6 s → sha256 → self-test → handover; a tampered package stopped at "Verify" and the old version kept running.
+- Windows notification-area icon and background mode. The icon shows the state (normal, orange dot for warnings, blue dot while updating) and a tooltip with the version and update progress; a click opens the settings page and the right-click menu has Open settings, Show/Hide console window, Check for updates and Quit. New settings under General: "Run in background" (off by default; start without a console window, icon only; the console can be shown from the menu and stays a classic console window) and "Notifications" (on by default; balloons when an update finishes or fails and when a request for a custom model may have gone to the official service; clicking one opens the matching settings tab). During a hot handover there is only ever one icon: the new process adds its icon only after the handover is confirmed, and the old one removes its icon while draining; in background mode the new process also starts without a console. The icon is recreated when Explorer restarts. macOS and Linux are unchanged.
+- Settings page tabs: Models (default), Network, General and Update, so the model list is no longer pushed down by network and update settings. The tab is kept in the URL (`#models`, `#network`, `#update`, `#general`) and survives reloads and hot handovers; tabs support arrow keys, Home and End. A narrow status bar at the top shows version, takeover, proxy, TUN (when on) and update state, and small dots on the tabs point to where a problem is. Each setting keeps a one-line description, with details behind a "?" (hover, focus or click; Esc closes).
+
+### Changed
+
+- Official-only routing follows the hostname. OpenAI's own domains (`openai.com`, `chatgpt.com`, `oaistatic.com`, `oaiusercontent.com`, `oaistatsig.com`) go through the proxy with the Cursor and Grok names. A TLS SNI or HTTP Host on that list does too. When the first bytes have no hostname (SSH, no SNI, no Host), the dialed name is used, so a host that is not on the list connects directly. A public IP still has no name and goes through the proxy. Waiting out the first bytes does not change a name that is already known. Custom models still use their own proxy switch.
+- Settings page: Open Codex uses the app icon; custom models are marked Cursor only; the network tab puts the proxy above the takeover switches; the Update tab is last.
+- The terminal now prints self-update progress line by line by default (one line per step, one every 10% or 15 s while downloading); the full bar lives on the settings page. `CURSOR_INNER_LIVE_PROGRESS=1` brings back the in-place progress line.
+- Tray "Check for updates" now checks in the background and opens the Update tab instead of showing native confirmation dialogs.
+- Release workflow: pin the GitHub Actions runner to `ubuntu-24.04` instead of `ubuntu-latest`, matching the image used by the last successful release (run 38146445808 / Ubuntu2404), so the scheduled `ubuntu-latest` cutover around 2026-10-19 does not change the build environment without notice.
+
+### Fixed
+
+- Grok Bot no longer restarts every few seconds when another cursor-inner is running with Grok takeover off. That copy was clearing the proxy arguments the main one had just applied, and the main one put them back. A data directory only removes those arguments after it has applied them itself.
+- Custom models in Cursor's Agents window. The client now waits for a server hello on the agent websocket before it sends the run, so the local model id was forwarded to the official service and rejected (`AI Model Not Found`). The hello is completed first. The pooled connection stays open until the user sends, and a custom model is answered locally. Reply frames on that socket start at sequence 0; starting at 1 was dropped as out of order, so the window stayed on Reconnecting. A resume of that same run stays on the local model. Forwarding it made the official service answer `AI Model Not Found` again after the reply was already on screen.
+- Windows: the console close-button hook only reacts to cursor-inner's own console window; before, closing another classic console window could be caught as well.
+- Self-update download: when the parallel route tried for a slow download failed straight away (for example the proxy refused the connection), it was restarted every second for the rest of the download, flooding the log. A route that fails is now tried once.
+- `inner.log` after a hot handover: the old process opened the log without append mode, so its last lines could overwrite the start of the new process's first line. Both processes now append.
+
 ## [0.5.3] - 2026-10-11
 
 ### Added
@@ -241,7 +266,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.4.0...v0.5.1

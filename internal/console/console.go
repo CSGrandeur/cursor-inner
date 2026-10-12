@@ -40,6 +40,14 @@ type Console struct {
 	drawn   string
 	closed  bool
 	hidden  bool
+	live    bool // 允许底部活动行（原地刷新的进度条）；默认关，更新进度按普通行打印
+
+	// 底部活动行（见 live.go）
+	liveOn    bool // 有活动行（即使暂时没上屏）
+	liveShown bool // 活动行此刻在屏幕最后一行
+	liveLabel string
+	liveFrac  float64
+	liveInfo  string
 }
 
 func New(out *os.File, file io.Writer) *Console {
@@ -72,7 +80,7 @@ func (c *Console) Event(text string) {
 		return
 	}
 	if c.vt {
-		fmt.Fprintf(c.out, "\r\n%s", styleLine(text))
+		c.lineLocked(styleLine(text))
 		return
 	}
 	fmt.Fprintln(c.out, text)
@@ -90,7 +98,7 @@ func (c *Console) Write(p []byte) (int, error) {
 			continue
 		}
 		if c.vt {
-			fmt.Fprintf(c.out, "\r\n%s%s%s  %s", faint, now.Format("15:04:05"), reset, styleLine(line))
+			c.lineLocked(faint + now.Format("15:04:05") + reset + "  " + styleLine(line))
 		} else {
 			fmt.Fprintf(c.out, "%s  %s\n", now.Format("15:04:05"), line)
 		}
@@ -153,12 +161,14 @@ func (c *Console) Attach(out *os.File) {
 	c.hidden = false
 	c.closed = false
 	c.vt = term.IsTerminal(int(out.Fd())) && enableVT(out)
+	c.liveShown = false
 	if !c.vt || c.url == "" {
 		return
 	}
 	c.cols, c.rows = c.size()
 	fmt.Fprint(c.out, "\x1b[?25l\x1b[2J")
 	c.layoutLocked()
+	c.redrawLiveLocked()
 }
 
 func (c *Console) watch() {
@@ -178,6 +188,7 @@ func (c *Console) watch() {
 		if cols != c.cols || rows != c.rows {
 			c.cols, c.rows = cols, rows
 			c.layoutLocked()
+			c.redrawLiveLocked()
 		} else {
 			c.drawHeaderLocked(false)
 		}

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/logx"
 )
 
 // ErrChecksum 表示下载内容和清单里的 sha256 或大小对不上。文件已删掉，不会被使用。
@@ -38,11 +40,13 @@ type MirrorFailure struct {
 	Err    error
 }
 
-// Progress 是下载进度，给配置页看。Done 是从头开始已连续写好的字节数。
+// Progress 是下载进度，给配置页和控制台看。Done 是从头开始已连续写好的字节数。
 type Progress struct {
 	Done, Total int64
-	Rate        int64  // 当前路径在滑动窗口里的速度，字节/秒；还没测出来时为 0
-	Route       string // 当前领先的网络路径
+	Rate        int64  // 整体进度（Done）在滑动窗口里的速度，字节/秒；还没测出来时为 0
+	Route       string // 正在用的网络路径（并行比较时是原来那条）
+	Probe       string // 正在并行试的另一条路径；没在比较时为空
+	Verifying   bool   // 已下完，正在整份重读核对大小和 sha256
 }
 
 // DownloadPolicy 决定什么时候认为一条路径太慢、卡住，以及整体最多等多久。零值字段取默认值。
@@ -213,6 +217,9 @@ func fetchAsset(ctx context.Context, routes []Route, url string, a Asset, dir st
 		return "", used, err
 	}
 	// 整份重读校验：中途换过路径、续传过也一样逐字节核对。
+	if progress != nil {
+		progress(Progress{Done: a.Size, Total: a.Size, Verifying: true})
+	}
 	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
 		return "", used, err
 	}
@@ -291,6 +298,34 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 		return routes[best]
 	}
 
+	// overall 是 covered 的采样，算整体速度：并行比较、续传时也连续，不随领先路径来回跳。
+	began := time.Now()
+	overall := []sample{{began, 0}}
+	report := func(now time.Time) {
+		if progress == nil || len(active) == 0 {
+			return
+		}
+		var primary, probe *leg
+		for _, l := range active {
+			if primary == nil || l.id < primary.id {
+				primary, probe = l, primary
+			} else {
+				probe = l
+			}
+		}
+		p := Progress{Total: j.size, Route: primary.route.Name}
+		if probe != nil {
+			p.Probe = probe.route.Name
+		}
+		j.mu.Lock()
+		p.Done = j.covered
+		j.mu.Unlock()
+		if now.Sub(began) >= pol.Warmup/2 {
+			p.Rate = int64(windowRate(overall))
+		}
+		progress(p)
+	}
+
 	launch(routes[0])
 	tick := time.NewTicker(pol.Tick)
 	defer tick.Stop()
@@ -314,9 +349,11 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 						o.cancel()
 					}
 				}
+				active = map[int]*leg{l.id: l}
+				report(time.Now()) // 最后一帧：100%
 				active = map[int]*leg{}
 				if len(usedRoutes) > 1 {
-					slog.Info("更新包下载完成", "route", l.route.Name)
+					slog.Info("更新包下载完成", "route", l.route.Name, logx.FileOnly)
 				}
 				return len(usedRoutes), nil
 			}
@@ -327,7 +364,11 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 			lastErr = err
 			failed[l.route.Name]++
 			if len(active) > 0 {
-				raceStart = time.Time{} // 另一条还在下，比较结束
+				// 另一条还在下：比较结束，出错的这条算比输了，不再拿来比。
+				// 否则一条马上就失败的路径（代理拒绝、连不上）会在每个监控周期被重新拉起，一秒好几次。
+				raceStart = time.Time{}
+				lost[l.route.Name] = true
+				slog.Info("并行试的路径出错，继续用原路径", "route", l.route.Name, "err", err.Error(), logx.FileOnly)
 				continue
 			}
 			if retries >= pol.Retries || ctx.Err() != nil {
@@ -338,11 +379,10 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 			j.mu.Lock()
 			at := j.covered
 			j.mu.Unlock()
-			slog.Warn("更新包下载中断，从断点续传", "route", l.route.Name, "next", r.Name, "offset", at, "err", err.Error())
+			slog.Warn("更新包下载中断，从断点续传", logx.FileOnly, "route", l.route.Name, "next", r.Name, "offset", at, "err", err.Error())
 			launch(r)
 		case now := <-tick.C:
 			j.mu.Lock()
-			var lead *leg
 			for _, l := range active {
 				l.samples = append(l.samples, sample{now, l.pos})
 				trim := 0
@@ -350,9 +390,6 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 					trim++
 				}
 				l.samples = l.samples[trim:]
-				if lead == nil || l.pos > lead.pos {
-					lead = l
-				}
 			}
 			var stalled []*leg
 			for _, l := range active {
@@ -360,15 +397,14 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 					stalled = append(stalled, l)
 				}
 			}
-			covered := j.covered
-			var rate int64
-			if lead != nil && now.Sub(lead.launched) >= pol.Warmup/2 {
-				rate = int64(windowRate(lead.samples))
+			overall = append(overall, sample{now, j.covered})
+			trim := 0
+			for trim < len(overall)-2 && now.Sub(overall[trim+1].at) >= pol.Window {
+				trim++
 			}
+			overall = overall[trim:]
 			j.mu.Unlock()
-			if progress != nil && lead != nil {
-				progress(Progress{Done: covered, Total: j.size, Rate: rate, Route: lead.route.Name})
-			}
+			report(now)
 			for _, l := range stalled {
 				// 卡住按断开处理：取消后由 fetch 报 errStall，走上面的续传逻辑。
 				j.mu.Lock()
@@ -401,7 +437,7 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 				if r > 0 && time.Duration(float64(remaining)/r*float64(time.Second)) <= pol.SlowETA {
 					continue
 				}
-				slog.Info("更新包下载太慢，并行试另一条网络路径", "route", l.route.Name, "rate", int64(r), "next", alt.Name)
+				slog.Info("更新包下载太慢，并行试另一条网络路径", "route", l.route.Name, "rate", int64(r), "next", alt.Name, logx.FileOnly)
 				raceStart = now
 				launch(alt)
 			case 2:
@@ -421,11 +457,11 @@ func (j *job) run(ctx context.Context, routes []Route, pol DownloadPolicy, progr
 				j.mu.Unlock()
 				raceStart = time.Time{}
 				if rn > raceWin*ro {
-					slog.Info("更新包下载改走更快的路径", "from", old.route.Name, "to", nw.route.Name, "old_bytes", ro, "new_bytes", rn)
+					slog.Info("更新包下载改走更快的路径", "from", old.route.Name, "to", nw.route.Name, "old_bytes", ro, "new_bytes", rn, logx.FileOnly)
 					lost[old.route.Name] = true
 					stop(old)
 				} else {
-					slog.Info("另一条路径没有更快，继续用原路径", "route", old.route.Name, "old_bytes", ro, "other", nw.route.Name, "other_bytes", rn)
+					slog.Info("另一条路径没有更快，继续用原路径", "route", old.route.Name, "old_bytes", ro, "other", nw.route.Name, "other_bytes", rn, logx.FileOnly)
 					lost[nw.route.Name] = true
 					stop(nw)
 				}

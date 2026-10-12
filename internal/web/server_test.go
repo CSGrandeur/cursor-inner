@@ -13,15 +13,16 @@ import (
 )
 
 type fake struct {
-	strict     *bool
-	scope      string
-	tunnel     *bool
-	view       View
-	autostart  bool
-	takeover   bool
-	quit       bool
-	opened     bool
-	openedGrok bool
+	strict      *bool
+	scope       string
+	tunnel      *bool
+	view        View
+	autostart   bool
+	takeover    bool
+	quit        bool
+	opened      bool
+	openedGrok  bool
+	openedCodex bool
 }
 
 func (f *fake) State() (View, error) {
@@ -33,8 +34,12 @@ func (f *fake) State() (View, error) {
 	return f.view, nil
 }
 func (f *fake) SetTakeover(target string, enabled bool) error {
-	if target == "grok" {
+	switch target {
+	case "grok":
 		f.view.TakeoverGrok = enabled
+		return nil
+	case "codex":
+		f.view.TakeoverCodex = enabled
 		return nil
 	}
 	f.takeover = enabled
@@ -52,6 +57,15 @@ func (f *fake) SetImage(baseURL, apiKey, model string) error {
 func (f *fake) SetAutostart(enabled bool) error {
 	f.autostart = enabled
 	f.view.Autostart = autostart.State{Enabled: enabled, Mode: "logon-task", Detail: i18n.T("已写入", "Written")}
+	return nil
+}
+func (f *fake) SetDesktop(background, notify *bool) error {
+	if background != nil {
+		f.view.Desktop.Background = *background
+	}
+	if notify != nil {
+		f.view.Desktop.Notify = *notify
+	}
 	return nil
 }
 func (f *fake) AddModel(config.Model) error            { return nil }
@@ -79,6 +93,7 @@ func (f *fake) TestSaved(string) provider.Result { return provider.Result{OK: tr
 func (f *fake) Quit() error                      { f.quit = true; return nil }
 func (f *fake) OpenCursor() error                { f.opened = true; return nil }
 func (f *fake) OpenGrok() error                  { f.openedGrok = true; return nil }
+func (f *fake) OpenCodex() error                 { f.openedCodex = true; return nil }
 func (f *fake) OpenLogs() error                  { return nil }
 func (f *fake) RunLeakCheck() error              { return nil }
 
@@ -190,7 +205,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, ">接管 Codex<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="open-codex"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))
@@ -210,6 +225,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	}{
 		{`{"target":"cursor","enabled":true}`, true, false},
 		{`{"target":"grok","enabled":false}`, true, false},
+		{`{"target":"codex","enabled":true}`, true, false},
 	} {
 		req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/takeover", strings.NewReader(tc.body))
 		req.Header.Set("Content-Type", "application/json")
@@ -221,6 +237,9 @@ func TestPageAndAutostartToggle(t *testing.T) {
 		if res3.StatusCode != 200 || f.takeover != tc.want || f.view.TakeoverGrok != tc.grok {
 			t.Fatalf("%s status %d cursor %v grok %v", tc.body, res3.StatusCode, f.takeover, f.view.TakeoverGrok)
 		}
+	}
+	if !f.view.TakeoverCodex {
+		t.Fatal("codex takeover was not stored")
 	}
 }
 func (f *fake) SetStrictEgress(enabled bool) error { f.strict = &enabled; return nil }
@@ -271,5 +290,32 @@ func TestProxyScopeEndpoint(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 || f.scope != "official" {
 		t.Fatalf("status %d scope %q", res.StatusCode, f.scope)
+	}
+}
+
+func TestDesktopSettingsOnlyChangeWhatIsSent(t *testing.T) {
+	f := &fake{view: View{Desktop: DesktopView{Tray: true, Notify: true}}}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	put := func(body string) *http.Response {
+		req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/desktop", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", srv.URL)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res
+	}
+	if res := put(`{"background":true}`); res.StatusCode != 200 {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if !f.view.Desktop.Background || !f.view.Desktop.Notify {
+		t.Fatalf("background only: %+v", f.view.Desktop)
+	}
+	put(`{"notify":false}`)
+	if !f.view.Desktop.Background || f.view.Desktop.Notify {
+		t.Fatalf("notify only: %+v", f.view.Desktop)
 	}
 }

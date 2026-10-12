@@ -13,7 +13,7 @@ func TestLoadWritesDefaultAndRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Get()
-	if !got.Takeover || !got.TakeoverGrok || !got.Proxy.Enabled || got.Autostart || got.Proxy.Address != "" {
+	if !got.Takeover || !got.TakeoverGrok || !got.TakeoverCodex || !got.Proxy.Enabled || got.Autostart || got.Proxy.Address != "" {
 		t.Fatalf("%+v", got)
 	}
 	if err := s.Update(func(f *File) error {
@@ -45,7 +45,7 @@ func TestMissingGrokSwitchDefaultsOn(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Get()
-	if got.Takeover || !got.TakeoverGrok {
+	if got.Takeover || !got.TakeoverGrok || !got.TakeoverCodex {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -61,7 +61,23 @@ func TestExplicitGrokSwitchFalseStaysOff(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := s.Get()
-	if !got.Takeover || got.TakeoverGrok {
+	if !got.Takeover || got.TakeoverGrok || !got.TakeoverCodex {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestExplicitCodexSwitchFalseStaysOff(t *testing.T) {
+	dir := t.TempDir()
+	raw := []byte(`{"takeover":true,"takeover_codex":false,"autostart":false,"proxy":{"enabled":true},"models":[]}`)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.Get()
+	if !got.Takeover || !got.TakeoverGrok || got.TakeoverCodex {
 		t.Fatalf("%+v", got)
 	}
 }

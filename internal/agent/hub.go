@@ -76,19 +76,20 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 	switch m := msg.GetMessage().(type) {
 	case *cursorpb.AgentClientMessage_RunRequest:
 		route.ModelID = modelID(m.RunRequest)
+		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
+		if s.session == nil && route.ModelID != "" && h.lookup != nil {
+			if model, ok := h.lookup(route.ModelID); ok {
+				s.session = newSession(requestID, model, m.RunRequest, h.history)
+				for _, id := range model.Fallback {
+					if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
+						s.session.Fallbacks = append(s.session.Fallbacks, fb)
+					}
+				}
+				start = true
+			}
+		}
 		if !s.decided {
 			s.decided = true
-			if route.ModelID != "" && h.lookup != nil {
-				if model, ok := h.lookup(route.ModelID); ok {
-					s.session = newSession(requestID, model, m.RunRequest, h.history)
-					for _, id := range model.Fallback {
-						if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
-							s.session.Fallbacks = append(s.session.Fallbacks, fb)
-						}
-					}
-					start = true
-				}
-			}
 			close(s.ready)
 		}
 	case *cursorpb.AgentClientMessage_ExecClientMessage:

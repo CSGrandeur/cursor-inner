@@ -383,6 +383,25 @@ func TestE2ESlowDefaultDownloadSwitchesToProxy(t *testing.T) {
 	if st := u.Check(context.Background(), false); st.State != StateAvailable || st.Route != "default" {
 		t.Fatalf("%+v", st)
 	}
+	// 订阅者（控制台进度条、配置页推送）看到的阶段序列。
+	watch := u.Watch()
+	defer watch.Close()
+	var snaps []Status
+	collected := make(chan struct{})
+	wctx, wcancel := context.WithCancel(context.Background())
+	go func() {
+		defer close(collected)
+		for {
+			st, err := watch.Next(wctx)
+			if err != nil {
+				return
+			}
+			snaps = append(snaps, st)
+			if st.State == StateDone || st.State == StateFailed {
+				return
+			}
+		}
+	}()
 	var mu sync.Mutex
 	routes := map[string]bool{}
 	var maxSpeed int64
@@ -415,6 +434,49 @@ func TestE2ESlowDefaultDownloadSwitchesToProxy(t *testing.T) {
 	if e.exeContent() != string(payload) || len(e.handover) != 1 || len(e.leftovers()) != 0 {
 		t.Fatalf("exe swapped=%v handover=%v leftovers=%v", e.exeContent() == string(payload), e.handover, len(e.leftovers()))
 	}
+	select {
+	case <-collected:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watch did not see done")
+	}
+	wcancel()
+	var stages []string
+	var sawProbe, sawETA bool
+	lastSeq := uint64(0)
+	for _, st := range snaps {
+		if st.Seq <= lastSeq && lastSeq != 0 {
+			t.Fatalf("seq went backwards: %d after %d", st.Seq, lastSeq)
+		}
+		lastSeq = st.Seq
+		if len(stages) == 0 || stages[len(stages)-1] != st.State {
+			stages = append(stages, st.State)
+		}
+		if st.DLRoute != "" {
+			mu.Lock()
+			routes[st.DLRoute] = true // 轮询可能错过很短的阶段，订阅不会
+			mu.Unlock()
+		}
+		if st.State == StateDownloading {
+			sawProbe = sawProbe || st.DLProbe == "proxy"
+			sawETA = sawETA || st.ETA > 0
+			if st.Total > 0 && st.Percent != int(min(st.Done, st.Total)*100/st.Total) {
+				t.Fatalf("percent %d for %d/%d", st.Percent, st.Done, st.Total)
+			}
+			if st.Asset != pkg {
+				t.Fatalf("asset %q", st.Asset)
+			}
+		}
+		if st.State == StateVerifying && st.DLMillis <= 0 {
+			t.Fatalf("verifying without dl_ms: %+v", st)
+		}
+	}
+	want := []string{StateAvailable, StateDownloading, StateVerifying, StatePreflight, StateHandover, StateDone}
+	if strings.Join(stages, ">") != strings.Join(want, ">") {
+		t.Fatalf("stages %v", stages)
+	}
+	if !sawProbe || !sawETA {
+		t.Fatalf("probe=%v eta=%v", sawProbe, sawETA)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	if !routes["default"] || !routes["proxy"] || maxSpeed == 0 {
@@ -439,5 +501,42 @@ func TestDownloadStallSingleRouteResumes(t *testing.T) {
 	}
 	if d := time.Since(start); d < fastPolicy.Stall || d > 3*time.Second {
 		t.Fatalf("took %s", d)
+	}
+}
+
+// 并行试的路径马上就失败（代理拒绝连接）：只试一次，不在每个监控周期重新拉起；默认网络照常下完。
+func TestDownloadFailingProbeIsNotRelaunched(t *testing.T) {
+	payload, a := randomPayload(t, 256<<10)
+	slow := newSlowServer(t, payload, 160<<10)
+	var mu sync.Mutex
+	refused := 0
+	deny := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		refused++
+		mu.Unlock()
+		http.Error(w, "proxy refused", http.StatusForbidden)
+	}))
+	t.Cleanup(deny.Close)
+	addr := strings.TrimPrefix(deny.URL, "http://")
+	bad := Route{Name: "proxy", Client: &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}}}}
+	var probes int
+	path, _, _, err := DownloadMirrors(context.Background(), []Mirror{{Name: "github", Route: routeTo("default", slow), Alt: []Route{bad}, URLs: []string{pkgURL}}}, a, t.TempDir(), fastPolicy, func(p Progress) {
+		if p.Probe != "" {
+			probes++
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkFile(t, path, payload)
+	mu.Lock()
+	defer mu.Unlock()
+	if refused != 1 {
+		t.Fatalf("failing route tried %d times", refused)
+	}
+	if len(slow.ranges()) != 1 {
+		t.Fatalf("default route restarted: %v", slow.ranges())
 	}
 }
