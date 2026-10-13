@@ -74,12 +74,22 @@ func TestQuietLeakPaths(t *testing.T) {
 		"/aiserver.v1.AiService/GetNewChatNudge",
 		"/aiserver.v1.AiService/NameTab",
 		"/aiserver.v1.DashboardService/GetUsageLimitStatusAndActiveGrants",
+		"/aiserver.v1.RepositoryService/FastUpdateFileV2",
+		"/api/1234567890123456/envelope/",
+		"/api/1/envelope",
 	} {
 		if !quietLeak(path) {
 			t.Fatal(path)
 		}
 	}
-	if quietLeak("/aiserver.v1.BidiService/BidiAppend") {
-		t.Fatal("agent path should not scrub")
+	for _, path := range []string{
+		"/aiserver.v1.BidiService/BidiAppend",
+		"/api/not-a-project/envelope/",
+		"/api/123/store/",
+		"/envelope/",
+	} {
+		if quietLeak(path) {
+			t.Fatal(path)
+		}
 	}
 }

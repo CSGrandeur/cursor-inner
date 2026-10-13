@@ -586,10 +586,14 @@ func (s *Server) selectedModel() string {
 }
 
 func quietLeak(path string) bool {
+	if sentryEnvelope(path) {
+		return true
+	}
 	for _, part := range []string{
 		"NameTab",
 		"GetUsageLimitStatusAndActiveGrants",
 		"AnalyticsService/",
+		"RepositoryService/", // 代码索引。选中自定义模型时请求里会带上目录 id，不是对话
 		"GetDefaultModelNudgeData",
 		"GetNewChatNudge",
 	} {
@@ -598,6 +602,27 @@ func quietLeak(path string) bool {
 		}
 	}
 	return false
+}
+
+// sentryEnvelope 是 Cursor 指标客户端的上报地址，形如 /api/<数字>/envelope/。
+// 目录里追加自定义模型之后，客户端把它当成默认模型，span 里写的是目录 id。
+// 这和统计、提示一样，先等长替换再转发，不在控制台警告。
+func sentryEnvelope(path string) bool {
+	const prefix = "/api/"
+	rest, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return false
+	}
+	id, tail, ok := strings.Cut(rest, "/")
+	if !ok || id == "" || (tail != "envelope" && tail != "envelope/") {
+		return false
+	}
+	for _, c := range id {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
