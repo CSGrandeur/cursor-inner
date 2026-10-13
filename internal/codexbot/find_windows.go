@@ -5,9 +5,10 @@ package codexbot
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
-	"cursor-inner/internal/grokbot"
+	"cursor-inner/internal/winproc"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -26,30 +27,39 @@ func desktopLookups() []func() (string, error) {
 	return []func() (string, error){appxCodex, whereCodex, registryCodex}
 }
 
+// appxCodex 从当前用户的商店包仓库里找 OpenAI.Codex，效果同 Get-AppxPackage，但不用起 PowerShell。
+// 仓库里可能留着旧版本的键，按包全名从新到旧试，取第一个目录里真有 exe 的。
 func appxCodex() (string, error) {
-	script := `$p = Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue | Select-Object -First 1; if ($p) { $p.InstallLocation }`
-	out, err := grokbot.Quiet("powershell.exe", "-NoProfile", "-Command", script).Output()
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages`, registry.ENUMERATE_SUB_KEYS)
 	if err != nil {
 		return "", err
 	}
-	dir := strings.TrimSpace(string(out))
-	if dir == "" {
-		return "", os.ErrNotExist
+	defer k.Close()
+	names, err := k.ReadSubKeyNames(-1)
+	if err != nil {
+		return "", err
 	}
-	if exe := codexExecutable(dir); exe != "" {
-		return exe, nil
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	for _, name := range names {
+		if !strings.HasPrefix(strings.ToLower(name), "openai.codex_") {
+			continue
+		}
+		sub, err := registry.OpenKey(k, name, registry.QUERY_VALUE)
+		if err != nil {
+			continue
+		}
+		dir, _, _ := sub.GetStringValue("PackageRootFolder")
+		sub.Close()
+		if exe := codexExecutable(dir); exe != "" {
+			return exe, nil
+		}
 	}
 	return "", os.ErrNotExist
 }
 
 func whereCodex() (string, error) {
 	for _, name := range []string{"Codex.exe", "ChatGPT.exe"} {
-		out, err := grokbot.Quiet("where.exe", name).Output()
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(out), "\n") {
-			line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		for _, line := range winproc.Where(name) {
 			if exe := codexExecutable(line); exe != "" {
 				return exe, nil
 			}

@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"unicode/utf16"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/winproc"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -118,7 +118,7 @@ func upsertTask(exe, user string) error {
 	if err := file.Close(); err != nil {
 		return err
 	}
-	out, err := exec.Command("schtasks", "/Create", "/TN", TaskName, "/XML", name, "/F").CombinedOutput()
+	out, err := winproc.Quiet("schtasks", "/Create", "/TN", TaskName, "/XML", name, "/F").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(decodeOut(out)))
 	}
@@ -126,7 +126,7 @@ func upsertTask(exe, user string) error {
 }
 
 func queryTask() (string, bool) {
-	out, err := exec.Command("schtasks", "/Query", "/TN", TaskName, "/XML").CombinedOutput()
+	out, err := winproc.Quiet("schtasks", "/Query", "/TN", TaskName, "/XML").CombinedOutput()
 	if err != nil {
 		return "", false
 	}
@@ -134,7 +134,7 @@ func queryTask() (string, bool) {
 }
 
 func deleteTask() error {
-	out, err := exec.Command("schtasks", "/Delete", "/TN", TaskName, "/F").CombinedOutput()
+	out, err := winproc.Quiet("schtasks", "/Delete", "/TN", TaskName, "/F").CombinedOutput()
 	if err != nil && !missing(decodeOut(out)) {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(decodeOut(out)))
 	}

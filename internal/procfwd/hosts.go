@@ -3,7 +3,6 @@ package procfwd
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -138,16 +137,12 @@ func MarkerPresent() bool {
 
 // Restore 删掉系统 hosts 里的直连转发。接管进程崩溃后由下次启动或守护进程调用。
 func Restore() error {
+	if !hostsHeld(hostsPath()) {
+		return nil
+	}
 	if err := removeHosts(hostsPath()); err != nil {
 		return err
 	}
 	flushDNS()
 	return nil
-}
-
-func flushDNS() {
-	if runtime.GOOS != "windows" {
-		return
-	}
-	_ = exec.Command("ipconfig", "/flushdns").Run()
 }

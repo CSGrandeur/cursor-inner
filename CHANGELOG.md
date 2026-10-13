@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-10-13
+
+### Fixed
+
+- With takeover on, a console window no longer flashes every few seconds. 0.5.7 hid the window but still started PowerShell twice every 5 seconds to look for Grok and Codex. cursor-inner now reads the process list and command lines itself and starts nothing.
+- Restarting Grok or Codex ends the old process tree directly instead of through `taskkill`. Finding Grok, Codex or Cursor no longer runs `where` or PowerShell.
+
 ## [0.5.10] - 2026-10-13
 
 ### Fixed
@@ -307,6 +314,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...HEAD
+[0.5.11]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...v0.5.11
 [0.5.10]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...v0.5.10
 [0.5.9]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.7...v0.5.8

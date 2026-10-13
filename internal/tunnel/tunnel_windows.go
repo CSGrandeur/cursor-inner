@@ -5,11 +5,11 @@ package tunnel
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/winproc"
 )
 
 func (m *Manager) scriptPath() string { return filepath.Join(m.dir, "tun-egress.ps1") }
@@ -37,7 +37,7 @@ func runScript(m *Manager, action string) error {
 		"-LogPath", m.LogPath(),
 		"-PidPath", m.pidPath(),
 	}
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+	cmd := winproc.Quiet("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
 		fmt.Sprintf("$p=Start-Process powershell -Verb RunAs -PassThru -Wait -ArgumentList %s; exit $p.ExitCode", psArgList(inner)))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -57,7 +57,7 @@ func psArgList(args []string) string {
 
 // DetectDNS 读取当前所有网卡的 IPv4 DNS 服务器，供生成配置时作为“真实 DNS 上游”。
 func DetectDNS() []string {
-	cmd := exec.Command("powershell", "-NoProfile", "-Command",
+	cmd := winproc.Quiet("powershell", "-NoProfile", "-Command",
 		"(Get-DnsClientServerAddress -AddressFamily IPv4).ServerAddresses | Sort-Object -Unique")
 	out, err := cmd.Output()
 	if err != nil {

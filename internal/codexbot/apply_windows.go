@@ -3,22 +3,20 @@
 package codexbot
 
 import (
-	"encoding/json"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 
 	"cursor-inner/internal/grokbot"
+	"cursor-inner/internal/winproc"
 )
 
 type process struct {
-	ProcessID      int    `json:"ProcessId"`
-	ExecutablePath string `json:"ExecutablePath"`
-	CommandLine    string `json:"CommandLine"`
+	ProcessID      uint32
+	ExecutablePath string
+	CommandLine    string
 }
 
 var applyMu sync.Mutex
@@ -80,51 +78,28 @@ func desktopShells(procs []process) []process {
 }
 
 func running() ([]process, error) {
-	script := `Get-CimInstance Win32_Process -Filter "Name = 'Codex.exe' OR Name = 'ChatGPT.exe'" | Select-Object ProcessId, ExecutablePath, CommandLine | ConvertTo-Json -Compress`
-	out, err := grokbot.Quiet("powershell.exe", "-NoProfile", "-Command", script).Output()
+	procs, err := winproc.List("Codex.exe", "ChatGPT.exe")
 	if err != nil {
 		return nil, err
 	}
-	text := strings.TrimSpace(string(out))
-	if text == "" || text == "null" {
-		return nil, nil
-	}
-	if strings.HasPrefix(text, "[") {
-		var procs []process
-		if err := json.Unmarshal([]byte(text), &procs); err != nil {
-			return nil, err
+	var out []process
+	for _, p := range procs {
+		if p.Exe == "" && p.CommandLine == "" {
+			continue
 		}
-		return procs, nil
+		out = append(out, process{ProcessID: p.PID, ExecutablePath: p.Exe, CommandLine: p.CommandLine})
 	}
-	var one process
-	if err := json.Unmarshal([]byte(text), &one); err != nil {
-		return nil, err
-	}
-	if one.ExecutablePath == "" && one.CommandLine == "" {
-		return nil, nil
-	}
-	return []process{one}, nil
+	return out, nil
 }
 
 func stop(shells []process) error {
+	pids := make([]uint32, 0, len(shells))
 	for _, p := range shells {
-		if p.ProcessID <= 0 {
-			continue
+		if p.ProcessID > 0 {
+			pids = append(pids, p.ProcessID)
 		}
-		out, err := grokbot.Quiet("taskkill", "/F", "/T", "/PID", strconv.Itoa(p.ProcessID)).CombinedOutput()
-		if err == nil {
-			continue
-		}
-		text := strings.TrimSpace(string(out))
-		if strings.Contains(strings.ToLower(text), "not found") || strings.Contains(text, "没有找到") || strings.Contains(text, "找不到") {
-			continue
-		}
-		if text == "" {
-			return err
-		}
-		return err
 	}
-	return nil
+	return winproc.KillTree(pids...)
 }
 
 func start(exe, proxyURL string) error {

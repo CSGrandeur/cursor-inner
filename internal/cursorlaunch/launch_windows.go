@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"cursor-inner/internal/winproc"
 )
 
 func Start() error {
@@ -41,12 +43,7 @@ func windowsCandidates() []string {
 
 func whereCursor() (string, error) {
 	for _, name := range []string{"Cursor.exe", "cursor"} {
-		out, err := exec.Command("where.exe", name).Output()
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(out), "\n") {
-			line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		for _, line := range winproc.Where(name) {
 			if exe := cursorExecutable(line); exe != "" {
 				return exe, nil
 			}

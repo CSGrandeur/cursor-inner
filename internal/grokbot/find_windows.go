@@ -5,8 +5,8 @@ package grokbot
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
+	"cursor-inner/internal/winproc"
 	"golang.org/x/sys/windows/registry"
 )
 
@@ -20,12 +20,7 @@ func windowsCandidates() []string {
 }
 
 func whereGrok() (string, error) {
-	out, err := Quiet("where.exe", "Grok Bot.exe").Output()
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+	for _, line := range winproc.Where(exeName) {
 		if exe := grokExecutable(line); exe != "" {
 			return exe, nil
 		}

@@ -7,10 +7,10 @@ import (
 	"crypto/sha1"
 	"crypto/x509"
 	"encoding/hex"
-	"os/exec"
 	"strings"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/winproc"
 )
 
 func InstallCA(certPath string, leaf *x509.Certificate) (string, i18n.Text) {
@@ -18,7 +18,7 @@ func InstallCA(certPath string, leaf *x509.Certificate) (string, i18n.Text) {
 	if installed(thumb) {
 		return "ready", i18n.T("证书已在当前用户的受信任根证书颁发机构里。", "The certificate is in the current user's Trusted Root Certification Authorities.")
 	}
-	out, err := exec.Command("certutil", "-user", "-addstore", "-f", "Root", certPath).CombinedOutput()
+	out, err := winproc.Quiet("certutil", "-user", "-addstore", "-f", "Root", certPath).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil {
 		return "untrusted", i18n.Tf("证书还没装进系统。可以自己执行：certutil -user -addstore -f Root \"%s\"\n%s", "The certificate is not installed yet. You can run: certutil -user -addstore -f Root \"%s\"\n%s", certPath, text)
@@ -35,7 +35,7 @@ func thumbprint(leaf *x509.Certificate) string {
 }
 
 func installed(thumb string) bool {
-	out, err := exec.Command("certutil", "-user", "-store", "Root").CombinedOutput()
+	out, err := winproc.Quiet("certutil", "-user", "-store", "Root").CombinedOutput()
 	if err != nil {
 		return false
 	}

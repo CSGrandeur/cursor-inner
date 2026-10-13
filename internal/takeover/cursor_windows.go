@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"cursor-inner/internal/winproc"
 )
 
 // cursorKillArgs 只结束 Cursor.exe 自己。
@@ -17,7 +19,7 @@ func cursorKillArgs() []string {
 }
 
 func TerminateCursor() error {
-	out, err := exec.Command("taskkill", cursorKillArgs()...).CombinedOutput()
+	out, err := winproc.Quiet("taskkill", cursorKillArgs()...).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err == nil {
 		return nil

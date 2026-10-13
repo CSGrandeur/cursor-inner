@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 )
 
+func flushDNS() {}
+
 func commitHosts(path string, data []byte) error {
 	mode := os.FileMode(0o644)
 	if info, err := os.Stat(path); err == nil && info.Mode().Perm() != 0 {

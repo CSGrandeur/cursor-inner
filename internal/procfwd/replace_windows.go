@@ -7,9 +7,14 @@ import (
 	"os"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/winproc"
 
 	"golang.org/x/sys/windows"
 )
+
+func flushDNS() {
+	_ = winproc.Quiet("ipconfig", "/flushdns").Run()
+}
 
 // commitHosts 直接改原来的 hosts。
 // drivers\etc 允许管理员改已有文件，但不允许在目录里新建文件再替换：
