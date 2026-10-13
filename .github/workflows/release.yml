@@ -19,8 +19,6 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the Gitee mirror step pushes the full history and the tag
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -136,14 +134,3 @@ jobs:
           flags=""
           case "$VERSION" in *-*) flags="--prerelease" ;; esac
           gh release create "$VERSION" out/* --verify-tag --title "cursor-inner ${VERSION}" --notes-file notes.md $flags
-
-      # Second update source for users who reach Gitee faster than GitHub. Optional: skipped
-      # without the GITEE_TOKEN secret, and a failure here does not undo the GitHub release.
-      - name: Mirror to Gitee
-        continue-on-error: true
-        env:
-          VERSION: ${{ github.ref_name }}
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_REPO: ${{ vars.GITEE_REPO }}
-          GITEE_USER: ${{ vars.GITEE_USER }}
-        run: ./scripts/gitee_release.sh out "$VERSION" notes.md

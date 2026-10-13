@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-10-13
+
+### Fixed
+
+- Checking for updates no longer says an update source is unavailable when another source already answered. That line appears only when every source failed.
+- Update checks only look at the GitHub release. There is no other public release to query.
+
 ## [0.5.9] - 2026-10-13
 
 ### Fixed
@@ -299,7 +306,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...HEAD
+[0.5.10]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...v0.5.10
 [0.5.9]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.6...v0.5.7

@@ -1,11 +1,14 @@
 package selfupdate
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -112,6 +115,48 @@ func TestUpdaterUsesCheckedRouteForDownload(t *testing.T) {
 	}
 }
 
+func TestSpareSourceFailureStaysQuiet(t *testing.T) {
+	okSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(goodManifest)) }))
+	defer okSrv.Close()
+	badSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer badSrv.Close()
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	u := New(Options{
+		Version: "v0.4.0", DataDir: t.TempDir(), Timeout: time.Second, GOOS: "windows", GOARCH: "amd64",
+		Sources: []Source{URLSource(badSrv.URL + "/manifest.json"), URLSource(okSrv.URL + "/manifest.json")},
+	})
+	st := u.Check(context.Background(), false)
+	if st.State != StateUpToDate {
+		t.Fatalf("state %s err %s", st.State, st.Error)
+	}
+	log := buf.String()
+	if strings.Contains(log, "更新源不可用") {
+		t.Fatalf("spare failure reached the console log:\n%s", log)
+	}
+	if !strings.Contains(log, "备用更新源没有用上") {
+		t.Fatalf("spare failure was not recorded:\n%s", log)
+	}
+
+	buf.Reset()
+	none := New(Options{
+		Version: "v0.4.0", DataDir: t.TempDir(), Timeout: time.Second,
+		Sources: []Source{URLSource(badSrv.URL + "/manifest.json")},
+	})
+	if st := none.Check(context.Background(), false); st.State != StateFailed {
+		t.Fatalf("state %s", st.State)
+	}
+	if !strings.Contains(buf.String(), "更新源不可用") {
+		t.Fatalf("total failure was not announced:\n%s", buf.String())
+	}
+}
+
 func TestUpdaterCheckRecordsRoute(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(goodManifest)) }))
 	defer srv.Close()
@@ -127,5 +172,14 @@ func TestUpdaterCheckRecordsRoute(t *testing.T) {
 	}
 	if st3 := u.Check(context.Background(), false); st3.State != StateFailed {
 		t.Fatalf("manual check should run again: %+v", st3)
+	}
+}
+
+func TestDefaultSourcesOnlyGitHub(t *testing.T) {
+	if len(DefaultSources) != 1 || DefaultSources[0].Name != "github" || DefaultSources[0].URL == "" {
+		t.Fatalf("default sources = %+v", DefaultSources)
+	}
+	if DefaultSources[0].LatestAPI != "" || DefaultSources[0].DownloadBase != "" {
+		t.Fatalf("default source should be a fixed manifest URL: %+v", DefaultSources[0])
 	}
 }

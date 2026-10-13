@@ -13,19 +13,18 @@ import (
 // Source 是一个更新源。清单和安装包的完整性只靠签名清单里的 sha256，所以多加一个镜像不会降低安全性：
 // 镜像能做的最坏的事是不给更新（由过期时间和回滚检查兜底），或者给坏文件（被 sha256 拒掉、换下一个源）。
 type Source struct {
-	Name string // 显示用：github、gitee
+	Name string // 显示用，例如 github
 	// URL 是固定的清单地址（GitHub 的 releases/latest/download/manifest.json 走重定向，不调 API、不受匿名限流）。
 	URL string
-	// LatestAPI 和 DownloadBase 给没有「最新版」固定地址的源（Gitee）：先从 API 取最新 tag，
+	// LatestAPI 和 DownloadBase 给没有「最新版」固定地址的源：先从 API 取最新 tag，
 	// 再拼 DownloadBase + tag + "/manifest.json"。tag 必须是版本号。
 	LatestAPI    string
 	DownloadBase string
 }
 
-// DefaultSources 并行查询，取验签通过的最高版本；版本相同时用先返回的那个，下载失败再换另一个。
+// DefaultSources 只查 GitHub Release。公开仓库不在别的代码托管上，不要再加一个会 404 的源。
 var DefaultSources = []Source{
 	{Name: "github", URL: "https://github.com/CSGrandeur/cursor-inner/releases/latest/download/manifest.json"},
-	{Name: "gitee", LatestAPI: "https://gitee.com/api/v5/repos/csgrandeur/cursor-inner/releases/latest", DownloadBase: "https://gitee.com/csgrandeur/cursor-inner/releases/download/"},
 }
 
 // URLSource 用一个固定清单地址做源（调试演练用）。

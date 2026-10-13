@@ -171,9 +171,19 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 		statuses[i] = SourceStatus{Name: r.src.Name, Route: r.route.Name, Millis: r.elapsed.Milliseconds(), Chosen: i == best}
 		if r.err != nil {
 			statuses[i].Error, statuses[i].Code = r.err.Error(), ErrorCode(r.err)
-			slog.Info("更新源不可用", "source", r.src.Name, "err", r.err.Error())
 		} else {
 			statuses[i].Version = r.manifest.Version
+		}
+	}
+	// 多个源是备用。有一个能用时，没选中的失败只留在调试日志里。
+	// 全部失败才在终端说「更新源不可用」，避免每次检查都先报一句故障再报成功。
+	if best < 0 {
+		slog.Info("更新源不可用", "err", joinSourceErrors(results).Error())
+	} else {
+		for _, r := range results {
+			if r.err != nil {
+				slog.Debug("备用更新源没有用上", "source", r.src.Name, "err", r.err.Error())
+			}
 		}
 	}
 	var err error
