@@ -74,7 +74,6 @@ func TestQuietLeakPaths(t *testing.T) {
 		"/aiserver.v1.AiService/GetNewChatNudge",
 		"/aiserver.v1.AiService/NameTab",
 		"/aiserver.v1.DashboardService/GetUsageLimitStatusAndActiveGrants",
-		"/aiserver.v1.RepositoryService/FastUpdateFileV2",
 		"/api/1234567890123456/envelope/",
 		"/api/1/envelope",
 	} {
@@ -84,6 +83,7 @@ func TestQuietLeakPaths(t *testing.T) {
 	}
 	for _, path := range []string{
 		"/aiserver.v1.BidiService/BidiAppend",
+		"/aiserver.v1.RepositoryService/FastUpdateFileV2",
 		"/api/not-a-project/envelope/",
 		"/api/123/store/",
 		"/envelope/",

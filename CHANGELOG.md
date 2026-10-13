@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.9] - 2026-10-13
+
+### Fixed
+
+- A custom model id in Cursor's own metrics, stats or index traffic is no longer shown as a terminal warning. Metrics and stats still have the id replaced before forwarding. Code index uploads are forwarded unchanged, so file contents are left intact.
+
 ## [0.5.8] - 2026-10-13
 
 ### Fixed
@@ -293,7 +299,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.8...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...HEAD
+[0.5.9]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.8...v0.5.9
 [0.5.8]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.5...v0.5.6

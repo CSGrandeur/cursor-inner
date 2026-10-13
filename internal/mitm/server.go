@@ -555,19 +555,9 @@ func (s *Server) warnCustomModel(path string, body []byte, encoding string) {
 	if id == "" {
 		return
 	}
-	if quietLeak(path) {
-		slog.Debug("转发给官方的请求带有自定义模型", "path", path, "model", id)
-		return
-	}
-	name := displayName(s.entries(), id)
-	s.mu.Lock()
-	s.leakN++
-	s.leakName = name
-	if name == "" {
-		s.leakName = id
-	}
-	s.mu.Unlock()
-	slog.Warn("转发给官方的请求带有自定义模型", "path", path, "model", id, "name", name)
+	// 目录 id 出现在遥测或被索引的文件里时，请求本身仍要转发给 Cursor。
+	// 这不是故障，不升成警告，也不计入「被带给了官方」。对话没留在本机的拒绝在各自的处理函数里。
+	slog.Debug("转发给官方的请求带有自定义模型", "path", path, "model", id)
 }
 
 func (s *Server) rememberModel(path, id string) {
@@ -593,7 +583,6 @@ func quietLeak(path string) bool {
 		"NameTab",
 		"GetUsageLimitStatusAndActiveGrants",
 		"AnalyticsService/",
-		"RepositoryService/", // 代码索引。选中自定义模型时请求里会带上目录 id，不是对话
 		"GetDefaultModelNudgeData",
 		"GetNewChatNudge",
 	} {

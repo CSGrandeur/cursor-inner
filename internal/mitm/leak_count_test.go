@@ -8,7 +8,8 @@ import (
 	"cursor-inner/internal/config"
 )
 
-// 托盘的泄漏告警看 Traffic().Leaks：只数真正带出去的请求，遥测类（会被改写掉）不算。
+// 目录 id 出现在非对话请求里只记调试日志，不计入托盘告警。
+// 对话没留在本机是另一条错误，不从这里计数。
 func TestTrafficCountsCustomModelLeaks(t *testing.T) {
 	const id = "model-12345678"
 	s := New(
@@ -18,12 +19,8 @@ func TestTrafficCountsCustomModelLeaks(t *testing.T) {
 		agent.NewHistory(t.TempDir()),
 	)
 	s.warnCustomModel("/aiserver.v1.AnalyticsService/Batch", []byte(id), "")
-	s.warnCustomModel("/aiserver.v1.AiService/StreamChat", []byte("nothing here"), "")
-	if tr := s.Traffic(); tr.Leaks != 0 {
-		t.Fatalf("quiet paths and clean bodies must not count: %+v", tr)
-	}
 	s.warnCustomModel("/aiserver.v1.AiService/StreamChat", []byte("x"+id+"y"), "")
-	if tr := s.Traffic(); tr.Leaks != 1 || tr.LastLeak != "Mine" {
-		t.Fatalf("leak not counted: %+v", tr)
+	if tr := s.Traffic(); tr.Leaks != 0 || tr.LastLeak != "" {
+		t.Fatalf("model id in a forwarded request is not a tray alert: %+v", tr)
 	}
 }
