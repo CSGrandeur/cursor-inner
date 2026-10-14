@@ -385,12 +385,52 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request, available bool)
 	writeUpstream(w, resp, merged)
 }
 
+// heartbeatRoute 判断一条 BidiAppend 是不是心跳，以及该不该在本机回答。
+// 客户端每 5 秒为每条进行中的 run 发一次 ClientHeartbeat（带 request id、没有 run/exec 消息）。
+// 只有本机的会话才本地回 200：官方未登录时转发会得到 401，客户端报 Error resuming chat。
+// 官方 run 的心跳必须原样转发，否则官方以为客户端掉线，官方模型做一步就停。
+func (s *Server) heartbeatRoute(plain []byte) (agent.Route, bool) {
+	id, client, err := protox.DecodeBidi(plain)
+	if err != nil {
+		return agent.Route{}, false
+	}
+	var msg cursorpb.AgentClientMessage
+	if proto.Unmarshal(client, &msg) != nil || msg.GetClientHeartbeat() == nil {
+		return agent.Route{}, false
+	}
+	local := s.hub.Owns(id)
+	slog.Debug("BidiAppend heartbeat", "request", id, "where", where(local))
+	return agent.Route{RequestID: id, Local: local}, true
+}
+
 func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	plain, err := protox.Plain(body, r.Header.Get("Content-Encoding"))
 	var route agent.Route
 	if err == nil {
-		route, err = s.hub.Bidi(plain)
+		if hb, ok := s.heartbeatRoute(plain); ok {
+			route = hb
+		}
+	}
+	if route.RequestID == "" {
+		if err == nil {
+			// 客户端回合结束后约 90 秒会用同一条 run 发 resume：新请求带 X-Original-Request-Id。
+			// 别把它当成新的一轮再调一次模型——那会覆盖用户已经看到的回答和思考。
+			original := r.Header.Get("X-Original-Request-Id")
+			if original != "" {
+				if newID, _, perr := protox.DecodeBidi(plain); perr == nil {
+					if s.hub.NoteResume(original, newID) {
+						slog.Debug("BidiAppend resume", "original", original, "request", newID)
+						route = agent.Route{RequestID: newID, ModelID: "", Local: true}
+					}
+				}
+			}
+		}
+	}
+	if route.RequestID == "" {
+		if err == nil {
+			route, err = s.hub.Bidi(plain)
+		}
 	}
 	if err != nil {
 		slog.Debug("BidiAppend 解析失败，转发官方", "error", err)
@@ -448,6 +488,35 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("connect-protocol-version", "1")
 	w.WriteHeader(http.StatusOK)
 	flush(w)
+	if session.Finished() {
+		// 这是已答完 run 的 resume（BidiAppend 已带 X-Original-Request-Id 接到原会话）。
+		// 不再调用模型，但要把这一轮最终状态完整回放：客户端靠它确认任务已完成，
+		// 只回 turn_ended 客户端会报 "Error resuming chat" 并反复重试。
+		slog.Debug("RunSSE resume，回放最终状态", "request", id)
+		frames, err := session.Replay()
+		if err == nil {
+			for _, m := range frames {
+				raw, merr := proto.Marshal(m)
+				if merr != nil {
+					break
+				}
+				if _, werr := w.Write(protox.Frame(0, raw)); werr != nil {
+					break
+				}
+				flush(w)
+			}
+		}
+		raw, err := proto.Marshal(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_InteractionUpdate{InteractionUpdate: &cursorpb.InteractionUpdate{
+			Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}},
+		}}})
+		if err == nil {
+			_, _ = w.Write(protox.Frame(0, raw))
+			flush(w)
+		}
+		_, _ = w.Write(protox.EndStream())
+		flush(w)
+		return
+	}
 	d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
 	session.Web = s.webDial
 	session.Proxy = s.proxy()
@@ -614,6 +683,15 @@ func sentryEnvelope(path string) bool {
 	return true
 }
 
+// noteUnauthorized 在官方对转发请求返回 401 时记一条日志，带上路径和请求 id。
+// 客户端收到 ERROR_NOT_LOGGED_IN 会放弃整轮，没有这条日志就查不出是哪个请求被拒。
+func noteUnauthorized(r *http.Request, status int) {
+	if status != http.StatusUnauthorized {
+		return
+	}
+	slog.Info("官方返回未登录", "path", r.URL.Path, "request", r.Header.Get("x-request-id"))
+}
+
 func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 	s.countOfficial()
 	if r.Body != nil {
@@ -644,6 +722,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+	noteUnauthorized(r, resp.StatusCode)
 	copyHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	buf := make([]byte, 32*1024)

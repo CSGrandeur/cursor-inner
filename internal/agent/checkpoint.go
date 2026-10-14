@@ -492,8 +492,9 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 			parts = []wirePart{{Type: "text", Text: text}}
 		}
 	} else if len(doc.Content) > 0 && string(doc.Content) != "null" {
-		if err := json.Unmarshal(doc.Content, &parts); err != nil {
-			return provider.Message{}, 0, fmt.Errorf("checkpoint: root content is not a Cursor content array")
+		var err error
+		if parts, err = decodeParts(doc.Content); err != nil {
+			return provider.Message{}, 0, err
 		}
 	}
 	if doc.Role == "system" {
@@ -551,6 +552,58 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 		message.Content = text.String()
 	}
 	return message, rootMessage, nil
+}
+
+// decodeParts 宽松地读 Cursor 的 content 数组。官方轮次写进检查点的部件字段类型不总和本机写的一样：
+// tool-result 的 result 可能是对象或数组，text 可能缺省，还会带本机不认识的字段。严格解析时整条 root 失败，
+// 官方轮次之后切到自定义模型就整轮报「root content is not a Cursor content array」。
+// 这里逐个部件解析，字段类型不对时转成文本保留，只有 content 根本不是数组才算错。
+func decodeParts(raw json.RawMessage) ([]wirePart, error) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("checkpoint: root content is not a Cursor content array")
+	}
+	parts := make([]wirePart, 0, len(items))
+	for _, item := range items {
+		var part wirePart
+		if err := json.Unmarshal(item, &part); err == nil {
+			parts = append(parts, part)
+			continue
+		}
+		var loose map[string]json.RawMessage
+		if err := json.Unmarshal(item, &loose); err != nil {
+			continue // 不是对象的部件（例如裸字符串）没法归类，跳过，不让整轮失败
+		}
+		part = wirePart{
+			Type:       looseString(loose["type"]),
+			Text:       looseString(loose["text"]),
+			Signature:  looseString(loose["signature"]),
+			ToolCallID: looseString(loose["toolCallId"]),
+			ToolName:   looseString(loose["toolName"]),
+			Args:       loose["args"],
+			Result:     looseString(loose["result"]),
+			Image:      looseString(loose["image"]),
+			MIMEType:   looseString(loose["mimeType"]),
+		}
+		var isErr bool
+		if json.Unmarshal(loose["isError"], &isErr) == nil {
+			part.IsError = isErr
+		}
+		parts = append(parts, part)
+	}
+	return parts, nil
+}
+
+// looseString 把任意 JSON 值转成文本：字符串取原文，null 或缺省为空，其余保留 JSON 原样。
+func looseString(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return string(raw)
 }
 
 func partText(parts []wirePart) string {

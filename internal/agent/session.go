@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	maxSteps          = 50
 	parallelLimit     = 8
 	argFailLimit      = 3
 	heartbeatInterval = 5 * time.Second
@@ -34,6 +33,20 @@ const (
 	replyStopped      = "The user did not respond in time. Continue without that answer."
 	replyWait         = 10 * time.Minute
 )
+
+// maxSteps 是一轮里连续调用工具的上限。到上限不报错：告诉用户已暂停、发检查点并正常结束这一轮，
+// 用户说「继续」就能接着做。原来 50 步就报错，长任务做着做着无声停下。测试可以改小。
+var maxSteps = 200
+
+// stepLimitNotice 是到步数上限时给用户看的说明。
+const stepLimitNotice = "\n\n(Paused after %d tool steps in this turn. Reply \"continue\" to keep going.)"
+
+// silentToolLimit 是连续多少次工具调用客户端完全没回应后就结束这一轮。
+// 客户端已放弃这次请求（例如它自己报了认证错误）时，继续发工具只会每次白等一个超时。
+const silentToolLimit = 2
+
+// silentToolNotice 是因客户端不回应工具而结束一轮时给用户看的说明。
+const silentToolNotice = "\n\n(Stopped: the editor did not respond to %d tool calls in a row. Send a new message to retry.)"
 
 // toolWaitLimit 是一次普通执行在没有新消息时最多再等多久。
 // 到点就把失败交回模型，这一轮继续。测试可以改短。
@@ -61,6 +74,7 @@ type Session struct {
 	nextID           uint32
 	inflight         []uint32
 	argFails         map[string]int
+	silentTools      int
 	terminals        string
 	workspaces       []string
 	dial             dialer.Func
@@ -229,6 +243,19 @@ func (s *Session) fetchBlob(ctx context.Context, send Emit, id []byte) ([]byte, 
 	}
 }
 
+// prependUsers 追加客户端补发的历史用户消息（如切换模型后把旧对话带过来）。
+// 它们已经发生过，不能再套 userTurn 的包装：会重新打上本轮时间戳和 <user_query> 标签，
+// 历史消息就变成带标签的新消息，写进 checkpoint 后客户端重建时显示一堆标签。
+func prependUsers(messages []provider.Message, preps []*cursorpb.UserMessage) []provider.Message {
+	for _, pre := range preps {
+		if strings.TrimSpace(pre.GetText()) == "" {
+			continue
+		}
+		messages = append(messages, provider.Message{Role: "user", Content: pre.GetText(), Shown: pre.GetText()})
+	}
+	return messages
+}
+
 func (s *Session) noteTool(name string) {
 	slog.Debug("调用工具", "conversation", s.RequestID, "tool", name)
 	s.toolCount++
@@ -282,6 +309,58 @@ type Emit func(*cursorpb.AgentServerMessage) error
 // Run 执行完整的模型与工具循环，返回后由调用方写结束帧。
 // Finished 表示这一轮模型循环已经返回。之后同一条 run 上新开的连接是恢复，不是新的一轮。
 func (s *Session) Finished() bool { return s.finished.Load() }
+
+// Replay 生成这一轮最终状态的完整回放：全部引用的 blob（SetBlobArgs）+ 最后一份 checkpoint。
+// 客户端在回合结束后会 resume 同一条 run，用它确认「任务已完成、内容是什么」；
+// 只回 turn_ended 的话客户端会报 Error resuming chat 并反复重试。
+func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
+	state := s.baseState
+	if state == nil {
+		return nil, nil
+	}
+	seen := map[string]struct{}{}
+	var ids []string
+	need := func(id []byte) {
+		if len(id) == 0 {
+			return
+		}
+		if _, ok := seen[string(id)]; ok {
+			return
+		}
+		seen[string(id)] = struct{}{}
+		ids = append(ids, string(id))
+	}
+	for _, id := range state.GetTurns() {
+		need(id)
+		if data, ok := s.history.GetBlob(id); ok {
+			var turn cursorpb.ConversationTurnStructure
+			if proto.Unmarshal(data, &turn) == nil && turn.GetAgentConversationTurn() != nil {
+				need(turn.GetAgentConversationTurn().GetUserMessage())
+				for _, step := range turn.GetAgentConversationTurn().GetSteps() {
+					need(step)
+				}
+			}
+		}
+	}
+	for _, id := range state.GetRootPromptMessagesJson() {
+		need(id)
+	}
+	var out []*cursorpb.AgentServerMessage
+	next := s.nextID
+	for _, key := range ids {
+		data, ok := s.history.GetBlob([]byte(key))
+		if !ok {
+			continue
+		}
+		next++
+		out = append(out, &cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_KvServerMessage{KvServerMessage: &cursorpb.KvServerMessage{
+			Id:      next,
+			Message: &cursorpb.KvServerMessage_SetBlobArgs{SetBlobArgs: &cursorpb.SetBlobArgs{BlobId: []byte(key), BlobData: data}},
+		}}})
+	}
+	out = append(out, &cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ConversationCheckpointUpdate{ConversationCheckpointUpdate: state}})
+	return out, nil
+}
 
 func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr error) {
 	defer s.finished.Store(true)
@@ -358,12 +437,7 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	summarizeOnly := s.run.GetAction().GetSummarizeAction() != nil
 	user := action.GetUserMessage()
 	if !summarizeOnly && user != nil {
-		for _, pre := range action.GetPrependUserMessages() {
-			if strings.TrimSpace(pre.GetText()) == "" {
-				continue
-			}
-			messages = append(messages, userTurn(pre, reqCtx))
-		}
+		messages = prependUsers(messages, action.GetPrependUserMessages())
 		messages = append(messages, userTurn(user, reqCtx))
 	}
 	s.reqCtx = reqCtx
@@ -496,6 +570,9 @@ next:
 		s.promptTokens = reply.PromptTokens
 		s.completionTokens = reply.CompletionTokens
 		s.cacheTokens = reply.CacheTokens
+		for i := range reply.ToolCalls {
+			reply.ToolCalls[i] = tools.Canonical(reply.ToolCalls[i])
+		}
 		messages = append(messages, reply)
 		if warn, stop := s.loops.observe(reply.ToolCalls); stop {
 			return fmt.Errorf("相同工具调用重复 %d 次，已停止", loopStopAt)
@@ -549,6 +626,18 @@ next:
 					return fmt.Errorf("工具 %s 连续 %d 次参数错误，已停止", outcome.call.Name, argFailLimit)
 				}
 			}
+			if s.silentTools >= silentToolLimit {
+				slog.Debug("客户端连续不回应工具，结束这一轮", "conversation", short, "silent", s.silentTools)
+				s.silentTools = 0
+				if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: fmt.Sprintf(silentToolNotice, silentToolLimit)}}})); err != nil {
+					return err
+				}
+				if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
+					return err
+				}
+				sentCheckpoint = true
+				return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
+			}
 			var steered bool
 			messages, steered, err = s.drainSteer(send, messages)
 			if err != nil {
@@ -584,7 +673,15 @@ next:
 			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 		}
 	}
-	return fmt.Errorf("模型连续调用工具超过 %d 步，已停止", maxSteps)
+	slog.Debug("一轮工具步数到上限，暂停", "conversation", short, "steps", maxSteps)
+	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: fmt.Sprintf(stepLimitNotice, maxSteps)}}})); err != nil {
+		return err
+	}
+	if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
+		return err
+	}
+	sentCheckpoint = true
+	return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 }
 
 func hasModelWork(messages []provider.Message) bool {
@@ -869,6 +966,7 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 			if gaveUp(err, ctx) {
 				slog.Debug("会话工具等待超时", "conversation", s.RequestID, "tool", call.Name)
 				s.untrack(exec.GetId())
+				s.silentTools++
 				if pending != nil && pending.Wait > 0 {
 					runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "left_running", ElapsedMs: time.Since(started).Milliseconds()})
 					return s.stopTool(send, call, ui, leftRunning(call.Name))
@@ -885,6 +983,7 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 			if err != nil {
 				return toolOutcome{}, err
 			}
+			s.silentTools = 0
 			next, deltas, text, isErr, done := pending.Feed(result, ui)
 			for _, delta := range deltas {
 				if err := send(delta); err != nil {
@@ -971,6 +1070,7 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		cancel()
 		if gaveUp(err, ctx) {
 			slog.Debug("会话并行工具等待超时", "conversation", s.RequestID, "pending", len(waiting))
+			s.silentTools++
 			runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Detail: "parallel_stopped", Tools: len(waiting)})
 			for id, index := range waiting {
 				s.untrack(id)
@@ -987,6 +1087,7 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		if err != nil {
 			return outcomes, err
 		}
+		s.silentTools = 0
 		index := waiting[msg.GetId()]
 		delete(waiting, msg.GetId())
 		s.untrack(msg.GetId())

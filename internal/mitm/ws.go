@@ -3,7 +3,9 @@ package mitm
 import (
 	"bufio"
 	"context"
+	"crypto/sha1"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -86,6 +88,28 @@ func (s *Server) bridgeWebSocket(w http.ResponseWriter, r *http.Request) {
 		_ = resp.Body.Close()
 		resp.Body = io.NopCloser(strings.NewReader(string(body)))
 		resp.ContentLength = int64(len(body))
+		if resp.StatusCode == http.StatusUnauthorized && len(s.entries()) > 0 {
+			// 只在官方未登录（401）时接管：限流、5xx 等要让客户端拿到官方原始响应，按自己的逻辑重试或提示。
+			// 官方拒绝升级（未登录）：本地还有自定义模型时别让客户端拿到官方 401。
+			// 给客户端一个本地 101，让它继续发这一轮；模型再按帧读——自定义模型就在本机回答。
+			_ = up.Close()
+			raw := "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: " + websocketAccept(r.Header.Get("Sec-WebSocket-Key"))
+			if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
+				raw += "\r\nSec-WebSocket-Protocol: " + proto
+			}
+			raw += "\r\n\r\n"
+			if _, err := client.Write([]byte(raw)); err != nil {
+				_ = client.Close()
+				return
+			}
+			s.noteWebSocket(r, http.StatusSwitchingProtocols, nil)
+			var toNet, fromNet io.WriteCloser
+			if open := currentRawOpen(); open != nil {
+				toNet, fromNet = open(addr, "websocket")
+			}
+			s.steerWebSocket(client, nil, toNet, fromNet)
+			return
+		}
 		_ = resp.Write(client)
 		_ = client.Close()
 		_ = up.Close()
@@ -116,19 +140,25 @@ func (s *Server) bridgeWebSocket(w http.ResponseWriter, r *http.Request) {
 // steerWebSocket 先看这条 Agents 连接要不要本地模型。官方模型的字节原样交给上游。
 func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteCloser) {
 	defer client.Close()
-	defer up.Close()
+	if up != nil {
+		defer up.Close()
+	}
 	defer closeRaw(toNet)
 	defer closeRaw(fromNet)
 	buffered, local, localID, runID, requestID, helloRelayed, start := s.readAgentDecision(client, up)
 	_ = client.SetReadDeadline(time.Time{})
-	_ = up.SetReadDeadline(time.Time{})
+	if up != nil {
+		_ = up.SetReadDeadline(time.Time{})
+	}
 	if local != nil {
-		_ = up.Close()
+		if up != nil {
+			_ = up.Close()
+		}
 		noteRaw(toNet, buffered)
 		if start {
 			s.serveLocalAgent(client, local, localID, runID, requestID, helloRelayed, toNet, fromNet)
 		} else if local.Finished() {
-			s.serveLocalIdle(client, runID, requestID, helloRelayed, fromNet)
+			s.serveLocalIdle(client, local, runID, requestID, helloRelayed, fromNet)
 		} else {
 			s.serveLocalAttach(client, localID, runID, requestID, helloRelayed, toNet, fromNet)
 		}
@@ -141,6 +171,11 @@ func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteClos
 // 新的 run 是自定义模型时，这一轮和它前面还没送出的 meta 留在本机，不写给上游。
 // 已经在走官方的轮次继续原样转发。正文里出现过模型 id 不算这一轮要本地回答。
 func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requestID string, toNet, fromNet io.WriteCloser) {
+	if up == nil {
+		// 官方拒绝升级（未登录等）且这一轮不是自定义模型：没有上游可转，只能让客户端知道失败了。
+		slog.Debug("官方不可用且不是本地模型，断开连接", "request", requestID)
+		return
+	}
 	if id := leakedModel(buffered, s.entries()); id != "" {
 		slog.Error("自定义模型的对话没有留在本机，已断开，不交给官方", "model", id)
 		return
@@ -417,14 +452,21 @@ func (s *Server) readAgentDecision(client, up net.Conn) (buffered []byte, sessio
 		}
 		frame := protox.ClassifyAgentPayload(payload)
 		if frame.Kind == "hello" {
-			if !helloRelayed && up != nil {
-				if _, err := up.Write(raw); err != nil {
-					return buffered, nil, "", runID, requestID, false, false
+			if !helloRelayed {
+				if up != nil {
+					// 官方已经升级成功：hello 只能来自官方。不要超时后伪造本地 hello——
+					// 官方 hello 晚到时客户端会收到两个 hello，官方模型这一轮就乱了。
+					if _, err := up.Write(raw); err != nil || !relayServerData(up, client) {
+						return buffered, nil, "", runID, requestID, false, false
+					}
+					helloRelayed = true
+				} else {
+					// 官方拒绝升级，没有上游：直接本地 hello，客户端不再等官方。
+					if err := writeWSFrame(client, 0x2, localHello()); err != nil {
+						return buffered, nil, "", runID, requestID, false, false
+					}
+					helloRelayed = true
 				}
-				if !relayServerData(up, client) {
-					return buffered, nil, "", runID, requestID, false, false
-				}
-				helloRelayed = true
 				// 客户端把这条连接放进池里，要等用户发送才发这一轮。这里再套短超时，超时后就会把整条连接交给官方。
 				_ = client.SetReadDeadline(time.Time{})
 			}
@@ -488,7 +530,8 @@ func relayServerData(up, client net.Conn) bool {
 }
 
 // serveLocalIdle 回答同一条已结束 run 上新开的连接。客户端会在回合结束后再发 resume，这条不能交给官方。
-func (s *Server) serveLocalIdle(client net.Conn, runID, requestID string, helloRelayed bool, fromNet io.Writer) {
+// 回放最终状态（blobs + checkpoint + turn_ended），客户端才认「任务已完成」。
+func (s *Server) serveLocalIdle(client net.Conn, session *agent.Session, runID, requestID string, helloRelayed bool, fromNet io.Writer) {
 	if runID == "" {
 		runID = requestID
 	}
@@ -499,11 +542,24 @@ func (s *Server) serveLocalIdle(client net.Conn, runID, requestID string, helloR
 		_ = writeLogged(client, fromNet, []byte{0x0a, 0x02, 0x08, 0x01})
 	}
 	_ = writeLogged(client, fromNet, protox.EncodeAgentRunAccepted(runID, requestID))
+	var seq uint64
+	if session != nil {
+		if frames, err := session.Replay(); err == nil {
+			for _, m := range frames {
+				raw, merr := proto.Marshal(m)
+				if merr != nil {
+					break
+				}
+				_ = writeLogged(client, fromNet, protox.EncodeAgentServer(runID, seq, raw))
+				seq++
+			}
+		}
+	}
 	raw, err := proto.Marshal(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_InteractionUpdate{InteractionUpdate: &cursorpb.InteractionUpdate{
 		Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}},
 	}}})
 	if err == nil {
-		_ = writeLogged(client, fromNet, protox.EncodeAgentServer(runID, 0, raw))
+		_ = writeLogged(client, fromNet, protox.EncodeAgentServer(runID, seq, raw))
 	}
 	for {
 		op, payload, _, err := readWSFrame(client)
@@ -659,6 +715,16 @@ func (s *Server) noteWebSocket(r *http.Request, status int, respBody []byte) {
 		Host: r.Host, Method: r.Method, Path: r.URL.Path, RawQuery: r.URL.RawQuery,
 		Status: status, ReqHeader: r.Header, RespBody: respBody,
 	})
+}
+
+// websocketAccept 按 RFC 6455 计算 Sec-WebSocket-Accept，用于本地接管官方拒绝的升级。
+// localHello 是服务器 hello 帧：protobuf { field1: { field1: 1 } }（协议版本 1）。
+// 官方 hello 拿不到时（未登录、断连）用它回给客户端，客户端才会继续发 run。
+func localHello() []byte { return []byte{0x0a, 0x02, 0x08, 0x01} }
+
+func websocketAccept(key string) string {
+	sum := sha1.Sum([]byte(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+	return base64.StdEncoding.EncodeToString(sum[:])
 }
 
 func writeUpgrade(dst io.Writer, r *http.Request) error {

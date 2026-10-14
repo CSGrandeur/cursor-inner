@@ -27,16 +27,22 @@ type slot struct {
 	born    time.Time
 }
 
+type finished struct {
+	session *Session
+	at      time.Time
+}
+
 // Hub 按 request_id 把 BidiAppend 的客户端消息路由到对应的 Session。
 type Hub struct {
-	mu      sync.Mutex
-	slots   map[string]*slot
-	lookup  func(id string) (config.Model, bool)
-	history *History
+	mu       sync.Mutex
+	slots    map[string]*slot
+	finished map[string]*finished
+	lookup   func(id string) (config.Model, bool)
+	history  *History
 }
 
 func New(lookup func(id string) (config.Model, bool), history *History) *Hub {
-	return &Hub{slots: map[string]*slot{}, lookup: lookup, history: history}
+	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, lookup: lookup, history: history}
 }
 
 // Bidi 处理一条已解压的 BidiAppend 请求体。
@@ -78,7 +84,11 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 		route.ModelID = modelID(m.RunRequest)
 		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
 		if s.session == nil && route.ModelID != "" && h.lookup != nil {
-			if model, ok := h.lookup(route.ModelID); ok {
+			// 同一条 run 的 resume（回合结束后约 90 秒客户端会重发）：接到已经答完的会话上，
+			// 不再新建会话调一次模型。新建会得到不同的输出，把用户已经看到的思考和回答覆盖掉。
+			if f := h.finished[requestID]; f != nil {
+				s.session = f.session
+			} else if model, ok := h.lookup(route.ModelID); ok {
 				s.session = newSession(requestID, model, m.RunRequest, h.history)
 				for _, id := range model.Fallback {
 					if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
@@ -161,7 +171,60 @@ func (h *Hub) Active() int {
 func (h *Hub) Done(requestID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	s := h.slots[requestID]
 	delete(h.slots, requestID)
+	if s != nil && s.session != nil && s.session.Finished() {
+		// 已答完的 run 保留一段时间：客户端会在回合结束后再用同一条 run 发 resume，
+		// 或是带 X-Original-Request-Id 重新开一条请求。见 resumeFinished / runSSE 的恢复路径。
+		h.finished[requestID] = &finished{session: s.session, at: time.Now()}
+	}
+}
+
+// Finished 报告 requestID 是不是本机已经答完的一条 run。
+func (h *Hub) Finished(requestID string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	f := h.finished[requestID]
+	return f != nil
+}
+
+// Owns 报告 requestID 是不是本机的会话（正在本地回答，或本地已经答完）。
+// 本机代为回答的官方请求（心跳、resume、握手）必须先用它确认归属；官方的 run 一律原样转发。
+func (h *Hub) Owns(requestID string) bool {
+	if requestID == "" {
+		return false
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.finished[requestID] != nil {
+		return true
+	}
+	s := h.slots[requestID]
+	return s != nil && s.session != nil
+}
+
+// NoteResume 把一条带 X-Original-Request-Id 的 resume 接到 oldID 已经答完的会话上。
+// 返回 false 表示这条 original 不是本机答完的 run，调用方按原流程处理。
+func (h *Hub) NoteResume(oldID, newID string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var sess *Session
+	if f := h.finished[oldID]; f != nil {
+		sess = f.session
+	} else if s := h.slots[oldID]; s != nil && s.session != nil && s.session.Finished() {
+		// WS 连接还开在池里时 serveLocalAgent 还没走到 Done，会话留在 slots 里。
+		sess = s.session
+	}
+	if sess == nil {
+		return false
+	}
+	if newID == "" {
+		newID = oldID
+	}
+	ready := make(chan struct{})
+	close(ready)
+	h.slots[newID] = &slot{session: sess, decided: true, ready: ready, born: time.Now()}
+	return true
 }
 
 func (h *Hub) slotLocked(id string) *slot {
@@ -177,6 +240,11 @@ func (h *Hub) sweepLocked() {
 	for id, s := range h.slots {
 		if time.Since(s.born) > 6*time.Hour {
 			delete(h.slots, id)
+		}
+	}
+	for id, f := range h.finished {
+		if time.Since(f.at) > 2*time.Hour {
+			delete(h.finished, id)
 		}
 	}
 }

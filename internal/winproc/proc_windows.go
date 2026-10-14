@@ -6,6 +6,7 @@ import (
 	"errors"
 	"runtime"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -139,23 +140,51 @@ func KillTree(pids ...uint32) error {
 }
 
 // Kill 只结束这一个进程，不碰子进程。已经退出的进程不算错。
+//
+// 结束一棵 Electron 进程树时，主进程一死，子进程会自己开始退出。这时对子进程
+// OpenProcess / TerminateProcess 会得到「拒绝访问」，但它几毫秒后就没了。
+// 只看一眼（等 0 毫秒）会把这种情况当成失败，调用方随后就不再重新打开程序，
+// 所以拒绝访问时先等它最多 exitGrace，真退出了就不算错。
 func Kill(pid uint32) error {
 	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, pid)
 	if err != nil {
 		if errors.Is(err, windows.ERROR_INVALID_PARAMETER) {
 			return nil
 		}
-		return err
+		return settle(err, func(d time.Duration) bool { return exitsWithin(pid, d) })
 	}
 	defer windows.CloseHandle(h)
 	if err := windows.TerminateProcess(h, 1); err != nil {
-		if ev, _ := windows.WaitForSingleObject(h, 0); ev == windows.WAIT_OBJECT_0 {
-			return nil
-		}
-		return err
+		return settle(err, func(d time.Duration) bool { return signaled(h, d) })
 	}
 	_, _ = windows.WaitForSingleObject(h, 5000)
 	return nil
+}
+
+// exitGrace 是结束失败后等进程自己退出的上限。
+const exitGrace = 2 * time.Second
+
+// settle 决定一次失败的结束算不算错：进程在 exitGrace 内退出了就不算。
+func settle(err error, exited func(time.Duration) bool) error {
+	if exited(exitGrace) {
+		return nil
+	}
+	return err
+}
+
+func signaled(h windows.Handle, d time.Duration) bool {
+	ev, _ := windows.WaitForSingleObject(h, uint32(d/time.Millisecond))
+	return ev == windows.WAIT_OBJECT_0
+}
+
+// exitsWithin 在拿不到结束权限时，只用 SYNCHRONIZE 等这个进程退出。
+func exitsWithin(pid uint32, d time.Duration) bool {
+	h, err := windows.OpenProcess(windows.SYNCHRONIZE, false, pid)
+	if err != nil {
+		return errors.Is(err, windows.ERROR_INVALID_PARAMETER)
+	}
+	defer windows.CloseHandle(h)
+	return signaled(h, d)
 }
 
 func started(pid uint32) (int64, bool) {

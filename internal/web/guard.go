@@ -13,7 +13,9 @@ import (
 // 配置页只监听 127.0.0.1，但浏览器里任何网页都能往本机端口发请求：
 //   - Host 必须是回环地址，挡住 DNS rebinding（攻击者域名解析到 127.0.0.1 后读写接口）；
 //   - 改动类请求若带 Origin，必须与 Host 同源；带 Sec-Fetch-Site 时只接受 same-origin / none，
-//     挡住跨站表单或 text/plain fetch 这类不触发预检的 CSRF（例如偷偷加模型、退出程序）。
+//     挡住跨站表单或 text/plain fetch 这类不触发预检的 CSRF（例如偷偷加模型、退出程序）；
+//   - /api/ 下的读取也按同样规则挡跨站：有的接口返回明文密钥（复制 API Key），
+//     不能只靠浏览器同源策略和「没有 CORS 头」这一层。
 //
 // 不带这些头的本机客户端（curl、测试）照常可用。
 func guard(next http.Handler) http.Handler {
@@ -25,7 +27,7 @@ func guard(next http.Handler) http.Handler {
 			writeErr(w, http.StatusForbidden, i18n.E("只接受本机地址访问", "Only loopback hosts are accepted"))
 			return
 		}
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if (r.Method != http.MethodGet && r.Method != http.MethodHead) || strings.HasPrefix(r.URL.Path, "/api/") {
 			if origin := r.Header.Get("Origin"); origin != "" && !strings.EqualFold(origin, "http://"+r.Host) {
 				writeErr(w, http.StatusForbidden, i18n.E("拒绝跨站请求", "Cross-site request refused"))
 				return

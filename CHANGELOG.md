@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.12] - 2026-10-14
+
+### Added
+
+- When Cursor's official server answers a forwarded request with 401 (not logged in), the log records the request path and request id, so a turn that Cursor abandoned with "Authentication error" can be traced to the rejected request.
+
+### Fixed
+
+- A custom model turn no longer keeps calling tools for minutes after Cursor has given up on it (for example after an "Authentication error"). When the editor answers none of two tool calls in a row, including a whole batch of parallel tools, the turn ends with a short note asking you to send the message again.
+- Switching to a custom model after built-in model turns no longer fails the whole turn with "root content is not a Cursor content array" when a tool result in the saved conversation is an object rather than text.
+- Long custom model tasks no longer stop with an error after 50 tool steps. The limit is now 200 steps per turn; when it is reached the turn ends normally with a note, and replying "continue" picks up where it stopped.
+- Custom models that call `GetDynamicTools` or `CallDynamicTool` now reach the configured MCP tools instead of failing with "tool is not available".
+- Built-in models could stop after a step or two while cursor-inner was running. Heartbeats of every run were answered locally, including runs handled by the official server, so the server treated the client as gone. Only heartbeats of runs answered locally are now answered locally; all others are forwarded unchanged. The local websocket handshake is now used only when the official server answers the upgrade with 401, so rate limits and server errors reach Cursor as-is, and a slow official handshake is no longer answered twice.
+- With Grok takeover on, opening Grok from its own shortcut could make the window flash and disappear without being reopened through the proxy. Ending the old Grok processes sometimes reported "Access is denied" for helper processes that were already exiting, and the restart was skipped silently. Such processes are now waited for briefly and Grok is reopened as soon as none is left running.
+- A custom model run that Cursor resumes about 90 seconds after the turn ends is no longer sent to the model a second time. The second call produced a different reply without the thinking content and could replace the answer already shown in the chat. Resumes now answer from the finished run and leave the reply unchanged.
+- Switching from a built-in model to a custom model no longer re-wraps the earlier conversation as new tagged messages. Cursor hands the history over as prepended user messages; they used to get a fresh timestamp and `<user_query>` tags, which then showed up as a pile of tags in the rebuilt transcript. History now stays as the original text; only the new message gets the harness wrapper.
+- When Cursor is not logged in to its official account, a new Agents connection used to be handed the official server's 401 and the chat showed "Authentication error" even though the custom model answered locally. The connection now switches to a local websocket handshake when the official server refuses the upgrade and custom models are configured, and the run is answered locally.
+- After a custom model run finishes, Cursor re-sends the same run and keeps a five-second heartbeat; both used to be forwarded to the official server. When the official account was unavailable the client kept showing "Thinking" and ended with "Error resuming chat". Resumes now replay the finished run's final state (blobs plus checkpoint) and heartbeats are answered locally, so a finished task stays finished.
+
 ## [0.5.11] - 2026-10-13
 
 ### Fixed
@@ -313,7 +332,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...HEAD
+[0.5.12]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.11...v0.5.12
 [0.5.11]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...v0.5.11
 [0.5.10]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...v0.5.10
 [0.5.9]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.8...v0.5.9

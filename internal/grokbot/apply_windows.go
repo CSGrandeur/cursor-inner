@@ -21,12 +21,19 @@ type process struct {
 
 var applyMu sync.Mutex
 
+// 测试替换用。生产路径就是下面的 running / stop / start。
+var (
+	listGrok  = running
+	stopGrok  = stop
+	startGrok = start
+)
+
 // Apply 让正在运行的 Grok Bot 改走 proxyURL。proxyURL 为空时，去掉我们加上的参数并重新打开。
 // 没在运行就不动。不改系统 hosts。
 func Apply(proxyURL string) error {
 	applyMu.Lock()
 	defer applyMu.Unlock()
-	procs, err := running()
+	procs, err := listGrok()
 	if err != nil {
 		return err
 	}
@@ -47,24 +54,40 @@ func Apply(proxyURL string) error {
 		if !ShouldRestart(cmds(procs), "") {
 			return nil
 		}
-		if err := stop(); err != nil {
+		if err := stopAll(); err != nil {
 			return err
 		}
 		slog.Info("已去掉 Grok Bot 的代理参数并重新打开")
-		return start(exe, "")
+		return startGrok(exe, "")
 	}
 	if !ShouldRestart(cmds(procs), proxyURL) {
 		return nil
 	}
-	if err := stop(); err != nil {
+	if err := stopAll(); err != nil {
 		return err
 	}
-	if err := start(exe, proxyURL); err != nil {
+	if err := startGrok(exe, proxyURL); err != nil {
 		slog.Warn("没能重新打开 Grok Bot：" + err.Error())
 		return err
 	}
 	slog.Info("Grok Bot 已改走配置的代理 " + proxyURL)
 	return nil
+}
+
+// stopAll 结束全部 Grok Bot 进程。结束时报错但进程其实都已退出，就不算失败：
+// 否则 Grok 被关掉却不再重新打开，用户看到的就是窗口闪一下没了，日志里也什么都没有。
+func stopAll() error {
+	err := stopGrok()
+	if err == nil {
+		return nil
+	}
+	left, lerr := listGrok()
+	if lerr == nil && len(left) == 0 {
+		slog.Warn("结束 Grok Bot 时报错，但进程已全部退出，继续重新打开：" + err.Error())
+		return nil
+	}
+	slog.Warn("没能结束 Grok Bot，保持现状：" + err.Error())
+	return err
 }
 
 func cmds(procs []process) []string {

@@ -941,6 +941,9 @@ func TestSteerDuringTheAnswerContinuesTheTurn(t *testing.T) {
 }
 
 func TestStepLimitStillSendsCheckpoint(t *testing.T) {
+	old := maxSteps
+	maxSteps = 6
+	t.Cleanup(func() { maxSteps = old })
 	// 每次换路径，避免相同调用指纹的循环检测先于步数上限触发。
 	responses := make([]string, maxSteps)
 	for i := range responses {
@@ -967,12 +970,18 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 			return nil
 		})
 	}()
-	checkpoint := false
+	checkpoint, notice, ended := false, false, false
 	for {
 		select {
 		case m := <-out:
 			if m.GetConversationCheckpointUpdate() != nil {
 				checkpoint = true
+			}
+			if strings.Contains(m.GetInteractionUpdate().GetTextDelta().GetText(), "continue") {
+				notice = true
+			}
+			if m.GetInteractionUpdate().GetTurnEnded() != nil {
+				ended = true
 			}
 			exec := m.GetExecServerMessage()
 			if exec.GetReadArgs() == nil {
@@ -985,16 +994,24 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 				t.Fatal(err)
 			}
 		case err := <-done:
-			if err == nil || !strings.Contains(err.Error(), "50") {
-				t.Fatalf("err=%v", err)
+			// 到上限不报错：给用户说明、发检查点、正常结束这一轮，用户可以说「继续」。
+			if err != nil {
+				t.Fatalf("步数到上限不应报错：%v", err)
 			}
 			for len(out) > 0 {
-				if (<-out).GetConversationCheckpointUpdate() != nil {
+				m := <-out
+				if m.GetConversationCheckpointUpdate() != nil {
 					checkpoint = true
 				}
+				if strings.Contains(m.GetInteractionUpdate().GetTextDelta().GetText(), "continue") {
+					notice = true
+				}
+				if m.GetInteractionUpdate().GetTurnEnded() != nil {
+					ended = true
+				}
 			}
-			if !checkpoint {
-				t.Fatal("stopped turn did not send a checkpoint")
+			if !checkpoint || !notice || !ended {
+				t.Fatalf("checkpoint=%v notice=%v ended=%v", checkpoint, notice, ended)
 			}
 			return
 		case <-ctx.Done():
