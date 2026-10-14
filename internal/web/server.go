@@ -317,9 +317,27 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("GET /api/quit/plan", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, backend.QuitPlan())
+	})
 	mux.HandleFunc("POST /api/quit", func(w http.ResponseWriter, r *http.Request) {
-		if err := backend.Quit(); err != nil {
+		var body struct {
+			DontAsk bool `json:"dont_ask"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body) // 没有正文就是普通退出
+		if err := backend.QuitConfirmed(body.DontAsk); err != nil {
 			writeErr(w, http.StatusConflict, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("POST /api/restore-apps", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Dismiss bool `json:"dismiss"`
+		}
+		_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body)
+		if err := backend.RestoreApps(body.Dismiss); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

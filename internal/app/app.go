@@ -116,10 +116,11 @@ func (a *App) OpenCursor() error {
 	return cursorlaunch.Start()
 }
 
-// Shutdown 只还原 Cursor。Grok Bot 保持原样：它直连用户配置的代理，不经过本程序，
-// 退出时若改回无代理重开，流量会直连出去。要撤掉 Grok 的代理，请在配置页关掉「接管 Grok」。
+// Shutdown 还原 Cursor，并关掉接管的 Grok Bot / Codex（见 closeManaged）。
+// 绝不把 Grok/Codex 改成无代理重开：那样官方流量会直连出去。
 func (a *App) Shutdown() {
 	a.shutdown.Do(func() {
+		a.closeManaged()
 		_ = a.life.Restore()
 	})
 }

@@ -286,10 +286,18 @@ func Main(version string) {
 		os.Exit(0)
 	}
 	watchConsole(shutdown)
+	// 托盘「退出」：有程序会被一并关掉且没选过不再询问时，打开配置页的确认框；Ctrl+C、注销、关机不问。
+	trayQuit := func() {
+		if application.QuitPlan().Confirm {
+			openPage("quit")
+			return
+		}
+		quit()
+	}
 	if prepareResident(residentOptions{
 		Term:  term,
 		Open:  openPage,
-		Quit:  quit,
+		Quit:  trayQuit,
 		Feed:  func() trayInput { return hub.input(time.Now()) },
 		Quiet: hub.quiet,
 		Defer: succ != nil,
@@ -377,6 +385,16 @@ func Main(version string) {
 	}
 	if note := mitm.TraceNote(); note != "" {
 		log.Printf("行为记录 %s", note)
+	}
+	if !opt.debug && succ == nil {
+		if names := application.QuitPlan().Restore; len(names) > 0 {
+			go func() {
+				time.Sleep(3 * time.Second) // 等托盘图标挂上
+				if !hub.quiet() {
+					trayBalloon(restoreBalloon(uiChinese(), names))
+				}
+			}()
+		}
 	}
 	if !opt.debug {
 		application.SyncGrok()

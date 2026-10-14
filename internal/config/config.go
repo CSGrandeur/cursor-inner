@@ -108,6 +108,8 @@ type File struct {
 	Desktop       Desktop  `json:"desktop,omitzero"`
 	Image         ImageAPI `json:"image,omitempty"`
 	Models        []Model  `json:"models"`
+	// QuitNoConfirm 为真时退出不再弹确认框（确认框里勾了「不再询问」）。
+	QuitNoConfirm bool `json:"quit_no_confirm,omitempty"`
 }
 
 func Default() File {

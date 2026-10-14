@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.14`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.15`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -106,6 +106,8 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 2. 在「模型」里填写显示名、类型、模型名、接口地址和密钥，点「测试」。编辑时密钥留空表示不改。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点「刷新模型列表」（Refresh model list），或执行 Reload Window。
 4. 用完点「退出」。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选「退出」才结束。Cursor 的设置会还原。
+
+   退出前会问一次「退出 cursor-inner？」，并列出「这些程序正经由 cursor-inner 联网，会一并关闭：」（Cursor，以及 cursor-inner 接管的 Grok 和 Codex），提示「下次启动时可一键恢复 Grok 和 Codex，照常走代理。」。勾「不再询问」以后直接退出，点「取消」不退出；Ctrl+C、注销、关机不问。只关 cursor-inner 自己接管的进程，你自己另开的不动；cursor-inner 被强杀时由守护进程补关。下次打开 cursor-inner，配置页顶部会显示上次关掉的程序：点「恢复」按当前接管设置带代理重新打开（拿不到可用代理就报错，绝不直连），点「忽略」不再提示。
 
 > [!IMPORTANT]
 > 选 **Auto** 时 Cursor 只用官方模型。要用自定义模型，必须在列表里手动选。
@@ -218,7 +220,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.14 ./build.sh linux
+VERSION=v0.5.15 ./build.sh linux
 ```
 
 ## 致谢

@@ -88,6 +88,9 @@ type Backend interface {
 	TestDraft(model config.Model) provider.Result
 	TestSaved(id string) provider.Result
 	Quit() error
+	QuitPlan() QuitPlan
+	QuitConfirmed(dontAsk bool) error
+	RestoreApps(dismiss bool) error
 	OpenCursor() error
 	OpenGrok() error
 	OpenCodex() error

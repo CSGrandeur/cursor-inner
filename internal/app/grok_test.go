@@ -31,7 +31,7 @@ func TestSyncGrokOffLeavesAnotherInstancesBotAlone(t *testing.T) {
 	if len(calls) != 0 {
 		t.Fatalf("switch off without ownership restarted Grok: %v", calls)
 	}
-	a.keepMark("grok.managed")
+	a.keepMark("grok.managed", "")
 	a.SyncGrok()
 	if len(calls) != 1 || calls[0] != "" {
 		t.Fatalf("owned switch off should clear once, got %v", calls)

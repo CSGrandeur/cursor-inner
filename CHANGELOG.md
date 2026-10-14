@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.15] - 2026-10-14
+
+### Added
+
+- Quitting from the tray or the settings page first asks for confirmation and lists the programs that will be closed with it (Cursor, and the Grok Bot / Codex that cursor-inner took over), with a "Don't ask again" option. Ctrl+C, logging off and shutting down quit without asking.
+- The next time cursor-inner starts, the settings page (and a tray notification) offers a one-click Restore for the Grok Bot / Codex closed on the last quit. They are reopened through the proxy according to the current takeover settings; if no reliable proxy is available, Restore reports an error and never starts them with a direct connection.
+
+### Fixed
+
+- Quitting cursor-inner now closes the Grok Bot and Codex it took over, instead of leaving them running with a proxy that no longer exists. Only processes carrying this instance's proxy settings are closed: a Grok Bot or Codex you started yourself, a debug instance, or another instance with a different data directory is left alone, and they are never reopened without the proxy.
+- If cursor-inner is force-killed or crashes, its watchdog now closes the taken-over Grok Bot / Codex as well and offers Restore on the next start.
+- Undoing the Cursor takeover during logoff or shutdown no longer fails with 0xc0000142: Cursor is now ended in-process instead of by starting `taskkill`.
+
 ## [0.5.14] - 2026-10-14
 
 ### Added
@@ -363,7 +376,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...HEAD
+[0.5.15]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.14...v0.5.15
 [0.5.14]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...v0.5.14
 [0.5.13]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...v0.5.13
 [0.5.12]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.11...v0.5.12

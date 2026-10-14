@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cursor-inner/internal/takeover"
 	"log/slog"
 	"net/url"
 	"os"
@@ -86,7 +87,7 @@ func (a *App) SyncGrok() {
 		return
 	}
 	if grokApply(proxyURL) == nil {
-		a.keepMark("grok.managed")
+		a.keepMark("grok.managed", proxyURL)
 	}
 }
 
@@ -95,9 +96,17 @@ func (a *App) ownsMark(name string) bool {
 	return err == nil
 }
 
-func (a *App) keepMark(name string) {
-	_ = os.WriteFile(filepath.Join(a.store.Dir(), name), []byte("1\n"), 0o644)
+// keepMark 记下接管标记，内容是这次接管用的代理地址（退出时只关带这个代理的进程）。
+func (a *App) keepMark(name, proxyURL string) {
+	p := filepath.Join(a.store.Dir(), name)
+	if old, err := os.ReadFile(p); err == nil && string(old) == proxyURL+"\n" {
+		return
+	}
+	_ = os.WriteFile(p, []byte(proxyURL+"\n"), 0o644)
 }
+
+// markProxy 读接管标记里记的代理地址；旧版标记内容是 "1"，返回空（退回旧判断）。
+func (a *App) markProxy(name string) string { return takeover.MarkProxy(a.store.Dir(), name) }
 
 func (a *App) dropMark(name string) {
 	_ = os.Remove(filepath.Join(a.store.Dir(), name))

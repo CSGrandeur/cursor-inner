@@ -78,7 +78,7 @@ func (a *App) SyncCodex() {
 		return
 	}
 	if codexApply(proxyURL) == nil {
-		a.keepMark("codex.managed")
+		a.keepMark("codex.managed", proxyURL)
 	}
 }
 

@@ -450,6 +450,32 @@
     background: var(--panel); color: var(--text); box-shadow: var(--shadow);
   }
   .caps-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .quit-dialog {
+    border: 1px solid var(--line-strong); border-radius: 12px; padding: 0;
+    width: min(372px, calc(100vw - 48px));
+    background: var(--panel); color: var(--text); box-shadow: var(--shadow);
+  }
+  .quit-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .quit-box { padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .quit-box h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .1px; }
+  .quit-lead, .quit-note { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+  .quit-note { color: var(--faint); }
+  .quit-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+  .quit-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 7px 10px; font-size: 12.5px; }
+  .quit-list li + li { border-top: 1px solid var(--line); }
+  .quit-list .why { color: var(--faint); font-size: 11px; white-space: nowrap; }
+  .quit-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+  .quit-skip { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+  .quit-skip input { margin: 0; }
+  button.sm.solid { background: var(--primary-bg); color: var(--primary-text); border-color: var(--primary-bg); }
+  button.sm.solid:hover { filter: brightness(1.08); }
+  .restore-bar {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+    padding: 6px 8px 6px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); font-size: 12.5px;
+  }
+  .restore-bar[hidden] { display: none; }
+  .restore-bar .restore-text { margin-right: auto; color: var(--muted); }
   .caps-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 12px 16px; border-bottom: 1px solid var(--line);
@@ -480,6 +506,11 @@
 </head>
 <body>
 <main>
+  <div class="restore-bar" id="restore-bar" hidden>
+    <span class="restore-text" id="restore-text"></span>
+    <button type="button" class="sm solid" id="restore-go" data-i18n="restoreGo">恢复</button>
+    <button type="button" class="sm" id="restore-skip" data-i18n="restoreSkip">忽略</button>
+  </div>
   <header class="top">
     <div class="brand"><img src="/icon.svg" alt=""><span>cursor-inner</span></div>
     <div class="top-right">
@@ -727,7 +758,21 @@
   <div class="caps-head"><strong id="caps-title"></strong><button type="button" class="sm" id="caps-close" data-i18n="capsClose"></button></div>
   <div class="caps-body" id="caps-body"></div>
 </dialog>
+<dialog class="quit-dialog" id="quit-dialog" aria-labelledby="quit-title">
+  <div class="quit-box">
+    <h3 id="quit-title" data-i18n="quitAsk">退出 cursor-inner？</h3>
+    <p class="quit-lead" data-i18n="quitLead">这些程序正经由 cursor-inner 联网，会一并关闭：</p>
+    <ul class="quit-list" id="quit-list"></ul>
+    <p class="quit-note" id="quit-note" data-i18n="quitNote">下次启动时可一键恢复，照常走代理。</p>
+    <div class="quit-foot">
+      <label class="quit-skip"><input type="checkbox" id="quit-skip"><span data-i18n="quitSkip">不再询问</span></label>
+      <button type="button" class="sm" id="quit-cancel" data-i18n="quitCancel">取消</button>
+      <button type="button" class="sm solid" id="quit-go" data-i18n="quitGo">退出</button>
+    </div>
+  </div>
+</dialog>
 <script>
+const BOOT_HASH = location.hash;
 const MESSAGES = {
   zh: {
     modelAddedRefresh: "已添加。Cursor 在窗口聚焦时约每 5 分钟拉一次模型列表（失焦时约 30 分钟），所以新模型不会立刻出现；想马上看到：Cursor 设置 → Models → 点「刷新模型列表」（Refresh model list），或执行 Reload Window。",
@@ -735,7 +780,10 @@ const MESSAGES = {
     openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", openCodex: "启动 Codex", openCodexTitle: "启动 Codex，不关闭 cursor-inner", codexStarted: "已启动 Codex", update: "更新", updateDesc: "只装签名有效的版本，更新时 Grok 和 Cursor 不用重启。", updateTip: "启动时检查一次 GitHub 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upSec: "{n} 秒", upMin: "{n} 分钟", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "清单 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", upApplying: "更新到 {latest}", upStepSign: "验签清单", upStepDownload: "下载", upStepVerify: "校验", upStepPreflight: "自检", upStepHandover: "热交接", upEtaLeft: "剩余约 {eta}", upMeasuring: "测速中", upTrying: "{route}，并行试{probe}", upInfoVerify: "核对大小和 sha256", upInfoPreflight: "试运行新版本 {latest} --version", upInfoHandover: "新版本 {latest} 接过本机端口，Grok 和 Cursor 不需要重启", upInfoDone: "已交给 {latest}，正在连接新版本…", upInfoFailed: "停在「{step}」，当前版本继续运行", upUpdated: "已从 {from} 更新到 {to}", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
     tun: "TUN 模式", tunDesc: "在网络层只把官方端点转进代理，需要管理员授权。", tunTip: "用 sing-box TUN 只把官方端点（Grok、x.ai、Cursor、OpenAI）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     strict: "严格模式", strictDesc: "用防火墙禁止 Grok Bot 和 Cursor 直连官方端点，需要管理员授权。", strictTip: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（Grok、x.ai、Cursor、OpenAI），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
-    quit: "退出", quitTitle: "退出 cursor-inner，并还原 Cursor 的代理设置",
+    quit: "退出", quitTitle: "退出 cursor-inner，并关闭经由它联网的 Cursor、Grok、Codex",
+    quitAsk: "退出 cursor-inner？", quitLead: "这些程序正经由 cursor-inner 联网，会一并关闭：", quitNote: "下次启动时可一键恢复 Grok 和 Codex，照常走代理。", quitSkip: "不再询问", quitCancel: "取消", quitGo: "退出",
+    appCursor: "Cursor", appCursorWhy: "还原代理设置", appGrok: "Grok Bot", appCodex: "Codex", appWhyProxy: "代理随之停用",
+    restoreText: "上次退出时关闭了 {apps}。", restoreJoin: " 和 ", restoreGo: "恢复", restoreSkip: "忽略", restoreDone: "已恢复，照常走代理",
     takeoverCursor: "接管 Cursor", takeoverCursorDesc: "写入 Cursor 的代理设置；开关时会关掉正在运行的 Cursor。", takeoverCursorTip: "写入 Cursor 的代理设置。正在运行的窗口读不到，开或关都会关掉它，需自行重新打开。自定义模型追加在列表末尾。",
     takeoverGrok: "接管 Grok", takeoverGrokDesc: "给 Grok Bot 加代理启动参数；没在运行不会拉起。", takeoverGrokTip: "写入启动参数与 HTTPS_PROXY。已带当前代理的进程不关；登录回跳多开的窗口可自行退出。没在运行不会拉起。",
     takeoverCodex: "接管 Codex", takeoverCodexDesc: "给 Codex 加上代理启动参数；没在运行不会拉起。", takeoverCodexTip: "窗口走 --proxy-server，接口和 WebSocket 走这个进程的 HTTPS_PROXY。已带当前代理的不关。没在运行不会拉起。不写系统环境变量。",
@@ -773,7 +821,6 @@ const MESSAGES = {
     untested: "未测试", failed: "失败", testFailed: "测试失败", testFailedWith: "测试失败：{error}", unknownError: "未知错误",
     testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 能力 {caps} · 返回：{output}",
     estimated: "（估算）", requestFailed: "请求失败 {status}",
-    quitConfirm: "退出 cursor-inner？\n\nCursor 的代理设置会被还原，正在运行的 Cursor 会被关闭。这次给 Grok Bot 加上的代理参数也会去掉；如果它正在运行，会重新打开。",
     goneTitle: "cursor-inner 已退出", goneBody: "Cursor 的代理设置已还原，可以关闭这个页面。",
     capsTitle: "能力探测结果", capsClose: "关闭",
     capNativeTools: "工具调用", capReasoning: "推理", capImage: "图片输入", capCache: "缓存命中", capSpeed: "速度",
@@ -790,7 +837,10 @@ const MESSAGES = {
     openGrok: "Open Grok", openGrokTitle: "Open Grok without quitting cursor-inner", grokStarted: "Grok is starting", openCodex: "Open Codex", openCodexTitle: "Open Codex without quitting cursor-inner", codexStarted: "Codex is starting", update: "Update", updateDesc: "Installs signed releases only; Grok and Cursor keep running.", updateTip: "Checks the GitHub releases once at startup and only installs correctly signed versions. The new version takes over the same local ports, so Grok and Cursor keep running; it rolls back automatically if the new version fails its health check.", updateCheck: "Check for updates", updateApply: "Update", upChecking: "Checking for updates…", upUpToDate: "Up to date ({current})", upAvailable: "New version {latest} (current {current})", upSec: "{n} s", upMin: "{n} min", upWaiting: "A custom-model turn is running; will update when it ends", upHandover: "Handing over to the new version…", upDone: "Handed over; this page will reload shortly", upFailed: "Update failed: {error}", upCheckFailed: "Update check failed", upApplyFailed: "Update did not complete", upFrom: "manifest {source} · {route}", upRouteDefault: "default network", upRouteProxy: "proxy", upVerified: "signature verified", upMirror: "package {source}", upSkipped: "{source} not used: {reason}", upManual: "This build has no built-in update key, so it cannot update itself. Download {latest} from the Releases page.", upKeep: "Nothing was downloaded or replaced; the current version keeps running.", upE_sig_missing: "The update manifest is not signed and was rejected.", upE_sig_invalid: "The update manifest failed signature verification (it may have been tampered with) and was rejected.", upE_key_unknown: "The update manifest is not signed by a trusted key and was rejected.", upE_expired: "The update manifest has expired and was rejected.", upE_rollback: "The update source offered an older version than one seen before (possibly a replayed manifest); ignored.", upE_bad_manifest: "The update source returned an invalid manifest; rejected.", upE_checksum: "The downloaded package does not match the SHA256 in the signed manifest and was deleted.", upE_network: "Could not reach the update sources.", upDetail: "Details: {error}", upConfirm: "Update to {latest}? Grok and Cursor keep running during the update.", upApplying: "Updating to {latest}", upStepSign: "Manifest signed", upStepDownload: "Download", upStepVerify: "Verify", upStepPreflight: "Self-test", upStepHandover: "Handover", upEtaLeft: "about {eta} left", upMeasuring: "measuring", upTrying: "{route}, also trying {probe}", upInfoVerify: "checking size and sha256", upInfoPreflight: "test-running {latest} --version", upInfoHandover: "{latest} is taking over the local ports; Grok and Cursor keep running", upInfoDone: "Handed over to {latest}; connecting to the new version…", upInfoFailed: "Stopped at {step}; the current version keeps running", upUpdated: "Updated from {from} to {to}", openLogs: "Open logs", logsOpened: "Opened the log folder", leakCheck: "Leak check", leakStarted: "Leak check started; results go to logs/grok/events.jsonl",
     tun: "TUN mode", tunDesc: "Routes only official endpoints into the proxy at the network layer. Needs admin.", tunTip: "Uses a sing-box TUN to route only official endpoints (Grok, x.ai, Cursor, OpenAI) into the current proxy at the network layer, catching even the apps' own proxy-bypassing HTTP/2 and hardcoded IPs. All other sites resolve and connect exactly as before. Needs administrator approval (UAC). Falls back to normal proxy takeover on failure.", tunOn: "Turn on", tunOff: "Turn off", tunAsked: "Administrator approval requested; see the PowerShell window for the result",
     strict: "Strict mode", strictDesc: "Firewall blocks direct official-endpoint access by Grok Bot and Cursor. Needs admin.", strictTip: "Uses Windows Firewall to stop Grok Bot and Cursor from connecting directly to official endpoints (Grok, x.ai, Cursor, OpenAI). Third parties such as GitHub and Google are not affected. Needs administrator approval. Blocking is by IP, so other sites on the same shared CDN IPs are also blocked for direct connections from these two apps.", strictOn: "Turn on", strictOff: "Turn off", strictAsked: "Administrator approval requested; see the PowerShell window for the result",
-    quit: "Quit", quitTitle: "Quit cursor-inner and restore Cursor's proxy settings",
+    quit: "Quit", quitTitle: "Quit cursor-inner and close the Cursor, Grok and Codex that connect through it",
+    quitAsk: "Quit cursor-inner?", quitLead: "These apps connect through cursor-inner and will be closed too:", quitNote: "Next time you can restore Grok and Codex in one click, with the proxy as before.", quitSkip: "Don't ask again", quitCancel: "Cancel", quitGo: "Quit",
+    appCursor: "Cursor", appCursorWhy: "proxy settings restored", appGrok: "Grok Bot", appCodex: "Codex", appWhyProxy: "its proxy goes away",
+    restoreText: "Closed on last quit: {apps}.", restoreJoin: " and ", restoreGo: "Restore", restoreSkip: "Dismiss", restoreDone: "Restored, with the proxy as before",
     takeoverCursor: "Take over Cursor", takeoverCursorDesc: "Writes Cursor's proxy settings; toggling closes a running Cursor.", takeoverCursorTip: "Writes Cursor's proxy settings. A running window does not see that, so turning it on or off closes Cursor — open it again yourself. Custom models are appended to the list.",
     takeoverGrok: "Take over Grok", takeoverGrokDesc: "Adds proxy launch args to Grok Bot; never starts it.", takeoverGrokTip: "Sets launch args and HTTPS_PROXY. A process that already has the current proxy is left alone; a bare window from the login page can exit on its own. Not started if it is not already running.",
     takeoverCodex: "Take over Codex", takeoverCodexDesc: "Adds proxy launch args to Codex; never starts it.", takeoverCodexTip: "The window uses --proxy-server. The API and WebSocket use this process's HTTPS_PROXY. A process that already has the current proxy is left alone. Not started if it is not already running. User environment variables are not changed.",
@@ -1412,10 +1462,9 @@ for (const [id, on] of [["#strict-on", true], ["#strict-off", false]]) {
     });
   });
 }
-document.querySelector("#quit").addEventListener("click", async () => {
-  if (!confirm(t("quitConfirm"))) return;
+async function doQuit(dontAsk) {
   try {
-    await send("/api/quit", {method: "POST"});
+    await send("/api/quit", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({dont_ask: !!dontAsk})});
     const gone = el("div", "gone");
     gone.append(el("h2", "", t("goneTitle")), el("p", "", t("goneBody")));
     document.querySelector("main").replaceChildren(gone);
@@ -1423,7 +1472,56 @@ document.querySelector("#quit").addEventListener("click", async () => {
   } catch (err) {
     showError(err.message);
   }
+}
+const APP_ROWS = {cursor: ["appCursor", "appCursorWhy"], grok: ["appGrok", "appWhyProxy"], codex: ["appCodex", "appWhyProxy"]};
+async function quitPlan() {
+  try { return await send("/api/quit/plan"); } catch { return null; }
+}
+async function openQuit() {
+  const plan = await quitPlan();
+  if (!plan || !plan.confirm) return doQuit(false);
+  const list = document.querySelector("#quit-list");
+  list.replaceChildren(...plan.closes.map(name => {
+    const [label, why] = APP_ROWS[name] || [name, ""];
+    const li = el("li");
+    li.append(el("span", "", t(label)), el("span", "why", why ? t(why) : ""));
+    return li;
+  }));
+  document.querySelector("#quit-note").hidden = !plan.closes.some(n => n === "grok" || n === "codex");
+  document.querySelector("#quit-skip").checked = false;
+  const dlg = document.querySelector("#quit-dialog");
+  dlg.showModal();
+  document.querySelector("#quit-go").focus();
+}
+document.querySelector("#quit").addEventListener("click", () => openQuit());
+document.querySelector("#quit-cancel").addEventListener("click", () => document.querySelector("#quit-dialog").close());
+document.querySelector("#quit-go").addEventListener("click", () => {
+  const dontAsk = document.querySelector("#quit-skip").checked;
+  document.querySelector("#quit-dialog").close();
+  doQuit(dontAsk);
 });
+async function refreshRestore() {
+  const plan = await quitPlan();
+  const bar = document.querySelector("#restore-bar");
+  const names = (plan && plan.restore) || [];
+  bar.hidden = names.length === 0;
+  if (!names.length) return;
+  const apps = names.map(n => t(n === "grok" ? "appGrok" : "appCodex")).join(t("restoreJoin"));
+  document.querySelector("#restore-text").textContent = t("restoreText", {apps});
+}
+for (const [id, dismiss] of [["#restore-go", false], ["#restore-skip", true]]) {
+  document.querySelector(id).addEventListener("click", async () => {
+    try {
+      await send("/api/restore-apps", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({dismiss})});
+      if (!dismiss) toast(t("restoreDone"), "ok");
+    } catch (err) {
+      showError(err.message);
+    }
+    refreshRestore();
+  });
+}
+refreshRestore();
+if (BOOT_HASH === "#quit") openQuit();
 
 function syncReveal() {
   const shown = document.querySelector("#api-key").type === "text";

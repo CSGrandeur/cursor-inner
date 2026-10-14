@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.14`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.15`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -106,6 +106,8 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 2. On Models, fill in the display name, type, model name, endpoint URL and API key, then click Test. When editing, leave the key blank to keep it.
 3. Open Cursor again, start a new chat, and pick the model you added. If Cursor is already open, it only fetches its model list about every 5 minutes while focused; to see the model right away, click Refresh model list in Cursor Settings → Models, or run Reload Window.
 4. Click Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon menu. Cursor's settings are restored.
+
+   Before quitting it asks "Quit cursor-inner?" and lists "These apps connect through cursor-inner and will be closed too:" (Cursor, plus the Grok and Codex that cursor-inner took over), noting "Next time you can restore Grok and Codex in one click, with the proxy as before." Tick "Don't ask again" to quit without asking from then on, or click "Cancel" to stay. Ctrl+C, logging off and shutting down do not ask. Only processes cursor-inner took over are closed, never ones you started yourself; if cursor-inner is force-killed, its watchdog closes them. Next time you open cursor-inner, a bar at the top of the settings page lists what was closed: "Restore" reopens them through the proxy according to the current takeover settings (it reports an error rather than connecting directly if no proxy is available), and "Dismiss" hides the bar.
 
 > [!IMPORTANT]
 > With **Auto** selected, Cursor only uses official models. Select a custom model in the list to use it.
@@ -218,7 +220,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.14 ./build.sh linux
+VERSION=v0.5.15 ./build.sh linux
 ```
 
 ## Acknowledgements
