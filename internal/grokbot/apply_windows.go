@@ -5,7 +5,6 @@ package grokbot
 import (
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 
@@ -126,7 +125,7 @@ func stop() error {
 }
 
 func start(exe, proxyURL string) error {
-	cmd := exec.Command(exe, ProxyArgs(proxyURL)...)
+	cmd := winproc.GUI(exe, ProxyArgs(proxyURL)...)
 	cmd.Dir = filepath.Dir(exe)
 	cmd.Env = ProxyEnv(proxyURL, os.Environ())
 	return cmd.Start()

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -381,7 +380,7 @@ func (u *Updater) apply(ctx context.Context, results []sourceResult, best int) e
 func Preflight(ctx context.Context, exe, want string) error {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, exe, "--version").Output()
+	out, err := versionCommand(ctx, exe).Output()
 	if err != nil {
 		return fmt.Errorf("新版本无法在本机启动：%w", err)
 	}

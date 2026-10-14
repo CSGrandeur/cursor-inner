@@ -136,9 +136,14 @@ func TestGrokBridgeFollowsScopeWithoutRestart(t *testing.T) {
 	if err := a.SetProxyScope(config.ScopeGlobal); err != nil {
 		t.Fatal(err)
 	}
-	connectVia(t, grokURL, echo)
-	if got := seen(); len(got) != 2 || got[1] != echo {
+	connectVia(t, grokURL, "book.invalid:443")
+	if got := seen(); len(got) != 2 || got[1] != "book.invalid:443" {
 		t.Fatalf("global scope through the same bridge: upstream saw %v", got)
+	}
+	// 内网预留地址（这里是回环）在全局范围下也直连，代理不该再收到。
+	connectVia(t, grokURL, echo)
+	if got := seen(); len(got) != 2 {
+		t.Fatalf("global scope must dial loopback directly, upstream saw %v", got)
 	}
 
 	if err := a.SetProxyScope(config.ScopeOfficial); err != nil {

@@ -25,6 +25,8 @@ func (a *App) codexProxy(cfg config.File) (proxyURL string, keep bool) {
 		a.codexBridge.Close()
 		return "", false
 	}
+	// 不带协议时先探测是 socks5 还是 http，再决定 Grok/Codex 能否直接用。
+	spec = dialer.Resolve(spec)
 	if grokbot.NeedsBridge(spec) {
 		d, err := dialer.FromProxy(cfg.Proxy)
 		if err != nil {

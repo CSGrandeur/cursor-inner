@@ -4,7 +4,9 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,10 +24,56 @@ func Scoped(p config.Proxy) (Func, error) {
 		return nil, err
 	}
 	_, on, _ := EffectiveAddress(p)
-	if !on || !p.OfficialOnly() {
+	if !on {
 		return via, nil
 	}
-	return split(via, directDial()), nil
+	direct := directDial()
+	if !p.OfficialOnly() {
+		return reservedFirst(via, direct), nil
+	}
+	return reservedFirst(split(via, direct), direct), nil
+}
+
+// lookupIP 是判断主机名是否落在内网预留段用的解析，测试里换成假的。
+var lookupIP = net.DefaultResolver.LookupNetIP
+
+// lookupWait 是这次本地解析最多等多久。超时或失败按原来的规则走（全局即走代理）。
+var lookupWait = 2 * time.Second
+
+// reservedFirst 让两种代理范围都先放行内网：目标是内网预留 IP，或主机名在本地解析后全部落在
+// 内网预留段，就直连解析出的地址（不再二次解析）。官方域名不解析、不看结果，一律交给 next，
+// 防 DNS 重绑定把官方流量引到直连。解析出任何一个公网地址也交给 next。
+func reservedFirst(next, direct Func) Func {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return next(ctx, network, addr)
+		}
+		if official.MustProxy(host) {
+			return next(ctx, network, addr)
+		}
+		if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
+			if official.Reserved(ip) {
+				slog.Debug("内网预留地址：直连", "target", addr)
+				return direct(ctx, network, addr)
+			}
+			return next(ctx, network, addr)
+		}
+		lctx, cancel := context.WithTimeout(ctx, lookupWait)
+		ips, err := lookupIP(lctx, "ip", host)
+		cancel()
+		if err != nil || len(ips) == 0 {
+			return next(ctx, network, addr)
+		}
+		for _, ip := range ips {
+			if !official.Reserved(ip) {
+				return next(ctx, network, addr)
+			}
+		}
+		target := net.JoinHostPort(ips[0].Unmap().String(), port)
+		slog.Debug("主机名解析到内网预留段：直连", "target", addr, "ip", target)
+		return direct(ctx, network, target)
+	}
 }
 
 // directDial 是「仅官方」时的直连拨号，测试里换成记录用的假拨号。

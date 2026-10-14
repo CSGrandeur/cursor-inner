@@ -4,13 +4,14 @@ package program
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"cursor-inner/internal/winproc"
 )
 
 var (
@@ -32,17 +33,12 @@ func executable() string {
 }
 
 func openBrowser(url string) error {
-	return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	return winproc.GUI("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }
 
 func startWatchdog(dir string) error {
 	exe := executable()
-	cmd := exec.Command(exe, "--watch", strconv.Itoa(os.Getpid()), "--data-dir", dir)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW,
-		HideWindow:    true,
-	}
-	return cmd.Start()
+	return winproc.Detached(exe, "--watch", strconv.Itoa(os.Getpid()), "--data-dir", dir).Start()
 }
 
 func notifyAlreadyRunning(url string) {

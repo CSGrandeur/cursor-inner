@@ -138,8 +138,13 @@ func TestCursorTunnelsFollowProxyScope(t *testing.T) {
 	mu.Lock()
 	cfg.Scope = config.ScopeGlobal
 	mu.Unlock()
-	tunnel(t, url, echo.Addr().String(), []byte("ping"))
-	if got := seen(); len(got) != 2 || got[1] != echo.Addr().String() {
+	tunnel(t, url, "book.invalid:443", []byte("ping"))
+	if got := seen(); len(got) != 2 || got[1] != "book.invalid:443" {
 		t.Fatalf("global scope: upstream saw %v", got)
+	}
+	// 内网预留地址（这里是回环）在全局范围下也直连，代理不该再收到。
+	tunnel(t, url, echo.Addr().String(), []byte("ping"))
+	if got := seen(); len(got) != 2 {
+		t.Fatalf("global scope must dial loopback directly, upstream saw %v", got)
 	}
 }

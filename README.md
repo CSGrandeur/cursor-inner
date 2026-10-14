@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.12`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.13`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -218,7 +218,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.12 ./build.sh linux
+VERSION=v0.5.13 ./build.sh linux
 ```
 
 ## 致谢

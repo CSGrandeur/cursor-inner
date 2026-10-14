@@ -44,9 +44,13 @@ const (
 var (
 	fake4 = netip.MustParsePrefix(FakeIP4)
 	fake6 = netip.MustParsePrefix(FakeIP6)
-	// 与 grokbot 的回环/私网绕过一致：LAN、WSL、链路本地。
+	// 与 grokbot 的回环/私网绕过一致：IPv4 内网预留段（不含 fake-ip 段）、LAN、WSL、链路本地。
 	private = []netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/8"),
 		netip.MustParsePrefix("10.0.0.0/8"),
+		netip.MustParsePrefix("100.64.0.0/10"),
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("192.0.0.0/24"),
 		netip.MustParsePrefix("172.16.0.0/12"),
 		netip.MustParsePrefix("192.168.0.0/16"),
 		netip.MustParsePrefix("169.254.0.0/16"),
@@ -100,6 +104,31 @@ func matchSuffix(host string, list []string) bool {
 // Name 报告 host 是不是官方域名（含子域名）。
 func Name(host string) bool {
 	return matchSuffix(normalize(host), Suffixes)
+}
+
+// MustProxy 报告这个名字是否必须走代理：官方域名或解析官方域名用的 DoH。
+// 这类名字一律不在本地解析、不按解析结果直连，防 DNS 重绑定把官方流量引到直连。
+func MustProxy(host string) bool {
+	h := normalize(host)
+	return matchSuffix(h, Suffixes) || matchSuffix(h, alsoProxy)
+}
+
+// Reserved 报告 ip 是否属于直连的内网预留段（回环、未指定、私网、CGNAT、链路本地等）。
+// TUN 的 fake-ip 段不算：落在那里的就是官方域名。
+func Reserved(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	if !ip.IsValid() || fake4.Contains(ip) || fake6.Contains(ip) {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() {
+		return true
+	}
+	for _, p := range private {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // ForHost 是「仅官方」时一个目标主机（不带端口）的走法。

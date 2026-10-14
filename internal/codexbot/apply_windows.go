@@ -5,7 +5,6 @@ package codexbot
 import (
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 
@@ -103,7 +102,7 @@ func stop(shells []process) error {
 }
 
 func start(exe, proxyURL string) error {
-	cmd := exec.Command(exe, Args(proxyURL)...)
+	cmd := winproc.GUI(exe, Args(proxyURL)...)
 	cmd.Dir = filepath.Dir(exe)
 	cmd.Env = Env(proxyURL, os.Environ())
 	return cmd.Start()

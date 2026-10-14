@@ -72,7 +72,7 @@ func RejectSelf(spec, mitmURL string) error {
 	if spec == "" || mitmURL == "" {
 		return nil
 	}
-	proxyURL, err := url.Parse(spec)
+	host, port, err := HostPort(spec)
 	if err != nil {
 		return err
 	}
@@ -80,10 +80,41 @@ func RejectSelf(spec, mitmURL string) error {
 	if err != nil {
 		return err
 	}
-	if proxyURL.Port() != "" && proxyURL.Port() == local.Port() && loopback(proxyURL.Hostname()) && loopback(local.Hostname()) {
+	if port == local.Port() && loopback(host) && loopback(local.Hostname()) {
 		return i18n.E("代理地址不能指向本工具的接管端口", "The proxy cannot point at cursor-inner's own takeover port")
 	}
 	return nil
+}
+
+// HostPort 只从代理地址里抽出主机和端口，不假定协议：不带协议的 host:port、[::1]:port，
+// 以及 http/socks5/socks5h:// 写法都行。协议由 Resolve 的探测决定，保存时保留用户原样写法。
+func HostPort(spec string) (host, port string, err error) {
+	spec = strings.TrimSpace(spec)
+	hp := spec
+	if strings.Contains(spec, "://") {
+		u, perr := url.Parse(spec)
+		if perr != nil {
+			return "", "", i18n.E("代理地址无法解析", "Proxy address cannot be parsed")
+		}
+		hp = u.Host
+	}
+	host, port, err = net.SplitHostPort(hp)
+	if err != nil || host == "" || port == "" {
+		return "", "", i18n.E("代理地址无法解析", "Proxy address cannot be parsed")
+	}
+	return strings.ToLower(host), port, nil
+}
+
+// Resolve 给不带协议的代理地址补上探测出的协议（socks5 或 http）。写了协议的原样返回；
+// 代理暂时连不上就返回原样写法，下次再探，不擅自假定成 http。
+func Resolve(spec string) string {
+	if strings.Contains(spec, "://") {
+		return spec
+	}
+	if full, err := withScheme(spec); err == nil {
+		return full
+	}
+	return spec
 }
 
 func loopback(host string) bool {

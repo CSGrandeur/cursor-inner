@@ -4,7 +4,6 @@ package cursorlaunch
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -16,7 +15,7 @@ func Start() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(path)
+	cmd := winproc.GUI(path)
 	cmd.Dir = filepath.Dir(path)
 	cmd.Env = withoutElectronNode(os.Environ())
 	return cmd.Start()

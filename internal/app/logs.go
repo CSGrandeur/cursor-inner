@@ -2,9 +2,7 @@ package app
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"cursor-inner/internal/config"
 )
@@ -24,15 +22,7 @@ func isDir(p string) bool {
 }
 
 func openFolder(dir string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("explorer", dir)
-	case "darwin":
-		cmd = exec.Command("open", dir)
-	default:
-		cmd = exec.Command("xdg-open", dir)
-	}
+	cmd := folderCommand(dir)
 	// explorer 打开成功也可能返回非零码，这里只在意能不能启动。
 	_ = cmd.Start()
 	return nil

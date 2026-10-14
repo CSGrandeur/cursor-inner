@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.13] - 2026-10-14
+
+### Changed
+
+- In both proxy scopes (global and official-only), connections to reserved IPv4 ranges (0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.168.0.0/16), and host names that resolve only to those ranges, now go direct, so campus, LAN and WSL services are no longer sent through the proxy. Official endpoints are never resolved locally and always use the proxy, so DNS rebinding cannot pull them off it; the TUN fake-ip range 198.18.0.0/15 still counts as official. Grok Bot's NO_PROXY and bypass list gain the new ranges.
+- On Windows, every child process cursor-inner starts goes through one set of spawn helpers, and a source check forbids starting processes any other way. The update self-check no longer flashes a console window.
+
+### Fixed
+
+- Saving a proxy address written without a scheme (for example `127.0.0.1:1080`) no longer fails with "first path segment in URL cannot contain colon". The self-loop check now only reads host and port; the scheme is still detected automatically (socks5 or http), and Grok Bot and Codex get the detected scheme instead of assuming http.
+- The "Start at login" switch no longer flips back off right after being turned on. The logon task was created, but Windows omits the default `<Enabled>true</Enabled>` when exporting it, and the read-back took that as disabled.
+
 ## [0.5.12] - 2026-10-14
 
 ### Added
@@ -332,7 +344,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...HEAD
+[0.5.13]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...v0.5.13
 [0.5.12]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.11...v0.5.12
 [0.5.11]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...v0.5.11
 [0.5.10]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.9...v0.5.10
