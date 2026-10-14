@@ -8,10 +8,17 @@ import (
 )
 
 var (
-	streamIdle  = 120 * time.Second
-	retryBase   = 500 * time.Millisecond
-	retryMax    = 10 * time.Second
-	maxAttempts = 5
+	streamIdle = 120 * time.Second
+	// streamDataIdle：连续这么久只收到 keepalive 注释行、没有任何 data 帧就判超时。
+	// 推理模型的思考过程也以 data 帧流式下发，150 秒足够覆盖排队和慢首字节。
+	streamDataIdle = 150 * time.Second
+	// maxTimeoutAttempts：空闲类超时最多尝试这么多次（含首次），最坏约 2×150 秒就向 Cursor 报错。
+	maxTimeoutAttempts = 2
+	// maxEmptyAttempts：上游正常结束却没有任何内容时最多尝试这么多次（含首次）。
+	maxEmptyAttempts = 2
+	retryBase        = 500 * time.Millisecond
+	retryMax         = 10 * time.Second
+	maxAttempts      = 5
 )
 
 func waitRetry(ctx context.Context, err error, attempt int) error {

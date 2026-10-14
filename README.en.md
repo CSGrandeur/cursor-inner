@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.13`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.14`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -104,7 +104,7 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 
 1. Run cursor-inner. It closes any running Cursor and opens the settings page. Open Cursor, Open Grok and Open Codex in the top bar start those apps and do not quit cursor-inner.
 2. On Models, fill in the display name, type, model name, endpoint URL and API key, then click Test. When editing, leave the key blank to keep it.
-3. Open Cursor again, start a new chat, and pick the model you added.
+3. Open Cursor again, start a new chat, and pick the model you added. If Cursor is already open, it only fetches its model list about every 5 minutes while focused; to see the model right away, click Refresh model list in Cursor Settings → Models, or run Reload Window.
 4. Click Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon menu. Cursor's settings are restored.
 
 > [!IMPORTANT]
@@ -218,7 +218,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.13 ./build.sh linux
+VERSION=v0.5.14 ./build.sh linux
 ```
 
 ## Acknowledgements

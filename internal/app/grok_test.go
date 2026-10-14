@@ -48,7 +48,7 @@ func TestGrokProxyBridgesCredentialsAndNeverGoesDirect(t *testing.T) {
 	if keep || !strings.HasPrefix(u, "http://127.0.0.1:") || strings.Contains(u, "user") || strings.HasSuffix(u, ":1080") {
 		t.Fatalf("credentials must go through the loopback bridge, got %q keep=%v", u, keep)
 	}
-	u, keep = a.grokProxy(config.File{Proxy: config.Proxy{Enabled: true, Address: "127.0.0.1:1080"}})
+	u, keep = a.grokProxy(config.File{Proxy: config.Proxy{Enabled: true, Address: "127.0.0.1:1080", Scope: config.ScopeGlobal}})
 	if keep || u != "http://127.0.0.1:1080" {
 		t.Fatalf("plain http proxy is handed over as is, got %q", u)
 	}

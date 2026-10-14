@@ -174,6 +174,30 @@ func emptyError() error {
 	return &APIError{Kind: KindEmpty, Text: "endpoint returned no content"}
 }
 
+// dataIdleText 也是诊断日志的检索关键字。
+const dataIdleText = "upstream_data_idle: stream sent only keepalives, no data"
+
+func dataIdleError() error {
+	return &APIError{Kind: KindTimeout, Text: dataIdleText}
+}
+
+// IsDataIdle 判断错误是否为“只收到 keepalive、没有 data 帧”的超时。
+func IsDataIdle(err error) bool {
+	var api *APIError
+	return errors.As(err, &api) && api.Kind == KindTimeout && api.Text == dataIdleText
+}
+
+// IsEmpty 判断错误是否为上游正常结束却没有任何内容。
+func IsEmpty(err error) bool {
+	var api *APIError
+	return errors.As(err, &api) && api.Kind == KindEmpty
+}
+
+func isTimeout(err error) bool {
+	var api *APIError
+	return errors.As(err, &api) && api.Kind == KindTimeout
+}
+
 func timeoutError() error {
 	return &APIError{Kind: KindTimeout, Text: "stream idle timeout"}
 }

@@ -54,7 +54,7 @@ func TestTunnelForSkippedHostGoesThroughConfiguredProxy(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 	}()
 
-	cfg := config.Proxy{Enabled: true, Address: "http://" + upstream.Addr().String()}
+	cfg := config.Proxy{Enabled: true, Address: "http://" + upstream.Addr().String(), Scope: config.ScopeGlobal}
 	s := New(func() config.Proxy { return cfg }, func() []catalog.Entry { return nil }, func(string) (config.Model, bool) { return config.Model{}, false }, nil)
 	url, err := s.Start(testCA(t))
 	if err != nil {

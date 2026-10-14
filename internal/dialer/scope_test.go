@@ -246,7 +246,7 @@ func connectProxy(t *testing.T) (string, func() []string) {
 
 func TestScopedGlobalVersusOfficial(t *testing.T) {
 	addr, seen := connectProxy(t)
-	global, err := Scoped(config.Proxy{Enabled: true, Address: addr})
+	global, err := Scoped(config.Proxy{Enabled: true, Address: addr, Scope: config.ScopeGlobal})
 	if err != nil {
 		t.Fatal(err)
 	}

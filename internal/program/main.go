@@ -63,6 +63,14 @@ func listenURL(dir string) string {
 func Main(version string) {
 	windowTitle = web.Title(version)
 	opt := parseArgs(os.Args[1:])
+	if code, text := argsExit(opt); code >= 0 {
+		out := os.Stdout
+		if code != 0 {
+			out = os.Stderr
+		}
+		fmt.Fprint(out, text)
+		os.Exit(code)
+	}
 	if opt.version {
 		// 自更新的预检：只报版本号，不碰任何状态。
 		fmt.Println(version)

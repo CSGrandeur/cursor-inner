@@ -853,6 +853,11 @@ func (s *Session) ask(ctx context.Context, send Emit, call provider.ToolCall, qu
 		slog.Debug("会话等待用户回答超时", "conversation", s.RequestID, "tool", call.Name)
 		return s.stopTool(send, call, ui, replyStopped)
 	}
+	if errors.Is(err, errBreak) {
+		slog.Info("等待用户回答时收到新消息，跳过提问继续这一轮", "conversation", s.RequestID, "tool", call.Name)
+		_ = send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}}))
+		return toolOutcome{}, err
+	}
 	if err != nil {
 		return toolOutcome{}, err
 	}
@@ -939,6 +944,10 @@ func (s *Session) waitReply(ctx context.Context, id uint32) (*cursorpb.Interacti
 				continue
 			}
 			return resp, nil
+		case <-s.steer:
+			if s.pullQueued() {
+				return nil, errBreak
+			}
 		case <-s.stopped:
 			return nil, fmt.Errorf("the turn was cancelled")
 		case <-ctx.Done():

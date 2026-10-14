@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.14] - 2026-10-14
+
+### Added
+
+- After adding a model, the settings page explains that a running Cursor picks it up on its next model list fetch (about every 5 minutes while focused, about 30 minutes otherwise) and how to see it right away: Refresh model list in Cursor Settings → Models, or Reload Window. cursor-inner already serves the new model on the very next fetch.
+
+### Changed
+
+- The proxy scope now defaults to official-only: only Cursor, Grok, x.ai, OpenAI and Codex endpoints go through the proxy, and everything else (campus, intranet and other non-official sites) connects directly, the same as if cursor-inner were not running. A configuration that explicitly saved "global" keeps it. Official endpoints are still never resolved locally and never fall back to a direct connection.
+- The selected option of every segmented control on the settings page is now a solid accent-colored fill with white text, in both light and dark themes.
+
+### Fixed
+
+- A turn no longer hangs at "Taking longer than expected" for 10 minutes when a new message is sent while a question card is waiting for an answer. The question is marked skipped and the turn continues with the new message.
+- An upstream stream that sends only keepalive comments and no data now times out after 150 seconds of no data and is retried at most once, so Cursor gets a clear error within about 5 minutes instead of waiting indefinitely.
+- An upstream reply that finishes successfully with no content and no tool calls is retried once and then reported as an error. A non-streaming empty JSON reply no longer shows up in Cursor as an empty message.
+- An unknown command-line argument, or `--help` / `-h`, now prints usage and exits (status 2 for unknown arguments, 0 for help) instead of starting normally and taking over Cursor, Grok Bot and Codex.
+- Log keywords for diagnosing these cases: `upstream_data_idle`, `upstream_timeout`, `upstream_empty`.
+
 ## [0.5.13] - 2026-10-14
 
 ### Changed
@@ -345,6 +364,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...HEAD
+[0.5.14]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...v0.5.14
 [0.5.13]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...v0.5.13
 [0.5.12]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.11...v0.5.12
 [0.5.11]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.10...v0.5.11

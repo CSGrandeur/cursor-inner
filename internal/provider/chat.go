@@ -81,6 +81,7 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 	started := time.Now()
 	useText := TextToolActive(m) // 端点不支持原生工具时，把工具规格写进系统提示，由救援解析读回
 	immediate := false
+	timeouts, empties := 0, 0
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 && !immediate {
 			noteModel(ctx, runlog.Note{Kind: "model_retry", Attempt: attempt, Error: Explain(last), ElapsedMs: time.Since(started).Milliseconds()})
@@ -141,6 +142,20 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 		}
 		if emitted || !Retryable(err) {
 			return Message{}, withRetries(err, attempt)
+		}
+		if IsEmpty(err) {
+			empties++
+			slog.Warn("upstream_empty 上游正常结束但没有内容和工具调用", "model", m.Model, "attempt", attempt+1, "elapsed_ms", time.Since(started).Milliseconds())
+			if empties >= maxEmptyAttempts {
+				return Message{}, withRetries(err, attempt)
+			}
+		}
+		if isTimeout(err) {
+			timeouts++
+			if timeouts >= maxTimeoutAttempts {
+				slog.Warn("upstream_timeout 上游空闲超时次数到上限，向客户端报错", "model", m.Model, "attempts", attempt+1, "error", Explain(err))
+				return Message{}, withRetries(err, attempt)
+			}
 		}
 	}
 	return Message{}, withRetries(last, maxAttempts-1)
@@ -255,6 +270,9 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		if err != nil {
 			return Message{}, err
 		}
+		if msg.Content == "" && len(msg.ToolCalls) == 0 && !msg.Truncated && msg.Reasoning == "" {
+			return Message{}, emptyError()
+		}
 		if msg.Content != "" {
 			if err := onText(msg.Content); err != nil {
 				if errors.Is(err, ErrStopStream) {
@@ -268,11 +286,19 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 	acc := newAccumulator(m.Type, m.Type != "anthropic" && ProfileOf(m).ThinkTagSplit)
 	sc := bufio.NewScanner(reader)
 	sc.Buffer(make([]byte, 0, 64*1024), 8<<20)
+	lastData := time.Now()
+	skipped := 0
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		if !strings.HasPrefix(line, "data:") {
+			skipped++
+			if waited := time.Since(lastData); waited >= streamDataIdle {
+				slog.Warn("upstream_data_idle 上游只发 keepalive、长时间没有数据帧，判定超时", "model", m.Model, "waited_s", int(waited.Seconds()), "non_data_lines", skipped)
+				return Message{}, dataIdleError()
+			}
 			continue
 		}
+		lastData = time.Now()
 		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		if data == "" || data == "[DONE]" {
 			continue

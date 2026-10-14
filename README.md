@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.13`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.14`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -104,7 +104,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的「启动 Cursor」「启动 Grok」「启动 Codex」再打开它们，不退出 cursor-inner。
 2. 在「模型」里填写显示名、类型、模型名、接口地址和密钥，点「测试」。编辑时密钥留空表示不改。
-3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。
+3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点「刷新模型列表」（Refresh model list），或执行 Reload Window。
 4. 用完点「退出」。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选「退出」才结束。Cursor 的设置会还原。
 
 > [!IMPORTANT]
@@ -218,7 +218,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.13 ./build.sh linux
+VERSION=v0.5.14 ./build.sh linux
 ```
 
 ## 致谢
