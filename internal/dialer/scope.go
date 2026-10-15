@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/connlog"
 	"cursor-inner/internal/official"
 )
 
@@ -25,13 +26,22 @@ func Scoped(p config.Proxy) (Func, error) {
 	}
 	_, on, _ := EffectiveAddress(p)
 	if !on {
-		return via, nil
+		return marked(via, "direct"), nil
 	}
-	direct := directDial()
+	via = marked(via, "proxy")
+	direct := marked(directDial(), "direct")
 	if !p.OfficialOnly() {
 		return reservedFirst(via, direct), nil
 	}
 	return reservedFirst(split(via, direct), direct), nil
+}
+
+// marked 在拨号时把实际走的路记到 ctx 上（connlog），供代理桥的调试日志使用。
+func marked(d Func, route string) Func {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		connlog.Set(ctx, route)
+		return d(ctx, network, addr)
+	}
 }
 
 // lookupIP 是判断主机名是否落在内网预留段用的解析，测试里换成假的。

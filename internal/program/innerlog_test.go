@@ -3,6 +3,7 @@ package program
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,8 +27,8 @@ func TestOpenInnerLogKeepsOldLogOnHandover(t *testing.T) {
 	}
 	f.WriteString("fresh\n")
 	f.Close()
-	if b, _ := os.ReadFile(path); string(b) != "fresh\n" {
-		t.Fatalf("normal start log %q", b)
+	if b, _ := os.ReadFile(path); string(b) != "old process: update downloaded\nnew process\nfresh\n" {
+		t.Fatalf("normal start must append, log %q", b)
 	}
 }
 
@@ -51,5 +52,23 @@ func TestOpenInnerLogConcurrentWritersDoNotOverwrite(t *testing.T) {
 	want := "old: handing over\nnew: started\nold: handed over\nnew: updated\n"
 	if b, _ := os.ReadFile(path); string(b) != want {
 		t.Fatalf("got %q", b)
+	}
+}
+
+// 正常启动也不能清空 inner.log：上一轮的断连记录要能在重启后查到。
+func TestOpenInnerLogKeepsPreviousRunOnNormalStart(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "inner.log")
+	if err := os.WriteFile(p, []byte("previous run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := openInnerLog(p, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString("this run\n")
+	f.Close()
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "previous run") || !strings.Contains(string(b), "this run") {
+		t.Fatalf("inner.log = %q", b)
 	}
 }

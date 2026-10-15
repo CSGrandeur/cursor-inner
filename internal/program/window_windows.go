@@ -131,7 +131,7 @@ func launchDetached(argv []string, flags uint32) error {
 	si := windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfo{}))}
 	var pi windows.ProcessInformation
 	if err := windows.CreateProcess(nil, cmdline, nil, nil, false, flags, nil, nil, &si, &pi); err != nil {
-		return err
+		return newSpawnError(argv, flags, err)
 	}
 	defer func() {
 		_ = windows.CloseHandle(pi.Thread)

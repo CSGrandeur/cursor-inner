@@ -22,6 +22,7 @@ import (
 	"cursor-inner/internal/console"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/fsutil"
+	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/logx"
 	"cursor-inner/internal/mitm"
 	"cursor-inner/internal/selfupdate"
@@ -169,6 +170,9 @@ func Main(version string) {
 		log.SetOutput(logFile)
 	}
 	logx.Setup(consoleEvents{term}, logFile, opt.verbose)
+	if opt.debug || opt.verbose {
+		grokbot.SetConnDebug(true)
+	}
 
 	store, err := config.Load(dir)
 	if err != nil {
@@ -467,17 +471,12 @@ func runTrayHub(hub *trayHub, upd *updateGlue) {
 	}
 }
 
-// openInnerLog 打开本次运行的 inner.log。正常启动时清空重写（过大先轮转）；自更新交接时接在后面写，
-// 不截断：旧进程还开着这个文件，下载、校验、换路径、交接的记录都在里面，清空了就没法追查这次更新。
-// 两种都用追加模式打开：交接时新旧两个进程同时在写，各自的写入位置会互相覆盖，追加模式下每次写都落在文件末尾。
-// 清空单独做、不和 O_APPEND 一起传：Windows 上 O_TRUNC|O_APPEND 会带上普通写权限，写入位置是进程自己的偏移，
-// 交接时新进程的第一行会被旧进程接着写的内容盖掉开头（实测丢了「2026-10-12 0」13 个字节）。
+// openInnerLog 打开本次运行的 inner.log，一律追加、不清空：重启前的断连等记录要能在重启后查到。
+// 超过 5MB 时先轮转成 inner.log.1（logx.Rotate），历史不会无限增长。
+// 用追加模式：自更新交接时新旧两个进程同时在写，追加模式下每次写都落在文件末尾，不会互相覆盖。
 func openInnerLog(path string, handover bool) (*os.File, error) {
 	if !handover {
 		_ = logx.Rotate(path)
-		if f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
-			_ = f.Close()
-		}
 	}
 	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 }

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.16] - 2026-10-15
+
+### Added
+
+- With `--debug` or `--verbose`, the Grok / Codex proxy bridge logs one line per connection (target host:port, route taken, dial time, duration, bytes each way, which side closed first and why) and one summary line per minute (active connections, connections waiting to be closed, this process's CLOSE_WAIT count on Windows, proxy dial failures). Headers, tokens, bodies and proxy credentials are never logged, and nothing is written in a normal run.
+
+### Changed
+
+- inner.log is no longer emptied when cursor-inner starts: new lines are appended, and at the next start a file over 5 MB is rotated to inner.log.1. Records from before a restart (disconnects, failed updates) can now be looked up afterwards.
+
+### Fixed
+
+- The Grok / Codex proxy bridge no longer leaks connections. Through a socks5 proxy a client closing a tunnel was never passed on, so silent long-lived connections stayed open forever and CLOSE_WAIT sockets piled up. Once one direction of a tunnel ends, the bridge now closes both ends after at most 10 seconds.
+- Self-update no longer fails at the hot-handoff step with "Access is denied." when cursor-inner was started inside a Windows job object that does not allow child processes to break away (some IDE/agent terminals, task runners, sandboxes). The handoff now retries without breakaway; the new process then stays in that job, so it ends together with the old one if the launching tool closes the job.
+- When the new version cannot be started, the error now names every launch attempt (program, flags, error code), and inner.log records whether cursor-inner runs inside a job and what the job allows.
+
 ## [0.5.15] - 2026-10-14
 
 ### Added
@@ -376,7 +392,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...HEAD
+[0.5.16]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...v0.5.16
 [0.5.15]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.14...v0.5.15
 [0.5.14]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...v0.5.14
 [0.5.13]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.12...v0.5.13
