@@ -237,7 +237,8 @@ func readText(r *cursorpb.ReadResult) (string, []provider.Image, bool) {
 			return out.Content, nil, false
 		case *cursorpb.ReadSuccess_Data:
 			if mime := imageMIME(out.Data); mime != "" {
-				return "Read image file: " + v.Success.GetPath(), []provider.Image{{MIME: mime, Data: append([]byte(nil), out.Data...)}}, false
+				text, images := readImage("Read image file: "+v.Success.GetPath(), out.Data, mime)
+				return text, images, false
 			}
 			return fmt.Sprintf("%s is a binary file (%d bytes).", v.Success.GetPath(), len(out.Data)), nil, false
 		}

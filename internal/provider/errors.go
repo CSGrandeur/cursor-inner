@@ -34,6 +34,10 @@ type APIError struct {
 	RetryAfter time.Duration
 	Text       string
 	Detail     string // 上游 error.message（已脱敏、截断约 200 字）
+	// Large 表示空回复发生在带了很多图片的请求上，调用方可以省略一批旧图片后再试一次。
+	Large bool
+	// Compacted 表示已经省略旧图片重试过，仍然空回复。
+	Compacted bool
 }
 
 type attemptsError struct {
@@ -94,6 +98,9 @@ func explainKind(err error) string {
 			base = "连接失败"
 		case KindEmpty:
 			base = "模型没有返回内容"
+			if api.Compacted {
+				base = "上游空回复，可能上下文过大，已尝试压缩"
+			}
 		case KindAuth:
 			base = "密钥被拒绝"
 		case KindContextOverflow:
@@ -185,6 +192,21 @@ func dataIdleError() error {
 func IsDataIdle(err error) bool {
 	var api *APIError
 	return errors.As(err, &api) && api.Kind == KindTimeout && api.Text == dataIdleText
+}
+
+// EmptyLarge 判断是否为“带很多图片的请求得到空回复”。
+func EmptyLarge(err error) bool {
+	var api *APIError
+	return errors.As(err, &api) && api.Kind == KindEmpty && api.Large
+}
+
+// MarkCompacted 标记空回复发生在省略旧图片重试之后，给用户的说明随之改变。
+func MarkCompacted(err error) error {
+	var api *APIError
+	if errors.As(err, &api) && api.Kind == KindEmpty {
+		api.Compacted = true
+	}
+	return err
 }
 
 // IsEmpty 判断错误是否为上游正常结束却没有任何内容。

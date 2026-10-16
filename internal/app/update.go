@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"cursor-inner/internal/takeover"
 	"errors"
 	"time"
 
@@ -26,7 +27,15 @@ func (a *App) UpdateProxy() (selfupdate.DialFunc, bool) {
 }
 
 // Freeze 在交接开始时停掉会重新监听或改 Grok 参数的后台同步，避免和新进程抢端口。
-func (a *App) Freeze(on bool) { a.frozen.Store(on) }
+func (a *App) Freeze(on bool) {
+	a.frozen.Store(on)
+	// 交出期间本进程的接管暂时不在运行，不是故障；回滚后重新计宽限。
+	if on {
+		a.tracker().SetPhase(takeover.PhaseHandover)
+	} else {
+		a.tracker().SetPhase(takeover.PhaseSettled)
+	}
+}
 
 // ReleaseBridge / ReclaimBridge 交出、收回 Grok 代理桥的监听。
 func (a *App) ReleaseBridge() error { return a.bridge.Release() }

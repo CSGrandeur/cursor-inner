@@ -39,26 +39,29 @@ func (p Proxy) ScopeName() string {
 func (p Proxy) OfficialOnly() bool { return p.ScopeName() == ScopeOfficial }
 
 type Model struct {
-	ID              string    `json:"id"`
-	DisplayName     string    `json:"display_name"`
-	Type            string    `json:"type"`
-	BaseURL         string    `json:"base_url"`
-	APIKey          string    `json:"api_key"`
-	Model           string    `json:"model"`
-	UseProxy        bool      `json:"use_proxy"`
-	Reasoning       bool      `json:"reasoning,omitempty"`
-	FastSupport     bool      `json:"fast,omitempty"`
-	ContextWindow   int       `json:"context_window,omitempty"`
-	MaxOutputTokens int       `json:"max_output_tokens,omitempty"`
-	PromptCacheKey  string    `json:"prompt_cache_key,omitempty"`
-	Fallback        []string  `json:"fallback,omitempty"` // 其它已保存模型的 id，仅在尚未流出任何字时切换
-	LastTest        *LastTest `json:"last_test,omitempty"`
-	Effort          string    `json:"-"`
-	Fast            bool      `json:"-"`
-	ImageBaseURL    string    `json:"-"`
-	ImageAPIKey     string    `json:"-"`
-	ImageModel      string    `json:"-"`
-	TextToolMode    bool      `json:"-"` // 本次运行时：端点不支持原生工具，改用文本工具协议
+	ID              string `json:"id"`
+	DisplayName     string `json:"display_name"`
+	Type            string `json:"type"`
+	BaseURL         string `json:"base_url"`
+	APIKey          string `json:"api_key"`
+	Model           string `json:"model"`
+	UseProxy        bool   `json:"use_proxy"`
+	Reasoning       bool   `json:"reasoning,omitempty"`
+	FastSupport     bool   `json:"fast,omitempty"`
+	ContextWindow   int    `json:"context_window,omitempty"`
+	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+	// MaxImages / ImageBudgetMB：一次请求里最多带多少张图、图片合计多少 MB；超出时从最旧的工具图片起分批省略。0 用默认值。
+	MaxImages      int       `json:"max_images,omitempty"`
+	ImageBudgetMB  int       `json:"image_budget_mb,omitempty"`
+	PromptCacheKey string    `json:"prompt_cache_key,omitempty"`
+	Fallback       []string  `json:"fallback,omitempty"` // 其它已保存模型的 id，仅在尚未流出任何字时切换
+	LastTest       *LastTest `json:"last_test,omitempty"`
+	Effort         string    `json:"-"`
+	Fast           bool      `json:"-"`
+	ImageBaseURL   string    `json:"-"`
+	ImageAPIKey    string    `json:"-"`
+	ImageModel     string    `json:"-"`
+	TextToolMode   bool      `json:"-"` // 本次运行时：端点不支持原生工具，改用文本工具协议
 }
 
 // ImageAPI 是设置页选择的出图接口。留空时模型看不到 GenerateImage。

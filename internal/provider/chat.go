@@ -143,6 +143,9 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 		if emitted || !Retryable(err) {
 			return Message{}, withRetries(err, attempt)
 		}
+		if EmptyLarge(err) {
+			return Message{}, withRetries(err, attempt)
+		}
 		if IsEmpty(err) {
 			empties++
 			slog.Warn("upstream_empty 上游正常结束但没有内容和工具调用", "model", m.Model, "attempt", attempt+1, "elapsed_ms", time.Since(started).Milliseconds())
@@ -250,12 +253,17 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 	if maxTokens == 0 && (m.Type == "anthropic" || m.Type == "openai-responses") {
 		maxTokens = 8192
 	}
-	resp, err := do(ctx, m, dial, chatRequest{System: system, Messages: messages, Tools: tools, MaxTokens: maxTokens})
+	var reqBytes int
+	resp, err := doSized(ctx, m, dial, chatRequest{System: system, Messages: messages, Tools: tools, MaxTokens: maxTokens}, &reqBytes)
 	if err != nil {
 		return Message{}, transportError(err)
 	}
 	defer resp.Body.Close()
-	reader := bufio.NewReaderSize(&idleReader{r: resp.Body, idle: streamIdle}, 64*1024)
+	raw := &headBuffer{max: emptyRawHead}
+	reader := bufio.NewReaderSize(io.TeeReader(&idleReader{r: resp.Body, idle: streamIdle}, raw), 64*1024)
+	empty := func(finish string, msg Message) error {
+		return emptyReply(m, messages, reqBytes, finish, msg, raw.Bytes())
+	}
 	head, _ := reader.Peek(1)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(reader, 4096))
@@ -271,7 +279,7 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 			return Message{}, err
 		}
 		if msg.Content == "" && len(msg.ToolCalls) == 0 && !msg.Truncated && msg.Reasoning == "" {
-			return Message{}, emptyError()
+			return Message{}, empty(staticFinish(body), msg)
 		}
 		if msg.Content != "" {
 			if err := onText(msg.Content); err != nil {
@@ -333,12 +341,17 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 	}
 	msg := acc.message()
 	if msg.Content == "" && len(msg.ToolCalls) == 0 && !msg.Truncated && msg.Reasoning == "" {
-		return Message{}, emptyError()
+		return Message{}, empty(acc.finish, msg)
 	}
 	return msg, nil
 }
 
 func do(ctx context.Context, m config.Model, dial dialer.Func, req chatRequest) (*http.Response, error) {
+	return doSized(ctx, m, dial, req, nil)
+}
+
+// doSized 同 do，另把请求体字节数写进 size（可为 nil），供空回复诊断使用。
+func doSized(ctx context.Context, m config.Model, dial dialer.Func, req chatRequest, size *int) (*http.Response, error) {
 	endpoint, err := RequestURL(m)
 	if err != nil {
 		return nil, err
@@ -346,6 +359,9 @@ func do(ctx context.Context, m config.Model, dial dialer.Func, req chatRequest) 
 	payload, err := requestBody(m, req)
 	if err != nil {
 		return nil, err
+	}
+	if size != nil {
+		*size = len(payload)
 	}
 	noteModel(ctx, runlog.Note{Kind: "model_request", Bytes: len(payload)})
 	asked := time.Now()

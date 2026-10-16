@@ -431,7 +431,8 @@ func resourceText(r *cursorpb.ReadMcpResourceExecResult) (string, []provider.Ima
 		}
 		if blob := v.Success.GetBlob(); len(blob) > 0 {
 			if mime := imageMIME(blob); mime != "" {
-				return "Read image file: " + v.Success.GetUri(), []provider.Image{{MIME: mime, Data: append([]byte(nil), blob...)}}, false
+				text, images := readImage("Read image file: "+v.Success.GetUri(), blob, mime)
+				return text, images, false
 			}
 			return fmt.Sprintf("%s is binary (%d bytes).", v.Success.GetUri(), len(blob)), nil, false
 		}

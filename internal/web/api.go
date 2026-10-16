@@ -18,6 +18,8 @@ type ModelView struct {
 	Fast            bool             `json:"fast"`
 	ContextWindow   int              `json:"context_window"`
 	MaxOutputTokens int              `json:"max_output_tokens"`
+	MaxImages       int              `json:"max_images"`
+	ImageBudgetMB   int              `json:"image_budget_mb"`
 	PromptCacheKey  string           `json:"prompt_cache_key,omitempty"`
 	Fallback        []string         `json:"fallback,omitempty"`
 	KeyHint         string           `json:"key_hint"`
@@ -25,11 +27,16 @@ type ModelView struct {
 }
 
 type View struct {
-	ListenURL      string          `json:"listen_url"`
-	Takeover       bool            `json:"takeover"`
-	TakeoverGrok   bool            `json:"takeover_grok"`
-	TakeoverCodex  bool            `json:"takeover_codex"`
-	TakeoverActive bool            `json:"takeover_active"`
+	ListenURL      string `json:"listen_url"`
+	Takeover       bool   `json:"takeover"`
+	TakeoverGrok   bool   `json:"takeover_grok"`
+	TakeoverCodex  bool   `json:"takeover_codex"`
+	TakeoverActive bool   `json:"takeover_active"`
+	// TakeoverState 是三态：off（没要求接管）/ pending（还没定论）/ active / error（明确失败）。
+	// 页面只在 error 时标红，pending 显示中性的过程文字并继续轮询。Reason 见 takeover.Reason*，Since 是进入该状态的时刻（RFC3339）。
+	TakeoverState  string          `json:"takeover_state"`
+	TakeoverReason string          `json:"takeover_reason,omitempty"`
+	TakeoverSince  string          `json:"takeover_since,omitempty"`
 	MitmURL        string          `json:"mitm_url"`
 	CA             string          `json:"ca"`
 	CADetail       i18n.Text       `json:"ca_detail"`

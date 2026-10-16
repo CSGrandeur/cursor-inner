@@ -795,6 +795,24 @@ func TestSteerKeepsTheOpenTool(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// select 在 out 和 done 同时就绪时随机挑一个：先把已经入队的消息读完，再判断（CI 上偶发 queued=true delivered=false）。
+		drain:
+			for {
+				select {
+				case m := <-out:
+					state := m.GetInteractionUpdate().GetContextInjectionState().GetState()
+					queued = queued || state.GetQueued() != nil
+					delivered = delivered || state.GetDelivered() != nil
+					if m.GetExecServerControlMessage().GetAbort() != nil {
+						aborted = true
+					}
+					if appended := m.GetInteractionUpdate().GetUserMessageAppended().GetUserMessage(); appended.GetMessageId() != "" {
+						echoed = appended.GetMessageId()
+					}
+				default:
+					break drain
+				}
+			}
 			if aborted || !queued || !delivered || echoed != "msg-steer" || len(fm.requests) < 2 {
 				t.Fatalf("aborted=%v queued=%v delivered=%v echoed=%s requests=%d", aborted, queued, delivered, echoed, len(fm.requests))
 			}

@@ -70,8 +70,23 @@ func recentTail(messages []provider.Message, n int) []provider.Message {
 	return append([]provider.Message(nil), messages[start:]...)
 }
 
+// emptyRetry：带很多图片的请求得到空回复时，省略一批最旧的工具图片再试一次（参考 deepseek-harness image offload）。
+func emptyRetry(err error, messages []provider.Message) ([]provider.Message, bool) {
+	if !provider.EmptyLarge(err) {
+		return messages, false
+	}
+	return provider.EvictImageBatch(messages)
+}
+
 func chatOrCompact(ctx context.Context, model config.Model, dial dialer.Func, system string, messages []provider.Message, tools []provider.Tool, onText func(string) error, onThinking func(string) error) ([]provider.Message, provider.Message, error) {
 	reply, err := provider.Chat(ctx, model, dial, system, messages, tools, onText, onThinking)
+	if next, ok := emptyRetry(err, messages); ok {
+		reply, err = provider.Chat(ctx, model, dial, system, next, tools, onText, onThinking)
+		if provider.IsEmpty(err) {
+			err = provider.MarkCompacted(err)
+		}
+		return next, reply, err
+	}
 	if !provider.Overflow(err) {
 		return messages, reply, err
 	}
@@ -90,6 +105,16 @@ func (s *Session) chatOrCompactSession(ctx context.Context, model config.Model, 
 		return dialer.ForModel(s.Proxy, m.UseProxy)
 	}
 	used, reply, err := chatWithFallback(ctx, model, catalog, dialFor, system, messages, tools, onText, onThinking)
+	if next, ok := emptyRetry(err, messages); ok {
+		used, reply, err = chatWithFallback(ctx, used, catalog, dialFor, system, next, tools, onText, onThinking)
+		if provider.IsEmpty(err) {
+			err = provider.MarkCompacted(err)
+		}
+		if err == nil && used.ID != model.ID {
+			s.fallbackUsed = append(s.fallbackUsed, used.DisplayName)
+		}
+		return next, used, reply, err
+	}
 	if !provider.Overflow(err) {
 		if used.ID != model.ID {
 			s.fallbackUsed = append(s.fallbackUsed, used.DisplayName)

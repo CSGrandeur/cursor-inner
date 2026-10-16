@@ -95,6 +95,9 @@
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
   .dot.on { background: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
   .dot.bad { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }
+  /* 还没定论：空心的灰环，慢慢明暗一下，不用红色也不闪。 */
+  .dot.pending, .tab-dot.pending { background: transparent; box-shadow: inset 0 0 0 1.5px var(--faint); animation: settle 2.4s ease-in-out infinite; }
+  @keyframes settle { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
 
   /* 顶部状态条：平时是灰字，异常的那一项变色。 */
   .status {
@@ -117,6 +120,7 @@
     color: var(--signal); background: var(--signal-soft);
   }
   .pill.bad { color: var(--bad); background: var(--bad-soft); }
+  .pill.pending { color: var(--muted); background: var(--line); }
   .pill .mono { font-size: 11px; }
 
   .tabs {
@@ -144,6 +148,7 @@
   .tab-dot { display: none; width: 6px; height: 6px; border-radius: 50%; flex: none; }
   .tab-dot.warn { display: block; background: var(--signal); }
   .tab-dot.bad { display: block; background: var(--bad); }
+  .tab-dot.pending { display: block; }
   .pane[hidden] { display: none; }
   .pane { animation: pane-in .18s ease-out both; }
   @keyframes pane-in { from { opacity: 0; } to { opacity: 1; } }
@@ -616,6 +621,8 @@
           <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
           <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
           <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <label class="mini"><span data-i18n="maxImages">图片张数上限</span><input name="max_images" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="defaultImages" placeholder="默认 20"></label>
+          <label class="mini"><span data-i18n="imageBudget">图片总量上限（MB）</span><input name="image_budget_mb" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="defaultBudget" placeholder="默认 24"></label>
           <span class="spacer"></span>
           <button id="form-clear" type="button" data-i18n="clear">清空</button>
           <button id="draft-test" type="button" data-i18n="test">测试</button>
@@ -812,7 +819,7 @@ const MESSAGES = {
     tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥",
-    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", optional: "可选", test: "测试", testing: "测试中…", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
+    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", maxImages: "图片张数上限", imageBudget: "图片总量上限（MB）", defaultImages: "默认 20", defaultBudget: "默认 24", optional: "可选", test: "测试", testing: "测试中…", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
     keepKey: "留空不改", copyUrl: "点击复制接口地址", copied: "已复制", copiedToForm: "已填入添加表单。密钥不会带过去，需要重新填写。",
     showKey: "显示密钥", hideKey: "隐藏密钥",
     notTakenOver: "这次启动没有接管。", mitm: "接管代理 {url}",
@@ -828,7 +835,7 @@ const MESSAGES = {
     capToolsNative: "支持原生工具调用", capToolsText: "不支持原生工具调用，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "不支持工具调用",
     capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试失败：{error}",
     ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
-    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
+    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。", takeTimeout: "接管等待超时，仍没有接上。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
     switchLang: "EN"
   },
   en: {
@@ -869,7 +876,7 @@ const MESSAGES = {
     tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key",
-    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", optional: "optional", test: "Test", testing: "Testing…", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
+    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", maxImages: "Max images", imageBudget: "Image total (MB)", defaultImages: "default 20", defaultBudget: "default 24", optional: "optional", test: "Test", testing: "Testing…", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
     keepKey: "Leave blank to keep", copyUrl: "Click to copy the endpoint URL", copied: "Copied", copiedToForm: "Filled into the add form. The API key is not copied.",
     showKey: "Show key", hideKey: "Hide key",
     notTakenOver: "Takeover is not active in this session.", mitm: "Takeover proxy {url}",
@@ -886,7 +893,7 @@ const MESSAGES = {
     capToolsNative: "Native tool calls supported", capToolsText: "Native tool calls not supported; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calls not supported",
     capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test failed: {error}",
     ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
-    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
+    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time.", takeTimeout: "Timed out waiting for takeover; it is still not in place.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
     switchLang: "中文"
   }
 };
@@ -1048,7 +1055,11 @@ function showTest(result, name) {
 async function send(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(tr(data.error) || t("requestFailed", {status: res.status}));
+  if (!res.ok) {
+    const err = new Error(tr(data.error) || t("requestFailed", {status: res.status}));
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -1066,6 +1077,8 @@ function formModel() {
     fast: form.fast.checked,
     context_window: tokenField(fd.get("context_window")),
     max_output_tokens: tokenField(fd.get("max_output_tokens")),
+    max_images: tokenField(fd.get("max_images")),
+    image_budget_mb: tokenField(fd.get("image_budget_mb")),
     prompt_cache_key: String(fd.get("prompt_cache_key") || "").trim(),
     fallback
   };
@@ -1105,6 +1118,8 @@ function fillForm(model, mode) {
   form.fast.checked = !!model.fast;
   form.context_window.value = model.context_window > 0 ? String(model.context_window) : "";
   form.max_output_tokens.value = model.max_output_tokens > 0 ? String(model.max_output_tokens) : "";
+  form.max_images.value = model.max_images > 0 ? String(model.max_images) : "";
+  form.image_budget_mb.value = model.image_budget_mb > 0 ? String(model.image_budget_mb) : "";
   form.prompt_cache_key.value = model.prompt_cache_key || "";
   form.fallback.value = (model.fallback || []).join(", ");
   editingId = mode === "edit" ? model.id : "";
@@ -1183,34 +1198,44 @@ function busy(button, label, run) {
   return run().finally(() => { button.disabled = false; button.textContent = old; });
 }
 
-function render(state) {
-  lastState = state;
-  hoverTip.hidden = true;
-  tipAnchor = null;
+// 状态里会随时间变化的说明行（接管、隧道、Grok / Codex）。后台轮询只刷新这些和状态条，不动表单和模型列表。
+function renderMetas(state) {
   const tunNode = document.querySelector("#tun-status");
   tunNode.textContent = (state.tunnel && tr(state.tunnel.detail)) || "";
   tunNode.className = "meta" + (state.tunnel && state.tunnel.status === TUN_FAILED ? " warn" : "");
   tunNode.title = tunNode.textContent;
 
-  document.querySelector("#takeover-cursor").checked = !!state.takeover;
   const meta = document.querySelector("#takeover-meta");
   const lastError = tr(state.last_error);
-  meta.className = "meta" + (lastError ? " warn" : "");
+  const take = takeStatus(state);
+  meta.className = "meta" + (take.kind === "error" || lastError ? " warn" : "");
   const bits = [];
-  if (state.takeover && !state.takeover_active) bits.push(t("notTakenOver"));
+  const why = takeText(take);
+  if (take.kind === "pending" && why) bits.push(why);
+  if (take.kind === "off" && take.reason === "skipped") bits.push(t("notTakenOver"));
+  if (take.kind === "error" && !lastError && why) bits.push(why);
   if (state.takeover_active && state.mitm_url) bits.push(t("mitm", {url: state.mitm_url}));
   for (const text of [tr(state.ca_detail), tr(state.catalog_warning), lastError]) if (text) bits.push(text);
   meta.textContent = bits.join(" · ");
   meta.title = bits.join("\n");
 
   const grokMeta = document.querySelector("#grok-meta");
-  document.querySelector("#takeover-grok").checked = !!state.takeover_grok;
   grokMeta.textContent = state.takeover_grok ? (state.proxy && state.proxy.effective ? t("grokOn") : t("grokNoProxy")) : t("grokOff");
   grokMeta.title = grokMeta.textContent;
   const codexMeta = document.querySelector("#codex-meta");
-  document.querySelector("#takeover-codex").checked = !!state.takeover_codex;
   codexMeta.textContent = state.takeover_codex ? (state.proxy && state.proxy.effective ? t("codexOn") : t("codexNoProxy")) : t("codexOff");
   codexMeta.title = codexMeta.textContent;
+}
+
+function render(state) {
+  lastState = state;
+  stateSeq++;
+  hoverTip.hidden = true;
+  tipAnchor = null;
+  document.querySelector("#takeover-cursor").checked = !!state.takeover;
+  document.querySelector("#takeover-grok").checked = !!state.takeover_grok;
+  document.querySelector("#takeover-codex").checked = !!state.takeover_codex;
+  renderMetas(state);
 
   document.querySelector("#proxy-on").checked = !!state.proxy.enabled;
   const address = document.querySelector("#proxy-address");
@@ -1245,6 +1270,7 @@ function render(state) {
   document.querySelector("#notify").checked = desk.notify !== false;
 
   renderStatus();
+  schedulePoll();
 
   const box = document.querySelector("#models");
   box.replaceChildren();
@@ -1340,7 +1366,38 @@ async function load() {
   } catch (err) {
     showError(err.message);
   }
+  schedulePoll();
 }
+
+// —— 状态轮询 ——
+// 状态不是读一次就算数：接管正在建立、热交接刚完成、后台暂时连不上时，页面会短间隔追问，直到有定论就停下，
+// 之后慢速刷新（隧道、模型目录提示这类会在运行中变化的东西）。轮询只刷新状态条和说明行，不重绘表单和模型列表。
+let stateTimer = null;
+let stateSeq = 0;       // render() 的次数：轮询回来时若已有更新的渲染（用户刚操作过），丢弃旧结果
+let linkLostSince = 0;  // 第一次连不上后台的时刻；0 表示连得上
+function schedulePoll() {
+  clearTimeout(stateTimer);
+  const fast = needsFastPoll(lastState, linkStatus(linkLostSince, Date.now()));
+  stateTimer = setTimeout(pollState, fast ? 800 : (document.hidden ? 30000 : 8000));
+}
+async function pollState() {
+  const seq = stateSeq;
+  try {
+    const next = await send("/api/state");
+    linkLostSince = 0;
+    if (seq === stateSeq) {
+      lastState = next;
+      renderMetas(next);
+    }
+    renderStatus();
+  } catch (_) {
+    // 交接空窗、后台重启：不是错误，先显示「正在重新连接」，很久连不上才标红。
+    if (!linkLostSince) linkLostSince = Date.now();
+    renderStatus();
+  }
+  schedulePoll();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && lastState) pollState(); });
 
 document.querySelector("#lang").addEventListener("click", () => {
   lang = lang === "zh" ? "en" : "zh";
@@ -1556,7 +1613,6 @@ document.addEventListener("mouseout", (event) => {
 // —— 标签页与状态条 ——
 // 当前标签记在 URL hash（#models / #network / #update / #general）：刷新、热交接后的自动刷新、托盘直达都停在同一个标签。
 const TABS = ["models", "network", "general", "update"];
-const TUN_STARTING = 1, TUN_ON = 2, TUN_FAILED = 3; // 与 internal/tunnel.State 一致
 const tabButtons = [...document.querySelectorAll('.tabs [role="tab"]')];
 let upMissing = false; // 后端没有更新器（/api/update 不可用）：隐藏「更新」标签
 function tabFromHash() {
@@ -1600,45 +1656,100 @@ function setDot(tab, kind) {
   const dot = document.querySelector("#tab-" + tab + " .tab-dot");
   dot.className = "tab-dot" + (kind ? " " + kind : "");
 }
-// 各标签要不要亮点：bad 是出了问题，warn 是值得看一眼（有新版本）。
-function networkProblem(state) {
-  if (!state) return false;
-  const proxy = state.proxy || {};
-  return !!tr(state.last_error) || !!tr(state.catalog_warning)
-    || (state.takeover && !state.takeover_active)
-    || (proxy.enabled && !proxy.effective)
-    || (state.tunnel && state.tunnel.status === TUN_FAILED);
+// <state-logic>
+// 状态判定的纯逻辑（Go 测试用 node 单独跑这一段，见 page_state_test.go）。
+// 原则：还没定论的状态不能显示成错误。红色只给明确的失败；还在建立、切换、重连中的显示中性的过程文字，页面继续追问后台，直到定论。
+const TUN_STARTING = 1, TUN_ON = 2, TUN_FAILED = 3; // 与 internal/tunnel.State 一致
+const upTrust = ["sig_missing", "sig_invalid", "key_unknown", "expired", "rollback", "bad_manifest", "checksum"];
+const upApplying = ["downloading", "verifying", "preflight", "waiting_idle", "handover"];
+const LINK_GRACE_MS = 60000; // 连不上后台：这段时间内是「正在重新连接」，超过才算断开
+// 接管三态：后台给 takeover_state（off / pending / active / error）；缺这个字段时按旧字段推，且不把「没生效」直接当错误。
+function takeStatus(state) {
+  if (!state) return {kind: "pending", reason: "loading"};
+  const kind = state.takeover_state
+    || (tr(state.last_error) ? "error" : state.takeover_active ? "active" : state.takeover ? "pending" : "off");
+  return {kind, reason: state.takeover_reason || ""};
 }
+// 和后台的连接：ok / pending（刚断，正在重试）/ lost（断了很久）。
+function linkStatus(lostSince, now) {
+  if (!lostSince) return "ok";
+  return now - lostSince < LINK_GRACE_MS ? "pending" : "lost";
+}
+// 代理：ok / direct（没开）/ pending（开了但接管还没定论，先不判）/ bad（开了仍没生效）。
+function proxyStatus(state, take) {
+  const proxy = state.proxy || {};
+  if (proxy.effective) return "ok";
+  if (!proxy.enabled) return "direct";
+  return take.kind === "pending" ? "pending" : "bad";
+}
+// 网络标签的小点：bad 只给明确的问题，pending 是还没定论（中性），"" 是没事。
+function networkLevel(state, link) {
+  if (!state) return link === "lost" ? "bad" : "";
+  const take = takeStatus(state);
+  const proxy = proxyStatus(state, take);
+  const tun = state.tunnel && state.tunnel.status;
+  if (link === "lost" || take.kind === "error" || tr(state.catalog_warning) || proxy === "bad" || tun === TUN_FAILED) return "bad";
+  if (link === "pending" || take.kind === "pending" || proxy === "pending" || tun === TUN_STARTING) return "pending";
+  return "";
+}
+// 页面是否还要用短间隔追问后台（定论后停止，改慢速刷新）。
+function needsFastPoll(state, link) {
+  if (!state || link !== "ok") return true;
+  return networkLevel(state, link) === "pending";
+}
+// 更新标签 / 徽标：bad 只给明确的失败；更新进行中是中性的 pending；有新版本是提示色 warn。
 function updateLevel(st) {
   if (!st) return "";
   if (st.error_code === "no_key") return "warn";
   if (st.error && (st.state === "failed" || upTrust.includes(st.error_code))) return st.latest || upTrust.includes(st.error_code) ? "bad" : "";
   if ((st.sources || []).some(s => upTrust.includes(s.code))) return "bad";
-  if (st.state === "available" || upApplying.includes(st.state) || st.state === "done") return "warn";
+  if (upApplying.includes(st.state) || st.state === "done") return "pending";
+  if (st.state === "available") return "warn";
   return "";
+}
+// </state-logic>
+// 接管状态的过程文字 / 失败原因文字（没有就返回空串）。
+function takeText(take) {
+  if (take.kind === "pending") {
+    return take.reason === "handover" ? t("stTakeSwitch") : take.reason === "settling" ? t("stTakeSettle") : take.reason === "loading" ? t("stLoading") : t("stTakePending");
+  }
+  if (take.kind === "error") return take.reason === "timeout" ? t("takeTimeout") : take.reason === "not_active" ? t("takeNotActive") : "";
+  return "";
+}
+// 状态条第一项：{kind, text}。连接断开也在这里表达：刚断是中性的「重新连接」，断很久才红。
+function takeDisplay(state, link) {
+  const take = takeStatus(state);
+  const updating = upLast && (upApplying.includes(upLast.state) || upLast.state === "done");
+  if (state && link === "lost") return {kind: "error", text: t("stLinkLost")};
+  if (state && link === "pending") return {kind: "pending", text: updating || take.reason === "handover" ? t("stTakeSwitch") : t("stLinkWait")};
+  if (!state) return {kind: "pending", text: link === "lost" ? t("stLinkLost") : t("stLoading")};
+  if (take.kind === "pending") return {kind: "pending", text: takeText(take)};
+  if (take.kind === "error") return {kind: "error", text: t("stTakeBad")};
+  if (take.kind === "active") return {kind: "active", text: t("stTakeOn")};
+  return {kind: "off", text: t("stTakeOff")};
 }
 function renderStatus() {
   const state = lastState;
   const st = upLast;
+  const link = linkStatus(linkLostSince, Date.now());
   const ver = document.querySelector("#st-ver");
   ver.textContent = upCurrent || "";
   document.querySelector("#st-version").title = upCurrent ? t("stVersion", {v: upCurrent}) : "";
+  const shown = takeDisplay(state, link);
+  const take = document.querySelector("#listen");
+  document.querySelector("#live-dot").className = "dot" + ({active: " on", error: " bad", pending: " pending"}[shown.kind] || "");
+  document.querySelector("#st-take").textContent = shown.text;
+  take.classList.toggle("bad", shown.kind === "error");
+  take.title = link !== "ok" ? t("linkLostTip") : state ? [state.takeover_active ? t("liveOn") : t("liveOff"), state.takeover_active && state.mitm_url ? t("mitm", {url: state.mitm_url}) : "", takeText(takeStatus(state)), tr(state.last_error)].filter(Boolean).join("\n") : "";
   if (state) {
-    const take = document.querySelector("#listen");
-    const takeBad = !!tr(state.last_error) || (state.takeover && !state.takeover_active);
-    document.querySelector("#live-dot").className = "dot" + (takeBad ? " bad" : state.takeover_active ? " on" : "");
-    document.querySelector("#st-take").textContent = takeBad ? t("stTakeBad") : state.takeover_active ? t("stTakeOn") : t("stTakeOff");
-    take.classList.toggle("bad", takeBad);
-    take.title = [state.takeover_active ? t("liveOn") : t("liveOff"), state.takeover_active && state.mitm_url ? t("mitm", {url: state.mitm_url}) : "", tr(state.last_error)].filter(Boolean).join("\n");
-
     const proxy = state.proxy || {};
+    const ps = proxyStatus(state, takeStatus(state));
     const pv = document.querySelector("#st-proxy-v");
-    const proxyBad = proxy.enabled && !proxy.effective;
     pv.className = proxy.effective ? "mono" : "";
     pv.textContent = proxy.effective ? (proxy.address || "") + (proxy.scope !== "global" ? " · " + t("stOfficial") : "")
-      : proxyBad ? t("stProxyBad") : t("stDirect");
+      : ps === "pending" ? t("stProxyChecking") : ps === "bad" ? t("stProxyBad") : t("stDirect");
     const pnode = document.querySelector("#st-proxy");
-    pnode.classList.toggle("bad", proxyBad);
+    pnode.classList.toggle("bad", ps === "bad");
     pnode.title = proxy.effective ? t(proxy.scope !== "global" ? "proxyOnOfficial" : "proxyOn") : t("proxyOff");
 
     const tun = (state.tunnel && state.tunnel.status) || 0;
@@ -1648,7 +1759,7 @@ function renderStatus() {
     document.querySelector("#st-tun-v").textContent = tun === TUN_ON ? t("stTunOn") : tun === TUN_FAILED ? t("stTunFailed") : t("stTunStarting");
     tnode.title = tr(state.tunnel && state.tunnel.detail);
 
-    setDot("network", networkProblem(state) ? "bad" : "");
+    setDot("network", networkLevel(state, link));
     setDot("models", (state.models || []).some(m => m.last_test && !m.last_test.ok) ? "bad" : "");
     const bootBad = state.autostart && state.autostart.mode === "run-key"; // 登录任务没写进去，退回了启动项
     setDot("general", bootBad ? "warn" : "");
@@ -1666,7 +1777,7 @@ function renderStatus() {
   }
   pill.hidden = !text || upMissing;
   pill.textContent = text;
-  pill.className = "pill" + (level === "bad" ? " bad" : "");
+  pill.className = "pill" + (level === "bad" ? " bad" : level === "pending" ? " pending" : "");
 }
 
 // —— 悬停提示 ——
@@ -1722,10 +1833,8 @@ let upNoStream = false;
 let upLast = null;      // 最近一条快照
 let upCurrent = "";     // 本页面连着的进程版本；变了说明已经交接到新进程
 let upApplied = null;   // 最近一次更新过程里的最后一条快照，失败时用来把进度条停在出错的阶段
-const upTrust = ["sig_missing", "sig_invalid", "key_unknown", "expired", "rollback", "bad_manifest", "checksum"];
 const upNames = {github: "GitHub", gitee: "Gitee"};
 const upName = n => upNames[n] || n;
-const upApplying = ["downloading", "verifying", "preflight", "waiting_idle", "handover"];
 const upStepKeys = ["upStepSign", "upStepDownload", "upStepVerify", "upStepPreflight", "upStepHandover"];
 const upStepOf = {downloading: 1, verifying: 2, preflight: 3, waiting_idle: 4, handover: 4, done: 5};
 function upReason(code, error) {
@@ -1914,16 +2023,21 @@ try {
 applyLang();
 load();
 // 每次 cursor-inner 启动只自动检查一次（后端去重）；页面只是触发与展示。
-send("/api/update").then(st => {
-  if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true);
-  upStream();
-}).catch(() => {
-  // 没有更新器（例如预览后端）：藏起「更新」标签，版本号从 /api/version 拿。
-  upMissing = true;
-  document.querySelector("#tab-update").hidden = true;
-  if (location.hash === "#update") selectTab("models");
-  send("/api/version").then(v => { if (v.version && !upCurrent) { upCurrent = v.version; renderStatus(); } }).catch(() => {});
-});
+function initUpdate(tries) {
+  send("/api/update").then(st => {
+    if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true);
+    upStream();
+  }).catch((err) => {
+    // 只有后台明确说没有更新器（404，例如预览后端）才藏起「更新」标签；
+    // 连不上、5xx 多半是热交接刚完成、后台还没就绪：稍后重试，别把标签永久藏掉。
+    if (err.status !== 404 && tries < 30) { setTimeout(() => initUpdate(tries + 1), 1000); return; }
+    upMissing = true;
+    document.querySelector("#tab-update").hidden = true;
+    if (location.hash === "#update") selectTab("models");
+    send("/api/version").then(v => { if (v.version && !upCurrent) { upCurrent = v.version; renderStatus(); } }).catch(() => {});
+  });
+}
+initUpdate(0);
 </script>
 </body>
 </html>

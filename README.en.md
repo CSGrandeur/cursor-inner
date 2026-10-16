@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.16`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.17`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -114,7 +114,7 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 
 The settings page has four tabs: **Models**, **Network**, **General** and **Update**. A URL ending in `#models`, `#network`, `#general` or `#update` opens that tab.
 
-- **Models**: Cursor only. Add and test. A test records speed and probes tools, reasoning, images and cache. Context window, max output, reasoning, Fast, cache key and fallback can be left empty. A fallback model is used before any text has been shown, when authentication fails or the endpoint is rate-limited.
+- **Models**: Cursor only. Add and test. A test records speed and probes tools, reasoning, images and cache. Context window, max output, Max images, Image total (MB), reasoning, Fast, cache key and fallback can be left empty. Images are shrunk when read (long edge 1568 px, about 256 KB); when a request carries more images than the limits (default 20 images, 24 MB), the oldest tool images are left out in batches and the newest few are always kept. A fallback model is used before any text has been shown, when authentication fails or the endpoint is rate-limited.
 - **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, TUN mode and Strict mode. An empty proxy means a direct connection. A bare `host:port` is detected as socks5 or http. Adds proxy launch args to Codex; never starts it. That process sends its traffic through the proxy above.
 - **Update**: the buttons are Check for updates and Update. Only signed releases are installed. Cursor and Grok keep running; a version that fails its check leaves the current one in place.
 - **General**: image generation and start at login. On Windows there is also **Run in background** (No console window at startup; notification-area icon only.) and **Notifications** (System notifications for update results and leak warnings.). To let Agent generate images, fill in an OpenAI-compatible endpoint under Images.
@@ -220,7 +220,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.16 ./build.sh linux
+VERSION=v0.5.17 ./build.sh linux
 ```
 
 ## Acknowledgements

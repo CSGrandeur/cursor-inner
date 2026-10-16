@@ -184,6 +184,8 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 			Fast            *bool   `json:"fast"`
 			ContextWindow   *int    `json:"context_window"`
 			MaxOutputTokens *int    `json:"max_output_tokens"`
+			MaxImages       *int    `json:"max_images"`
+			ImageBudgetMB   *int    `json:"image_budget_mb"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -205,6 +207,12 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 			}
 			if body.MaxOutputTokens != nil {
 				model.MaxOutputTokens = *body.MaxOutputTokens
+			}
+			if body.MaxImages != nil {
+				model.MaxImages = *body.MaxImages
+			}
+			if body.ImageBudgetMB != nil {
+				model.ImageBudgetMB = *body.ImageBudgetMB
 			}
 			if err := backend.UpdateModel(r.PathValue("id"), model); err != nil {
 				status := http.StatusBadRequest

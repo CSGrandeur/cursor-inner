@@ -136,11 +136,13 @@ func actionText(action *cursorpb.ConversationAction) string {
 		}
 	}
 	if tasks := action.GetBackgroundTaskCompletionAction(); tasks != nil {
+		return completionText(tasks.GetCompletions(), true)
+	}
+	if subs := action.GetSubscriptionNotificationAction(); subs != nil {
 		var lines []string
-		for _, item := range tasks.GetCompletions() {
-			line := strings.TrimSpace(item.GetTitle() + " " + item.GetDetail())
-			if line != "" {
-				lines = append(lines, line)
+		for _, n := range subs.GetNotifications() {
+			if text := strings.TrimSpace(n.GetText()); text != "" {
+				lines = append(lines, text)
 			}
 		}
 		return strings.Join(lines, "\n")

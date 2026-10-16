@@ -208,6 +208,9 @@ func Main(version string) {
 	}, agent.NewHistory(dir))
 	life := takeover.New(dir, proxy)
 	application := app.New(store, life, autostart.New(), executable())
+	if succ != nil {
+		application.SetTakeoverPhase(takeover.PhaseHandover) // 接入中：接管没接上之前是「正在切换」，不是故障
+	}
 	if opt.debug {
 		application.Isolate()
 	}
@@ -367,6 +370,7 @@ func Main(version string) {
 			log.Printf("已从 %s 接过接管 %s，Cursor 与 Grok 无需重启", succ.Plan.FromVersion, life.Snapshot().URL)
 		}
 	} else if noTakeover {
+		application.SetTakeoverSkipped(true)
 		log.Printf("已跳过接管，Cursor 不会被结束")
 	} else if cfg.Takeover {
 		if err := application.EnableTakeover(); err != nil {
@@ -384,6 +388,8 @@ func Main(version string) {
 	} else if life.ClearStale() {
 		log.Printf("已清除上次留下的接管设置，并结束 Cursor")
 	}
+	// 启动 / 交接流程走完：从这里起接管没生效才算「真的没生效」（见 takeover.Tracker）。
+	application.SetTakeoverPhase(takeover.PhaseSettled)
 	if _, _, err := dialer.EffectiveAddress(cfg.Proxy); err != nil {
 		slog.Error(fmt.Sprintf("代理地址无效：%v", err))
 	}

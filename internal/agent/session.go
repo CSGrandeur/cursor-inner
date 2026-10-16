@@ -418,9 +418,11 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		}
 	}()
 
-	action := s.run.GetAction().GetUserMessageAction()
-	reqCtx := action.GetRequestContext()
-	if reqCtx.GetEnv() == nil && action != nil {
+	plan := planTurn(s.run.GetAction())
+	reqCtx := plan.ctx
+	if reqCtx.GetEnv() == nil && plan.needsModel() {
+		// 会调用模型的动作都需要和用户消息一样的运行环境，否则模式、工具和 MCP 都会缺。
+		// 只做摘要或本来就不调用模型的动作不需要。
 		if fetched, err := s.requestContext(ctx, send); err == nil {
 			reqCtx = fetched
 		} else {
@@ -434,12 +436,9 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	} else if restored != nil {
 		messages = restored
 	}
-	summarizeOnly := s.run.GetAction().GetSummarizeAction() != nil
-	user := action.GetUserMessage()
-	if !summarizeOnly && user != nil {
-		messages = prependUsers(messages, action.GetPrependUserMessages())
-		messages = append(messages, userTurn(user, reqCtx))
-	}
+	summarizeOnly := plan.summarize
+	user := plan.user
+	messages, skipReason := plan.apply(messages, reqCtx)
 	s.reqCtx = reqCtx
 	s.terminals = reqCtx.GetEnv().GetTerminalsFolder()
 	s.workspaces = append([]string{}, reqCtx.GetEnv().GetWorkspacePaths()...)
@@ -450,7 +449,7 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	}
 	s.mcp = tools.MCPDefs(reqCtx)
 	slog.Debug("mcp 工具", "count", len(s.mcp))
-	mode := user.GetMode()
+	mode := plan.mode
 	system := systemPrompt(s.Model.DisplayName, reqCtx) + mcpNote(s.mcp) + modeNote(mode, reqCtx) + s.roleNote() + familyNote(s.Model)
 	model := s.Model
 	if model.LastTest != nil && model.LastTest.Capabilities != nil && model.LastTest.Capabilities.TextToolMode {
@@ -472,6 +471,11 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	}
 	short := conversationID(s.run.GetConversationId())
 	slog.Info("▶ "+name, "conversation", short, "turn", userTurns(messages), "window", model.ContextWindow)
+	newTurnDiag(s.run, reqCtx, len(s.mcp), len(catalog), messages).log()
+	if skipReason != "" {
+		slog.Info("turn_skip 本次不调用模型", "conversation", short, "action", plan.kind, "reason", skipReason)
+		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
+	}
 	runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "start", Messages: userTurns(messages)})
 	defer func() {
 		seconds := time.Since(turnStarted).Round(time.Millisecond).Seconds()
@@ -529,6 +533,7 @@ next:
 		var thought atomic.Bool
 		started := time.Now()
 		messages = compactMessages(messages, model.ContextWindow)
+		messages = provider.EvictImages(messages, model)
 		if !s.autoSummarized && overBudget(messages, model.ContextWindow) {
 			s.autoSummarized = true
 			slog.Debug("自动压缩", "conversation", short, "window", model.ContextWindow)

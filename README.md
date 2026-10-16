@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.16`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.17`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -114,7 +114,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
 
-- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存。上下文窗口、最大输出、推理、Fast、缓存键和备用模型都可以留空。备用模型在还没输出文字时，用于鉴权失败或限流。
+- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型在还没输出文字时，用于鉴权失败或限流。
 - **网络**：代理地址、代理范围（「全局」或「仅官方」）、接管 Cursor、接管 Grok、接管 Codex、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
 - **更新**：按钮是「检查更新」和「更新」。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
 - **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容接口。
@@ -220,7 +220,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.16 ./build.sh linux
+VERSION=v0.5.17 ./build.sh linux
 ```
 
 ## 致谢

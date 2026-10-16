@@ -45,6 +45,8 @@ type App struct {
 	upd         *selfupdate.Updater
 	frozen      atomic.Bool
 	isolated    atomic.Bool
+	trackOnce   sync.Once
+	track       *takeover.Tracker
 
 	trayApply func(config.Desktop) // 托盘挂上后才有，见 SetTray
 }
@@ -73,6 +75,22 @@ func New(store *config.Store, life *takeover.Service, boot starter, exe string) 
 	return &App{store: store, life: life, boot: boot, exe: exe,
 		tun: tunnel.NewManager(filepath.Join(config.DefaultDir(), "tun"))}
 }
+
+// tracker 是接管三态的判定器（见 takeover.Tracker）；没有显式创建时按默认参数惰性创建。
+func (a *App) tracker() *takeover.Tracker {
+	a.trackOnce.Do(func() {
+		if a.track == nil {
+			a.track = takeover.NewTracker(nil)
+		}
+	})
+	return a.track
+}
+
+// SetTakeoverPhase 由启动流程和热交接设置：配置页据此区分「还在建立」和「真的没生效」。
+func (a *App) SetTakeoverPhase(p takeover.Phase) { a.tracker().SetPhase(p) }
+
+// SetTakeoverSkipped 记录这次启动用 --no-takeover 明确跳过了接管。
+func (a *App) SetTakeoverSkipped(v bool) { a.tracker().SetSkipped(v) }
 
 func (a *App) SetListen(url string) {
 	a.mu.Lock()
@@ -160,6 +178,9 @@ func (a *App) State() (web.View, error) {
 		view.LastError = a.bootErr
 	}
 	a.mu.Unlock()
+	st := a.tracker().Judge(cfg.Takeover, snap.Active, !view.LastError.IsZero())
+	view.TakeoverState, view.TakeoverReason = st.State, st.Reason
+	view.TakeoverSince = st.Since.UTC().Format(time.RFC3339)
 	tstate, tdetail := a.tun.Status()
 	view.Tunnel.Status = int(tstate)
 	view.Tunnel.Detail = tdetail
@@ -175,6 +196,8 @@ func (a *App) State() (web.View, error) {
 			Fast:            model.FastSupport,
 			ContextWindow:   model.ContextWindow,
 			MaxOutputTokens: model.MaxOutputTokens,
+			MaxImages:       model.MaxImages,
+			ImageBudgetMB:   model.ImageBudgetMB,
 			PromptCacheKey:  model.PromptCacheKey,
 			Fallback:        append([]string(nil), model.Fallback...),
 			KeyHint:         model.KeyHint(),
@@ -310,6 +333,9 @@ func (a *App) AddModel(model config.Model) error {
 func (a *App) UpdateModel(id string, model config.Model) error {
 	if model.ContextWindow < 0 || model.MaxOutputTokens < 0 {
 		return i18n.E("token 数不能为负", "Token counts cannot be negative")
+	}
+	if model.MaxImages < 0 || model.ImageBudgetMB < 0 {
+		return i18n.E("图片上限不能为负", "Image limits cannot be negative")
 	}
 	return a.store.Update(func(f *config.File) error {
 		for i := range f.Models {

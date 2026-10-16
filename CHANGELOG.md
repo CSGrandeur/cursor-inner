@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.17] - 2026-10-16
+
+### Added
+
+- Each custom model has two more optional limits on the settings page: max images per request and total image size (MB). Defaults are 20 images and 24 MB.
+
+### Changed
+
+- Images the model reads are shrunk on the way in (long edge 1568 px, about 256 KB) instead of being sent at full size with every later request. An image that cannot be shrunk is replaced by a short note.
+- When a request goes over the image limits, the oldest images returned by tools are replaced by a short note in batches of 8; the newest 3 are always kept, and images you pasted yourself are never removed. Removing in batches keeps the start of the request stable between batches, so the prompt cache keeps working.
+- The status bar and tab dots on the settings page no longer show a state that is still being worked out as an error. Takeover now has three states: in progress (starting up, handing over to a new version, confirming), active, and failed. In progress shows a muted hollow dot and plain text such as "Taking over…" or "Switching to the new version…", with no red; red is only for a definite failure (an error was reported, or takeover is still not in place after a short grace period or timeout). The same rule applies to the network tab dot, the proxy status and the update badge (an update in progress is neutral).
+- The settings page keeps asking the backend while something is undetermined (every ~0.8 s) and stops once it is settled; afterwards it refreshes slowly so a change that happens later (TUN, catalog notes) shows up without reloading. If the backend is briefly unreachable (a handover) it shows "Reconnecting…" and only turns red after a minute.
+
+### Fixed
+
+- A long conversation with many images could make the model reply with nothing and fail with "模型没有返回内容" after a retry, every time. The identical request is no longer sent again; instead the oldest batch of images is left out and the request is tried once more. If it still comes back empty, the message now says "上游空回复，可能上下文过大，已尝试压缩". An empty reply is also logged with its finish reason, token usage and the first 4 KB of what the server sent (never the API key or the request).
+- Custom models no longer fail with "模型没有返回内容" after a background task finishes or when Cursor resumes a conversation that had already finished. Finished background shells and subagents are now passed to the model with their status, title, output file and details. A resume only continues work that was actually left unfinished; otherwise the turn ends quietly. Plans, notifications and question answers are passed on as input as well.
+- These turns now get the same workspace, rules and MCP tools as a normal message instead of only the built-in tools.
+- Each custom-model turn now logs one `turn_action` line: which kind of request Cursor sent, whether it had a user message, the mode, whether the run environment and MCP tools were present, the message count and the last message's role, and why the mode or tools fell back to defaults. Only field names, counts, ids and lengths are logged, never what you typed or any keys.
+- Right after a self-update hot handover the settings page could show a red "Takeover problem" and a red dot on the network tab until it was reloaded. The page reloads as soon as it sees the new version and used to read the status exactly once, sometimes before the new process had taken over; it now shows "Taking over…" and settles by itself.
+- If the backend was not ready for a moment when the settings page loaded (for example right after a handover), the Update tab could be hidden for good. It is now hidden only when the backend says there is no updater.
+
 ## [0.5.16] - 2026-10-15
 
 ### Added
@@ -392,7 +414,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...HEAD
+[0.5.17]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...v0.5.17
 [0.5.16]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...v0.5.16
 [0.5.15]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.14...v0.5.15
 [0.5.14]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.13...v0.5.14
