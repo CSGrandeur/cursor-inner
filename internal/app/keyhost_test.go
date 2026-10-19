@@ -32,7 +32,7 @@ func TestStoredKeyNeverSentToNewHost(t *testing.T) {
 	if err := application.UpdateModel(id, config.Model{DisplayName: "Mine", Type: "openai-chat", BaseURL: evil.URL + "/v1", Model: "m"}); err == nil {
 		t.Fatal("moved the stored key to another host")
 	}
-	res := application.TestDraft(config.Model{ID: id, DisplayName: "Mine", Type: "openai-chat", BaseURL: evil.URL + "/v1", Model: "m"})
+	res := application.TestDraft(config.Model{ID: id, DisplayName: "Mine", Type: "openai-chat", BaseURL: evil.URL + "/v1", Model: "m"}, nil)
 	if res.OK || sawKey.Load() {
 		t.Fatalf("draft test sent the stored key to a new host: %+v", res)
 	}

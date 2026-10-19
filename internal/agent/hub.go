@@ -82,13 +82,21 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 	switch m := msg.GetMessage().(type) {
 	case *cursorpb.AgentClientMessage_RunRequest:
 		route.ModelID = modelID(m.RunRequest)
-		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
-		if s.session == nil && route.ModelID != "" && h.lookup != nil {
-			// 同一条 run 的 resume（回合结束后约 90 秒客户端会重发）：接到已经答完的会话上，
-			// 不再新建会话调一次模型。新建会得到不同的输出，把用户已经看到的思考和回答覆盖掉。
+		// 同一条 run 的 resume（回合结束后约 90 秒客户端会重发）：接到已经答完的会话上，
+		// 不再新建会话调一次模型。新建会得到不同的输出，把用户已经看到的思考和回答覆盖掉。
+		// 这一条不能要求 run request 里带模型：resume 的请求常常不带 requested_model，
+		// 按模型判归属会把它当成官方的 run 交给官方，客户端只能报 Error resuming chat。
+		if s.session == nil {
 			if f := h.finished[requestID]; f != nil {
 				s.session = f.session
-			} else if model, ok := h.lookup(route.ModelID); ok {
+				// resume 可能带着新的动作（继续运行、后台任务完成）。沿用旧动作会把上一轮的
+				// 用户消息再插一遍，接着跑的那一轮就多了一条重复的输入。
+				s.session.adopt(m.RunRequest)
+			}
+		}
+		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
+		if s.session == nil && route.ModelID != "" && h.lookup != nil {
+			if model, ok := h.lookup(route.ModelID); ok {
 				s.session = newSession(requestID, model, m.RunRequest, h.history)
 				for _, id := range model.Fallback {
 					if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
@@ -117,6 +125,14 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				if other := h.slots[id]; other != nil {
 					session = other.session
 				}
+			}
+		}
+		if session == nil {
+			// 后台任务完成、订阅通知这类动作会送到已经答完的 run 上（客户端认为这条 run 还活着），
+			// 不会另起一条 run。不认识它就只剩两条路：交给官方（自定义模型会拿到 401），
+			// 或在本地丢掉，客户端都会报 Error resuming chat。留到下一次 resume 时接着处理。
+			if f := h.finished[requestID]; f != nil {
+				session = f.session
 			}
 		}
 		if session != nil {

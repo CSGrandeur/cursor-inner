@@ -77,6 +77,13 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 	if len(messages) == 0 {
 		return Message{}, i18n.E("没有用户消息", "No user message")
 	}
+	tools = uniqueTools(tools)
+	// 这个端点+模型已经拒绝过这一档 reasoning_effort，就直接不发，省掉每轮一次 400。
+	if m.Effort != "" {
+		if rejected, ok := effortMem.Load(effortKey(m)); ok && rejected.(bool) {
+			m.Effort = ""
+		}
+	}
 	var last error
 	started := time.Now()
 	useText := TextToolActive(m) // 端点不支持原生工具时，把工具规格写进系统提示，由救援解析读回
@@ -131,6 +138,15 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 		}
 		last = err
 		noteModel(ctx, modelError(attempt, time.Since(started), err))
+		// 端点拒绝 Cursor 传来的 reasoning_effort 档位（闭集里没有这一档）时，去掉字段重试一次，
+		// 由端点用自己的默认档。只认错误里明确点名 reasoning_effort 的 400。
+		if !emitted && m.Effort != "" && wantsEffortFallback(err) {
+			effortMem.Store(effortKey(m), true)
+			m.Effort = ""
+			noteModel(ctx, runlog.Note{Kind: "model_reasoning_effort_dropped", Attempt: attempt, Error: Explain(err)})
+			immediate = true
+			continue
+		}
 		// vLLM 没配工具解析器时，带 tools 会被 400 拒绝（报 enable-auto-tool-choice / tool-call-parser）。
 		// 记下该端点+模型，改走文本工具协议，并立刻重试一次（不计退避）。
 		if !useText && len(tools) > 0 && !emitted && wantsTextToolMode(err) {
@@ -166,6 +182,37 @@ func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, 
 
 // textToolMem 记住哪些端点+模型不支持原生工具（本进程内）。键为 baseURL|model。
 var textToolMem sync.Map
+
+// effortMem 记住哪些端点+模型拒绝过哪一档 reasoning_effort（本进程内）。键为 baseURL|model|effort。
+var effortMem sync.Map
+
+func effortKey(m config.Model) string {
+	return textToolKey(m) + "|" + strings.ToLower(strings.TrimSpace(m.Effort))
+}
+
+// uniqueTools 按名字去重，保留第一次出现的定义。有的端点遇到重名工具直接 400
+// （DeepSeek 官方：Tool names must be unique）。工具表本身已经保证唯一，这里再兜一层。
+func uniqueTools(tools []Tool) []Tool {
+	if len(tools) < 2 {
+		return tools
+	}
+	seen := make(map[string]bool, len(tools))
+	out := make([]Tool, 0, len(tools))
+	var dropped []string
+	for _, tool := range tools {
+		key := strings.ToLower(strings.TrimSpace(tool.Name))
+		if key == "" || seen[key] {
+			dropped = append(dropped, tool.Name)
+			continue
+		}
+		seen[key] = true
+		out = append(out, tool)
+	}
+	if len(dropped) > 0 {
+		slog.Warn("tools_duplicate 工具重名，已丢弃重复定义", "dropped", strings.Join(dropped, ","), "kept", len(out))
+	}
+	return out
+}
 
 func textToolKey(m config.Model) string {
 	return strings.ToLower(strings.TrimSpace(m.BaseURL)) + "|" + strings.ToLower(strings.TrimSpace(m.Model))
@@ -259,8 +306,13 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		return Message{}, transportError(err)
 	}
 	defer resp.Body.Close()
+	idle, dataIdle := streamIdle, streamDataIdle
+	if DetectFamily(m) == FamilyDeepSeek && idle < deepseekStreamIdle {
+		// DeepSeek V4 的思考（effort=max、1M 上下文）可能几分钟没有新数据，参考实现给到 5 分钟。
+		idle, dataIdle = deepseekStreamIdle, deepseekStreamIdle
+	}
 	raw := &headBuffer{max: emptyRawHead}
-	reader := bufio.NewReaderSize(io.TeeReader(&idleReader{r: resp.Body, idle: streamIdle}, raw), 64*1024)
+	reader := bufio.NewReaderSize(io.TeeReader(&idleReader{r: resp.Body, idle: idle}, raw), 64*1024)
 	empty := func(finish string, msg Message) error {
 		return emptyReply(m, messages, reqBytes, finish, msg, raw.Bytes())
 	}
@@ -300,7 +352,7 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		line := strings.TrimSpace(sc.Text())
 		if !strings.HasPrefix(line, "data:") {
 			skipped++
-			if waited := time.Since(lastData); waited >= streamDataIdle {
+			if waited := time.Since(lastData); waited >= dataIdle {
 				slog.Warn("upstream_data_idle 上游只发 keepalive、长时间没有数据帧，判定超时", "model", m.Model, "waited_s", int(waited.Seconds()), "non_data_lines", skipped)
 				return Message{}, dataIdleError()
 			}

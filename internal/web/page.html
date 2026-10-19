@@ -318,11 +318,11 @@
 
   .table-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  col.c-name { width: 146px; }
-  col.c-test { width: 118px; }
+  col.c-name { width: 132px; }
+  col.c-test { width: 108px; }
   col.c-sw { width: 76px; }
   col.c-num { width: 78px; }
-  col.c-ops { width: 232px; }
+  col.c-ops { width: 216px; }
   th {
     text-align: left; font-weight: 500; font-size: 11px; color: var(--faint);
     letter-spacing: .02em; padding: 2px 8px 6px; white-space: nowrap;
@@ -342,14 +342,70 @@
   }
   button.model-name:hover { color: var(--text); background: transparent; border-color: transparent; }
   .api { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; color: var(--muted); }
+  .api-head { display: flex; align-items: center; flex-wrap: wrap; column-gap: 6px; row-gap: 2px; max-width: 100%; min-width: 0; }
+  .api-head .tag { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .url-line { display: flex; align-items: baseline; gap: 6px; max-width: 100%; min-width: 0; }
   .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .api .hint { flex: none; color: var(--faint); }
+  /* 密钥和接口类型同一行，带「密钥」标签，不能让它看着像被截断的地址尾巴。 */
+  button.key-hint {
+    display: inline-flex; align-items: center; gap: 4px; flex: none;
+    height: auto; min-width: 0; padding: 1px 5px; border: 0; border-radius: 4px;
+    background: transparent; color: var(--muted); font-size: 11px; line-height: 1.35; cursor: pointer;
+  }
+  button.key-hint:hover { color: var(--text); background: var(--line); border-color: transparent; }
+  button.key-hint .key-label { color: var(--faint); font-weight: 400; }
+  button.key-hint:hover .key-label { color: var(--muted); }
+  button.key-hint .mono { font-size: 11px; color: inherit; }
+  /* 窄窗口里接口列只有几十像素：密钥标签会占满整列，改成只留后四位，让类型标签自己换行。 */
+  @media (max-width: 960px) {
+    button.key-hint .key-label { display: none; }
+    .api-head .tag { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; text-align: left; }
+    button.key-hint { padding: 1px 4px; }
+  }
   button.tag {
     height: auto; padding: 1px 6px; border-radius: 4px;
     font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); cursor: pointer;
   }
   button.tag:hover { color: var(--text); }
+  /* 测试进行中：按钮文字不换，宽度就不变；只在原位置转圈。进度和阶段在表下列出。 */
+  button.test-btn { position: relative; }
+  button.test-btn.testing { color: transparent; }
+  button.test-btn.testing::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -7.5px 0 0 -7.5px;
+    border: 1.5px solid var(--line-strong); border-top-color: var(--signal); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  button.test-btn.testing:disabled { opacity: 1; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .test-run {
+    display: grid; gap: 6px;
+    padding: 9px 16px 11px;
+    border-top: 1px solid var(--line);
+    background: var(--raise);
+    animation: pane-in .18s ease-out both;
+  }
+  .test-run[hidden] { display: none; }
+  .test-run-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; font-size: 12px; }
+  .test-run-title { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+  .test-run-title strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .test-run-title .spin {
+    flex: none; width: 11px; height: 11px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong); border-top-color: var(--signal);
+    animation: spin .8s linear infinite;
+  }
+  .test-run-time { flex: none; color: var(--muted); font-size: 11px; }
+  .test-steps { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: var(--faint); }
+  .test-steps li { display: inline-flex; align-items: center; gap: 5px; }
+  .test-steps li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .5; }
+  .test-steps li.now { color: var(--text); }
+  .test-steps li.now::before { background: var(--signal); opacity: 1; animation: settle 1.2s ease-in-out infinite; }
+  .test-steps li.done { color: var(--good); }
+  .test-steps li.done::before { background: var(--good); opacity: 1; }
+  .test-steps li.off { color: var(--faint); }
+  .test-steps li.off::before { opacity: .25; }
+  .test-steps li.bad { color: var(--bad); }
+  .test-steps li.bad::before { background: var(--bad); opacity: 1; }
+  .test-info { margin: 0; min-height: 17px; font-size: 12px; line-height: 1.4; color: var(--muted); }
   tbody tr.editing { background: var(--signal-soft); }
   .speed {
     display: inline-flex; align-items: center; gap: 6px;
@@ -388,6 +444,14 @@
   .secret button:hover { color: var(--text); background: transparent; }
   .secret svg { display: block; }
   .secret svg[hidden] { display: none !important; }
+  /* 浏览器自带的密码眼睛（Edge 的 ::-ms-reveal）和自动填充钥匙会和页面上的眼睛叠在一起，
+     只留页面自己的那一颗。 */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear { display: none; }
+  input[type="password"]::-webkit-credentials-auto-fill-button,
+  input[type="password"]::-webkit-contacts-auto-fill-button,
+  input[type="password"]::-webkit-strong-password-auto-fill-button,
+  input[type="password"]::-webkit-caps-lock-indicator { display: none !important; visibility: hidden; pointer-events: none; }
   .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; }
   .actions .spacer { flex: 1 1 12px; }
 
@@ -581,6 +645,15 @@
         <tbody id="models"></tbody>
       </table>
       </div>
+      <div class="test-run" id="test-run" hidden>
+        <div class="test-run-head">
+          <span class="test-run-title"><i class="spin"></i><strong id="test-run-name"></strong></span>
+          <span class="test-run-time mono" id="test-run-time">0.0 s</span>
+        </div>
+        <ol class="test-steps" id="test-run-steps"></ol>
+        <div class="uptrack"><div class="upfill" id="test-run-fill"></div></div>
+        <p class="test-info" id="test-run-info"></p>
+      </div>
       <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
 
       <form id="model-form" class="add">
@@ -625,7 +698,7 @@
           <label class="mini"><span data-i18n="imageBudget">图片总量上限（MB）</span><input name="image_budget_mb" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="defaultBudget" placeholder="默认 24"></label>
           <span class="spacer"></span>
           <button id="form-clear" type="button" data-i18n="clear">清空</button>
-          <button id="draft-test" type="button" data-i18n="test">测试</button>
+          <button id="draft-test" class="test-btn" type="button" data-i18n="test">测试</button>
           <button id="model-submit" class="primary" type="submit" data-i18n="add">添加</button>
         </div>
       </form>
@@ -809,7 +882,7 @@ const MESSAGES = {
     promptCacheKey: "缓存键", fallback: "备用模型", fallbackHint: "其它模型 id，逗号分隔",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试", colProxy: "代理", colReason: "推理", colFast: "Fast", colContext: "上下文", colMax: "最大", colOps: "操作",
     tipModel: "上面是显示名，下面是请求使用的模型名。点击模型名复制，悬停可看被截断的全名。",
-    tipEndpoint: "上面是接口类型，下面是地址。点击类型标签复制地址。",
+    tipEndpoint: "上面是接口类型和密钥，下面是地址。类型标签和密钥都可以点击复制。",
     tipLastTest: "最近一次能力探测。数字是速度，悬停可看首字、耗时、能力与返回。",
     tipProxy: "这个模型的请求是否经过页面上方的代理。",
     tipReason: "打开后，Cursor 的模型菜单里可以选择推理力度，请求会带上这个力度。",
@@ -818,15 +891,19 @@ const MESSAGES = {
     tipMax: "单次回复最多输出的 token。留空时 OpenAI 兼容接口不传上限，Anthropic 用 8192。",
     tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
-    displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥",
-    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", maxImages: "图片张数上限", imageBudget: "图片总量上限（MB）", defaultImages: "默认 20", defaultBudget: "默认 24", optional: "可选", test: "测试", testing: "测试中…", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
-    keepKey: "留空不改", copyUrl: "点击复制接口地址", copied: "已复制", copiedToForm: "已填入添加表单。密钥不会带过去，需要重新填写。",
+    displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥", keyLabel: "密钥",
+    useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", maxImages: "图片张数上限", imageBudget: "图片总量上限（MB）", defaultImages: "默认 20", defaultBudget: "默认 24", optional: "可选", test: "测试", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
+    keepKey: "留空不改", copyUrl: "点击复制接口地址", copyKey: "点击复制密钥", copied: "已复制", copiedKey: "密钥已复制", copiedToForm: "已填入添加表单，含密钥（默认隐藏）。", copiedToFormNoKey: "已填入添加表单，但没能读到密钥，请重新填写。",
     showKey: "显示密钥", hideKey: "隐藏密钥",
     notTakenOver: "这次启动没有接管。", mitm: "接管代理 {url}",
     proxyOn: "生效中：Cursor 和 Grok Bot 的联网经过这个代理。", proxyOnOfficial: "生效中：只有官方地址经过这个代理，其余直连。", proxyOff: "当前直连。",
     liveOn: "接管中", liveOff: "未接管",
     untested: "未测试", failed: "失败", testFailed: "测试失败", testFailedWith: "测试失败：{error}", unknownError: "未知错误",
     testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 能力 {caps} · 返回：{output}",
+    testRunning: "正在测试 {model}", testPreparing: "准备中…",
+    testStageTools: "工具调用", testStageReasoning: "推理", testStageImages: "图片输入", testStageCache: "缓存", testStageSpeed: "测速",
+    testInfoTools: "让模型调用一次探测工具", testInfoReasoning: "发一条要求推理的请求", testInfoImages: "带一张图片，看模型能否识别", testInfoCache: "同一前缀连发两次，看第二次是否命中缓存", testInfoSpeed: "让模型输出 1 到 120，边收边统计",
+    testInfoTokens: "已收到 {tokens} tokens · {speed} tok/s", testStreamLost: "测试没有返回结果",
     estimated: "（估算）", requestFailed: "请求失败 {status}",
     goneTitle: "cursor-inner 已退出", goneBody: "Cursor 的代理设置已还原，可以关闭这个页面。",
     capsTitle: "能力探测结果", capsClose: "关闭",
@@ -866,7 +943,7 @@ const MESSAGES = {
     promptCacheKey: "Cache key", fallback: "Fallback", fallbackHint: "Other model ids, comma-separated",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test", colProxy: "Proxy", colReason: "Reasoning", colFast: "Fast", colContext: "Context", colMax: "Max", colOps: "Actions",
     tipModel: "Display name on top, request model name below. Click the model name to copy it. Hover to read a truncated name.",
-    tipEndpoint: "Endpoint type on top, URL below. Click the type tag to copy the URL.",
+    tipEndpoint: "Endpoint type and key on top, URL below. Click the type tag or the key to copy it.",
     tipLastTest: "Latest capability probe. The number is speed. Hover for first token, duration, capabilities and reply.",
     tipProxy: "Whether this model's requests go through the proxy above.",
     tipReason: "Shows an effort picker in Cursor's model menu and sends that effort.",
@@ -875,15 +952,19 @@ const MESSAGES = {
     tipMax: "Max output tokens for one reply. Empty omits the limit for OpenAI-compatible endpoints and uses 8192 for Anthropic.",
     tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
-    displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key",
-    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", maxImages: "Max images", imageBudget: "Image total (MB)", defaultImages: "default 20", defaultBudget: "default 24", optional: "optional", test: "Test", testing: "Testing…", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
-    keepKey: "Leave blank to keep", copyUrl: "Click to copy the endpoint URL", copied: "Copied", copiedToForm: "Filled into the add form. The API key is not copied.",
+    displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key", keyLabel: "Key",
+    useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", maxImages: "Max images", imageBudget: "Image total (MB)", defaultImages: "default 20", defaultBudget: "default 24", optional: "optional", test: "Test", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
+    keepKey: "Leave blank to keep", copyUrl: "Click to copy the endpoint URL", copyKey: "Click to copy the API key", copied: "Copied", copiedKey: "API key copied", copiedToForm: "Filled into the add form, including the API key (hidden by default).", copiedToFormNoKey: "Filled into the add form, but the API key could not be read; enter it again.",
     showKey: "Show key", hideKey: "Hide key",
     notTakenOver: "Takeover is not active in this session.", mitm: "Takeover proxy {url}",
     proxyOn: "Active: Cursor and Grok Bot traffic goes through this proxy.", proxyOnOfficial: "Active: only official endpoints go through this proxy; the rest is direct.", proxyOff: "Direct connection.",
     liveOn: "Takeover active", liveOff: "Not taken over",
     untested: "Not tested", failed: "Failed", testFailed: "Test failed", testFailedWith: "Test failed: {error}", unknownError: "unknown error",
     testDetail: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated} · caps {caps} · reply: {output}",
+    testRunning: "Testing {model}", testPreparing: "Preparing…",
+    testStageTools: "Tool calls", testStageReasoning: "Reasoning", testStageImages: "Image input", testStageCache: "Cache", testStageSpeed: "Speed",
+    testInfoTools: "Asking the model to call a probe tool", testInfoReasoning: "Sending a reasoning request", testInfoImages: "Sending an image to see if the model can read it", testInfoCache: "Sending the same prefix twice to check for a cache hit", testInfoSpeed: "Streaming 1 to 120 and counting tokens",
+    testInfoTokens: "{tokens} tokens received · {speed} tok/s", testStreamLost: "The test ended without a result",
     estimated: " (estimated)", requestFailed: "Request failed {status}",
     quitConfirm: "Quit cursor-inner?\n\nCursor's proxy settings will be restored and any running Cursor will be closed. Proxy arguments added to Grok Bot are removed; if it is running, it is opened again.",
     goneTitle: "cursor-inner has quit", goneBody: "Cursor's proxy settings have been restored. You can close this page.",
@@ -1099,20 +1180,16 @@ function syncFormMode() {
 function clearForm() {
   editingId = "";
   form.reset();
-  const key = document.querySelector("#api-key");
-  key.type = "password";
-  document.querySelector("#eye-on").hidden = true;
-  document.querySelector("#eye-off").hidden = false;
-  syncReveal();
+  setKeyRevealed(false);
   syncFormMode();
 }
 
-function fillForm(model, mode) {
+function fillForm(model, mode, apiKey) {
   form.display_name.value = model.display_name || "";
   form.type.value = model.type || "openai-chat";
   form.model.value = model.model || "";
   form.base_url.value = model.base_url || "";
-  form.api_key.value = "";
+  form.api_key.value = mode === "copy" ? (apiKey || "") : "";
   form.use_proxy.checked = !!model.use_proxy;
   form.reasoning.checked = !!model.reasoning;
   form.fast.checked = !!model.fast;
@@ -1123,13 +1200,14 @@ function fillForm(model, mode) {
   form.prompt_cache_key.value = model.prompt_cache_key || "";
   form.fallback.value = (model.fallback || []).join(", ");
   editingId = mode === "edit" ? model.id : "";
+  setKeyRevealed(false);
   syncFormMode();
   if (lastState) render(lastState);
   form.scrollIntoView({block: "nearest"});
   form.display_name.focus();
 }
 
-async function copyText(text) {
+async function copyText(text, done) {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
@@ -1141,7 +1219,16 @@ async function copyText(text) {
     document.execCommand("copy");
     area.remove();
   }
-  toast(t("copied"), "ok");
+  toast(done || t("copied"), "ok");
+}
+
+async function copyModelKey(model) {
+  try {
+    const data = await send("/api/models/" + model.id + "/key");
+    await copyText(data.api_key || "", t("copiedKey"));
+  } catch (err) {
+    showError(err.message);
+  }
 }
 
 function tokenField(value) {
@@ -1191,11 +1278,137 @@ function el(tag, className, text) {
   return node;
 }
 
-function busy(button, label, run) {
-  const old = button.textContent;
-  button.disabled = true;
-  button.textContent = label;
-  return run().finally(() => { button.disabled = false; button.textContent = old; });
+// —— 模型测试 ——
+// 测试依次跑工具、推理、图片、缓存和测速。后台按 NDJSON 逐行推进度，页面画成阶段列表、
+// 进度条和实时说明。按钮文字不换，只在原位置转圈，宽度不会跳。
+const TEST_LABELS = {
+  tools: "testStageTools", reasoning: "testStageReasoning", images: "testStageImages",
+  cache: "testStageCache", speed: "testStageSpeed"
+};
+const TEST_INFO = {
+  tools: "testInfoTools", reasoning: "testInfoReasoning", images: "testInfoImages",
+  cache: "testInfoCache", speed: "testInfoSpeed"
+};
+let testRunning = false;
+let testPlan = [];
+let testDone = 0;
+let testTimer = 0;
+let testSpeedStart = 0;
+
+function stageLabel(stage) {
+  return TEST_LABELS[stage] ? t(TEST_LABELS[stage]) : stage;
+}
+
+function startTestRun(name) {
+  testPlan = [];
+  testDone = 0;
+  testSpeedStart = 0;
+  document.querySelector("#test-run").hidden = false;
+  document.querySelector("#test-run-name").textContent = t("testRunning", {model: name});
+  document.querySelector("#test-run-time").textContent = "0.0 s";
+  document.querySelector("#test-run-steps").replaceChildren();
+  document.querySelector("#test-run-info").textContent = t("testPreparing");
+  document.querySelector("#test-run-fill").style.width = "0%";
+  const started = Date.now();
+  clearInterval(testTimer);
+  testTimer = setInterval(() => {
+    document.querySelector("#test-run-time").textContent = ((Date.now() - started) / 1000).toFixed(1) + " s";
+  }, 100);
+}
+
+function endTestRun() {
+  clearInterval(testTimer);
+  document.querySelector("#test-run").hidden = true;
+}
+
+function updateTestRun(event) {
+  if (event.plan) {
+    testPlan = event.plan;
+    testDone = 0;
+    const list = document.querySelector("#test-run-steps");
+    list.replaceChildren();
+    for (const stage of testPlan) {
+      const li = el("li", "", stageLabel(stage));
+      li.dataset.stage = stage;
+      list.append(li);
+    }
+    return;
+  }
+  if (!event.stage) return;
+  const li = document.querySelector("#test-run-steps li[data-stage='" + event.stage + "']");
+  const info = document.querySelector("#test-run-info");
+  if (event.state === "start") {
+    if (li) li.className = "now";
+    if (event.stage === "speed") testSpeedStart = Date.now();
+    info.textContent = t(TEST_INFO[event.stage] || "testPreparing");
+  } else if (event.state === "tokens") {
+    const seconds = testSpeedStart ? (Date.now() - testSpeedStart) / 1000 : 0;
+    const speed = seconds > 0 ? (event.tokens / seconds).toFixed(1) : "0.0";
+    info.textContent = t("testInfoTokens", {tokens: event.tokens, speed});
+  } else if (event.state === "done") {
+    if (li) li.className = event.ok ? "done" : (event.stage === "speed" ? "bad" : "off");
+    testDone++;
+    document.querySelector("#test-run-fill").style.width = Math.round(testDone / Math.max(1, testPlan.length) * 100) + "%";
+  }
+}
+
+async function streamTest(url, payload, onEvent) {
+  const options = {method: "POST", headers: {}};
+  if (payload) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload);
+  }
+  const res = await fetch(url, options);
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(tr(data.error) || t("requestFailed", {status: res.status}));
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "", result = null;
+  const handle = (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    if (event.result) result = event.result;
+    else onEvent(event);
+  };
+  for (;;) {
+    const {value, done} = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, {stream: true});
+    let at;
+    while ((at = buf.indexOf("\n")) >= 0) {
+      handle(buf.slice(0, at));
+      buf = buf.slice(at + 1);
+    }
+  }
+  buf += decoder.decode();
+  handle(buf);
+  if (!result) throw new Error(t("testStreamLost"));
+  return result;
+}
+
+async function runTest(button, name, request) {
+  if (testRunning) return null;
+  testRunning = true;
+  button.classList.add("testing");
+  button.setAttribute("aria-busy", "true");
+  for (const other of document.querySelectorAll(".test-btn")) other.disabled = true;
+  startTestRun(name);
+  let result = null;
+  try {
+    result = await request(updateTestRun);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    endTestRun();
+    button.classList.remove("testing");
+    button.removeAttribute("aria-busy");
+    for (const other of document.querySelectorAll(".test-btn")) other.disabled = false;
+    testRunning = false;
+  }
+  if (result) showTest(result, name);
+  return result;
 }
 
 // 状态里会随时间变化的说明行（接管、隧道、Grok / Codex）。后台轮询只刷新这些和状态条，不动表单和模型列表。
@@ -1291,16 +1504,25 @@ function render(state) {
     who.append(name, modelName);
     const api = el("td");
     const apiInner = el("div", "api");
+    const apiHead = el("div", "api-head");
     const tag = el("button", "tag", model.type);
     tag.type = "button";
     tag.dataset.tip = t("copyUrl");
     tag.addEventListener("click", () => copyText(model.base_url));
+    apiHead.append(tag);
+    if (model.key_hint) {
+      const key = el("button", "key-hint");
+      key.type = "button";
+      key.dataset.tip = t("copyKey");
+      key.append(el("span", "key-label", t("keyLabel")), el("span", "mono", model.key_hint));
+      key.addEventListener("click", () => copyModelKey(model));
+      apiHead.append(key);
+    }
     const urlLine = el("div", "url-line");
     const url = el("span", "url mono", model.base_url);
     url.dataset.tip = model.base_url || "";
     urlLine.append(url);
-    if (model.key_hint) urlLine.append(el("span", "mono hint", model.key_hint));
-    apiInner.append(tag, urlLine);
+    apiInner.append(apiHead, urlLine);
     api.append(apiInner);
     const last = el("td");
     const lastWrap = el("div", "last-wrap");
@@ -1316,21 +1538,28 @@ function render(state) {
       lastWrap.append(tt);
     }
     last.append(lastWrap);
-    const test = el("button", "sm", t("test"));
+    const test = el("button", "sm test-btn", t("test"));
     test.type = "button";
-    test.addEventListener("click", () => busy(test, t("testing"), () => act(async () => {
-      const result = await send("/api/models/" + model.id + "/test", {method: "POST"});
-      showTest(result, model.display_name || model.model);
-      return send("/api/state");
-    })));
+    test.addEventListener("click", async () => {
+      const result = await runTest(test, model.display_name || model.model, (onEvent) =>
+        streamTest("/api/models/" + model.id + "/test", null, onEvent));
+      if (result) act(async () => send("/api/state"));
+    });
     const edit = el("button", "sm", t("edit"));
     edit.type = "button";
     edit.addEventListener("click", () => fillForm(model, "edit"));
     const copy = el("button", "sm", t("copy"));
     copy.type = "button";
-    copy.addEventListener("click", () => {
-      fillForm(model, "copy");
-      toast(t("copiedToForm"), "ok");
+    copy.addEventListener("click", async () => {
+      let apiKey = "";
+      let gotKey = true;
+      try {
+        apiKey = (await send("/api/models/" + model.id + "/key")).api_key || "";
+      } catch (_) {
+        gotKey = false;
+      }
+      fillForm(model, "copy", apiKey);
+      toast(t(gotKey ? "copiedToForm" : "copiedToFormNoKey"), gotKey ? "ok" : "err");
     });
     const del = el("button", "sm danger", t("del"));
     del.type = "button";
@@ -1461,11 +1690,11 @@ document.querySelector("#form-clear").addEventListener("click", () => {
   if (lastState) render(lastState);
 });
 const draftTest = document.querySelector("#draft-test");
-draftTest.addEventListener("click", () => busy(draftTest, t("testing"), () => act(async () => {
-  const result = await send("/api/models/test", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(formModel())});
-  showTest(result, formModel().display_name || t("addModel"));
-  return null;
-})));
+draftTest.addEventListener("click", () => {
+  const draft = formModel();
+  runTest(draftTest, draft.display_name || t("addModel"), (onEvent) =>
+    streamTest("/api/models/test", draft, onEvent));
+});
 document.querySelector("#open-cursor").addEventListener("click", () => {
   act(async () => {
     await send("/api/cursor", {method: "POST"});
@@ -1586,13 +1815,15 @@ function syncReveal() {
   button.title = shown ? t("hideKey") : t("showKey");
   button.setAttribute("aria-label", button.title);
 }
-document.querySelector("#reveal-key").addEventListener("click", () => {
-  const input = document.querySelector("#api-key");
-  const show = input.type === "password";
-  input.type = show ? "text" : "password";
+// 复制模型时密钥一并填进去，但先保持密文；要看明文再点眼睛。
+function setKeyRevealed(show) {
+  document.querySelector("#api-key").type = show ? "text" : "password";
   document.querySelector("#eye-on").hidden = !show;
   document.querySelector("#eye-off").hidden = show;
   syncReveal();
+}
+document.querySelector("#reveal-key").addEventListener("click", () => {
+  setKeyRevealed(document.querySelector("#api-key").type === "password");
 });
 document.addEventListener("mouseover", (event) => {
   const node = event.target.closest ? event.target.closest("[data-tip]") : null;

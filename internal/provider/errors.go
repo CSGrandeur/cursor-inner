@@ -148,6 +148,37 @@ func Retryable(err error) bool {
 	}
 }
 
+// wantsEffortFallback 判断 400 是不是在拒绝 reasoning_effort 的档位。
+// 有的端点只接受固定的档位集合（例如 low/high/max），Cursor 传来的档位可能不在里面；
+// 去掉字段后由端点用默认档。只认错误里点名 reasoning_effort 或其变体的 400，
+// 且拒绝词要出现在字段名附近，避免把别的参数的枚举错误也当成档位问题。
+func wantsEffortFallback(err error) bool {
+	var api *APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	if api.Status != 400 && api.Kind != KindBadRequest {
+		return false
+	}
+	text := strings.ToLower(api.Text + " " + api.Detail)
+	for _, token := range []string{"reasoning_effort", "reasoning effort", "reasoning level", "reasoning.effort"} {
+		at := strings.Index(text, token)
+		if at < 0 {
+			continue
+		}
+		near := text[max(0, at-64):min(len(text), at+len(token)+96)]
+		for _, marker := range []string{
+			"must be one of", "expected one of", "invalid", "unsupported",
+			"not supported", "unknown", "unrecognized", "not permitted",
+		} {
+			if strings.Contains(near, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func statusError(code int, body []byte, retryAfter string) error {
 	text := excerpt(body)
 	kind := KindBadRequest

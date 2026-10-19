@@ -126,13 +126,14 @@ func (s *Session) chatOrCompactSession(ctx context.Context, model config.Model, 
 	return messages, used, reply, err
 }
 
+// estimateTokens 以上一次模型调用报告的 prompt_tokens 为基数，再加上那次调用之后新出现的消息。
+// 报告值属于「这条助手回复之前」的全部输入，所以从它自己之后开始数；把它自己的正文再算一遍
+// 会让每轮都多估一点，窗口偏小时容易反复触发自动压缩。
 func estimateTokens(messages []provider.Message) int {
-	base := 0
-	from := 0
+	base, from := 0, 0
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].PromptTokens > 0 {
-			base = messages[i].PromptTokens
-			from = i
+			base, from = messages[i].PromptTokens, i+1
 			break
 		}
 	}

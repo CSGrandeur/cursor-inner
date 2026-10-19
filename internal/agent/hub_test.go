@@ -1064,9 +1064,13 @@ func TestIdenticalToolLoopStops(t *testing.T) {
 			return nil
 		})
 	}()
+	var text string
 	for {
 		select {
 		case m := <-out:
+			if delta := m.GetInteractionUpdate().GetTextDelta(); delta != nil {
+				text += delta.GetText()
+			}
 			exec := m.GetExecServerMessage()
 			if exec.GetReadArgs() == nil {
 				continue
@@ -1077,8 +1081,16 @@ func TestIdenticalToolLoopStops(t *testing.T) {
 				t.Fatal(err)
 			}
 		case err := <-done:
-			if err == nil || !strings.Contains(err.Error(), "相同工具调用") {
-				t.Fatalf("err=%v", err)
+			for len(out) > 0 {
+				if delta := (<-out).GetInteractionUpdate().GetTextDelta(); delta != nil {
+					text += delta.GetText()
+				}
+			}
+			if err != nil {
+				t.Fatalf("重复工具调用应正常收尾，不该报错：%v", err)
+			}
+			if !strings.Contains(text, "repeated 5 times") {
+				t.Fatalf("缺少暂停说明：%q", text)
 			}
 			return
 		case <-ctx.Done():
@@ -1208,9 +1220,13 @@ func TestInsertArrivesBeforeTheNextModelCall(t *testing.T) {
 			return nil
 		})
 	}()
+	var text string
 	for {
 		select {
 		case m := <-out:
+			if delta := m.GetInteractionUpdate().GetTextDelta(); delta != nil {
+				text += delta.GetText()
+			}
 			exec := m.GetExecServerMessage()
 			if exec.GetReadArgs() == nil {
 				continue
@@ -1807,5 +1823,37 @@ func TestOfficialModelIsForwarded(t *testing.T) {
 	route, _ = hub.Bidi(bidi(t, "o", execResult(1, &cursorpb.ExecClientMessage{})))
 	if route.Local {
 		t.Fatal("exec result for an official run handled locally")
+	}
+}
+
+// 同一个工具调用连续重复到上限时，这一轮要正常收尾。用错误结束的话客户端会把整轮
+// 显示成 Operation interrupted.，已经流出来的思考、文件改动和回答都跟着看不见。
+func TestRepeatedToolCallPausesInsteadOfErroring(t *testing.T) {
+	call := `{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"GetMcpTools","arguments":"{}"}}]}}]}`
+	fm := &fakeModel{responses: []string{sse(call), sse(call), sse(call), sse(call), sse(call), sse(call), sse(call), sse(call)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-loop", runRequest("mine", "conv-loop", "do it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	frames := drive(t, hub, "run-loop", model, func(*cursorpb.ExecServerMessage) *cursorpb.ExecClientMessage {
+		return &cursorpb.ExecClientMessage{}
+	})
+	var text string
+	ended := false
+	for _, m := range frames {
+		if delta := m.GetInteractionUpdate().GetTextDelta(); delta != nil {
+			text += delta.GetText()
+		}
+		if m.GetInteractionUpdate().GetTurnEnded() != nil {
+			ended = true
+		}
+	}
+	if !ended {
+		t.Fatal("这一轮没有正常结束")
+	}
+	if !strings.Contains(text, "repeated 5 times") {
+		t.Fatalf("缺少暂停说明：%q", text)
 	}
 }

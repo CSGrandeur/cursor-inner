@@ -1,6 +1,8 @@
 package web
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,9 +73,15 @@ func (f *fake) SetDesktop(background, notify *bool) error {
 func (f *fake) AddModel(config.Model) error            { return nil }
 func (f *fake) UpdateModel(string, config.Model) error { return nil }
 func (f *fake) DeleteModel(string) error               { return nil }
-func (f *fake) SetModelProxy(string, bool) error       { return nil }
-func (f *fake) SetModelReasoning(string, bool) error   { return nil }
-func (f *fake) SetModelFast(string, bool) error        { return nil }
+func (f *fake) ModelKey(id string) (string, error) {
+	if id != "m1" {
+		return "", i18n.E("没有这个模型", "No such model")
+	}
+	return "sk-test", nil
+}
+func (f *fake) SetModelProxy(string, bool) error     { return nil }
+func (f *fake) SetModelReasoning(string, bool) error { return nil }
+func (f *fake) SetModelFast(string, bool) error      { return nil }
 func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
 	if len(f.view.Models) == 0 {
 		f.view.Models = []ModelView{{}}
@@ -86,16 +94,29 @@ func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
 	}
 	return nil
 }
-func (f *fake) TestDraft(config.Model) provider.Result {
+func (f *fake) TestDraft(_ config.Model, progress func(provider.Progress)) provider.Result {
+	return fakeTestProgress(progress)
+}
+func (f *fake) TestSaved(_ string, progress func(provider.Progress)) provider.Result {
+	return fakeTestProgress(progress)
+}
+
+func fakeTestProgress(progress func(provider.Progress)) provider.Result {
+	if progress != nil {
+		progress(provider.Progress{Plan: []string{provider.StageTools, provider.StageSpeed}})
+		progress(provider.Progress{Stage: provider.StageTools, State: "start"})
+		progress(provider.Progress{Stage: provider.StageTools, State: "done", OK: true})
+		progress(provider.Progress{Stage: provider.StageSpeed, State: "start"})
+		progress(provider.Progress{Stage: provider.StageSpeed, State: "tokens", Tokens: 3})
+	}
 	return provider.Result{OK: true, DurationMS: 1, TokensPerSecond: 1}
 }
-func (f *fake) TestSaved(string) provider.Result { return provider.Result{OK: true} }
-func (f *fake) Quit() error                      { f.quit = true; return nil }
-func (f *fake) OpenCursor() error                { f.opened = true; return nil }
-func (f *fake) OpenGrok() error                  { f.openedGrok = true; return nil }
-func (f *fake) OpenCodex() error                 { f.openedCodex = true; return nil }
-func (f *fake) OpenLogs() error                  { return nil }
-func (f *fake) RunLeakCheck() error              { return nil }
+func (f *fake) Quit() error         { f.quit = true; return nil }
+func (f *fake) OpenCursor() error   { f.opened = true; return nil }
+func (f *fake) OpenGrok() error     { f.openedGrok = true; return nil }
+func (f *fake) OpenCodex() error    { f.openedCodex = true; return nil }
+func (f *fake) OpenLogs() error     { return nil }
+func (f *fake) RunLeakCheck() error { return nil }
 
 func TestOpenCursorEndpoint(t *testing.T) {
 	f := &fake{}
@@ -193,6 +214,70 @@ func TestModelLimitsUpdate(t *testing.T) {
 	}
 }
 
+func TestModelKeyEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Get(srv.URL + "/api/models/m1/key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body := make([]byte, 256)
+	n, _ := res.Body.Read(body)
+	if res.StatusCode != 200 || !strings.Contains(string(body[:n]), `"sk-test"`) {
+		t.Fatalf("status %d body %s", res.StatusCode, body[:n])
+	}
+	if got := res.Header.Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache-control %q", got)
+	}
+	missing, err := http.Get(srv.URL + "/api/models/nope/key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing.Body.Close()
+	if missing.StatusCode != http.StatusNotFound {
+		t.Fatalf("missing model: status %d", missing.StatusCode)
+	}
+}
+
+func TestModelTestStreamsProgress(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/models/m1/test", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "application/x-ndjson; charset=utf-8" {
+		t.Fatalf("status %d type %q", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	var events []testEvent
+	dec := json.NewDecoder(res.Body)
+	for {
+		var ev testEvent
+		if err := dec.Decode(&ev); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
+	if len(events) != 6 {
+		t.Fatalf("want 6 events, got %d: %+v", len(events), events)
+	}
+	if len(events[0].Plan) != 2 || events[0].Plan[0] != provider.StageTools {
+		t.Fatalf("plan %+v", events[0])
+	}
+	if events[4].State != "tokens" || events[4].Tokens != 3 {
+		t.Fatalf("token event %+v", events[4])
+	}
+	if last := events[len(events)-1]; last.Result == nil || !last.Result.OK {
+		t.Fatalf("result %+v", last)
+	}
+}
+
 func TestPageAndAutostartToggle(t *testing.T) {
 	f := &fake{view: View{ListenURL: "http://127.0.0.1:9", CA: "missing"}}
 	srv := httptest.NewServer(Handler(f))
@@ -205,7 +290,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, ">接管 Codex<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="open-codex"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, ">接管 Codex<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "::-ms-reveal") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="open-codex"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))

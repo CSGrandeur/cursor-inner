@@ -44,6 +44,34 @@ func TestMCPDefsIncludesDescriptorTools(t *testing.T) {
 	}
 }
 
+// 同名的 MCP 工具（几个 Playwright 实例）和与内置工具重名的 MCP 工具都要改名，
+// 否则严格端点会整轮 400：Tool names must be unique。
+func TestMergeKeepsToolNamesUnique(t *testing.T) {
+	base := []provider.Tool{{Name: "Read"}, {Name: "Shell"}}
+	defs := []*cursorpb.McpToolDefinition{
+		{Name: "pw1-browser_navigate", ToolName: "browser_navigate"},
+		{Name: "pw2-browser_navigate", ToolName: "browser_navigate"},
+		{Name: "pw3-Read", ToolName: "Read"},
+	}
+	got := Merge(base, defs)
+	seen := map[string]bool{}
+	for _, tool := range got {
+		if seen[tool.Name] {
+			t.Fatalf("duplicate tool name %q in %v", tool.Name, got)
+		}
+		seen[tool.Name] = true
+	}
+	if len(got) != 5 {
+		t.Fatalf("%+v", got)
+	}
+	if !seen["browser_navigate"] || !seen["pw2-browser_navigate"] || !seen["pw3-Read"] {
+		t.Fatalf("%+v", got)
+	}
+	if _, ok := MatchMCP(provider.ToolCall{Name: "pw2-browser_navigate"}, defs); !ok {
+		t.Fatal("改名后的工具仍然要能用新名字调用")
+	}
+}
+
 func protoString(s string) *string { return &s }
 
 func TestParseGrepLinesKeepsWindowsPaths(t *testing.T) {

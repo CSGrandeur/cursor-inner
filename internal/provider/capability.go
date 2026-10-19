@@ -12,12 +12,47 @@ import (
 	"cursor-inner/internal/i18n"
 )
 
+// 能力探测的阶段名。页面按 Plan 画进度，各阶段再按 Stage 更新。
+const (
+	StageTools     = "tools"
+	StageReasoning = "reasoning"
+	StageImages    = "images"
+	StageCache     = "cache"
+	StageSpeed     = "speed"
+)
+
+// Progress 是一次能力探测的实时进度。Plan 只在第一帧给出，是当前模型实际会跑的阶段；
+// Stage 为当前阶段，State 取 start / done / tokens；测速阶段的 Tokens 是已收到的估算 token 数。
+type Progress struct {
+	Plan   []string
+	Stage  string
+	State  string
+	OK     bool
+	Tokens uint64
+}
+
 // Probe 做能力探测：工具往返、推理档（400 则自动关）、图片输入、缓存命中，并保留原有测速字段。
 // 成功时会按结果改写 m 上的 Reasoning / ContextWindow / MaxOutputTokens（调用方负责写回配置）。
-func Probe(ctx context.Context, m config.Model, dial dialer.Func) (Result, config.Model) {
+// progress 按阶段报告进度，可以为 nil。
+func Probe(ctx context.Context, m config.Model, dial dialer.Func, progress func(Progress)) (Result, config.Model) {
+	report := func(p Progress) {
+		if progress != nil {
+			progress(p)
+		}
+	}
 	start := time.Now()
 	caps := &config.Capabilities{Family: string(DetectFamily(m))}
 	profile := ProfileOf(m)
+	if DetectFamily(m) == FamilyDeepSeek {
+		if c, o := deepseekVariantLimits(m.Model); c > 0 {
+			if m.ContextWindow <= 0 {
+				m.ContextWindow = c
+			}
+			if m.MaxOutputTokens <= 0 {
+				m.MaxOutputTokens = o
+			}
+		}
+	}
 	if DetectFamily(m) == FamilyQwen {
 		if c, o := qwenVariantLimits(m.Model); c > 0 {
 			if m.ContextWindow <= 0 {
@@ -35,16 +70,31 @@ func Probe(ctx context.Context, m config.Model, dial dialer.Func) (Result, confi
 		m.MaxOutputTokens = profile.DefaultMaxOut
 	}
 
+	plan := []string{StageTools}
+	if m.Reasoning || profile.ReasoningEcho {
+		plan = append(plan, StageReasoning)
+	}
+	if profile.SupportsImages {
+		plan = append(plan, StageImages)
+	}
+	plan = append(plan, StageCache, StageSpeed)
+	report(Progress{Plan: plan})
+
+	report(Progress{Stage: StageTools, State: "start"})
 	caps.Tools = probeTools(ctx, m, dial)
+	report(Progress{Stage: StageTools, State: "done", OK: caps.Tools})
 	if caps.Tools && TextToolActive(m) {
 		caps.TextToolMode = true
 		m.TextToolMode = true
 	}
 
 	if m.Reasoning || profile.ReasoningEcho {
+		report(Progress{Stage: StageReasoning, State: "start"})
 		m.Reasoning = true
 		m.Effort = "low"
-		if probeReasoning(ctx, m, dial) {
+		ok := probeReasoning(ctx, m, dial)
+		report(Progress{Stage: StageReasoning, State: "done", OK: ok})
+		if ok {
 			caps.Reasoning = true
 		} else {
 			m.Reasoning = false
@@ -54,11 +104,19 @@ func Probe(ctx context.Context, m config.Model, dial dialer.Func) (Result, confi
 	}
 
 	if profile.SupportsImages {
+		report(Progress{Stage: StageImages, State: "start"})
 		caps.Images = probeImages(ctx, m, dial)
+		report(Progress{Stage: StageImages, State: "done", OK: caps.Images})
 	}
+	report(Progress{Stage: StageCache, State: "start"})
 	caps.CacheHit = probeCache(ctx, m, dial)
+	report(Progress{Stage: StageCache, State: "done", OK: caps.CacheHit})
 
-	speed := Test(ctx, m, dial)
+	report(Progress{Stage: StageSpeed, State: "start"})
+	speed := Test(ctx, m, dial, func(tokens uint64) {
+		report(Progress{Stage: StageSpeed, State: "tokens", Tokens: tokens})
+	})
+	report(Progress{Stage: StageSpeed, State: "done", OK: speed.OK})
 	result := speed
 	result.Capabilities = caps
 	if !result.OK && caps.Tools {
@@ -103,8 +161,12 @@ func probeReasoning(ctx context.Context, m config.Model, dial dialer.Func) bool 
 	return m.Reasoning
 }
 
+// probeImageBase64 是 256x256 的纯色 PNG。1x1 这类退化图会被部分端点（DeepSeek）判成
+// 不支持的图片，探测就会误报不支持看图。
+const probeImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAQMSURBVHhe7dQxEYBAAAPBF4slZKIBegxckb2ZbSIg55U02/kPknZyANJwDkAazgFIwzkAaTgHIA3nAKThHIA0nAOQhnMA0nAOQBrOAUjDOQBpOAcgDecApOEcgDScA5CGcwDScA5AGs4BSMM5AGk4ByAN5wCk4RyANJwDkIZzANJwDkAazgFIwzkAaTgHIA3nAKThHIA0nAOQhnMA0nAOQBrOAUjDOQBpOAcgDecApOEcgDScA5CGcwDScA5AGs4BSMM5AGk4ByAN5wCk4RyANJwDkIZzANJwDkAazgFIwzkAaTgHIA3nAKThHIA0nAOQhnMA0nAOQBrOAUjDOQBpOAcgDecApOEcgDScA5CGcwDScA5AGs4BSMM5AGk4ByAN5wCk4RyANJwDkIZzANJwDkAazgFIwzkAaTgHIA3nAKThHIA0nAOQhnMA0nAOQBrOAUjDOQBpOAcgDecApOEcgDScA5CGcwDScA5AGs4BSMM5AGk4ByAN5wCk4RyANJwDkIZzANJwH4f9QpKddqKHAAAAAElFTkSuQmCC"
+
 func probeImages(ctx context.Context, m config.Model, dial dialer.Func) bool {
-	png, _ := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+	png, _ := base64.StdEncoding.DecodeString(probeImageBase64)
 	messages := []Message{{
 		Role:    "user",
 		Content: "Describe the image in one word.",

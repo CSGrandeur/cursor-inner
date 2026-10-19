@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.18] - 2026-10-19
+
+### Changed
+
+- The test button keeps its width while a test runs and shows a spinner. A progress strip under the model list now shows the stages being probed (tool calls, reasoning, image input, cache, speed), a progress bar, elapsed time and live output tokens, instead of only a "Testing…" label on the button.
+- Copying a model now carries its API key into the add form as well; the field stays masked until you reveal it.
+- The API key in the model list now has its own label and click-to-copy target next to the endpoint type. It used to trail the truncated URL, where it looked like the end of the address.
+- Internal: the updater can now install a local build through the same verified hot handover (pre-check, wait for an idle model turn, health check, rollback). This is used only by development tooling; the released app does not expose it.
+- The context size menu for a custom model no longer lists sizes the model cannot hold. A model with a 128K context window now shows 128K instead of also offering 200K, 356K, 500K, 800K and 1M, which were silently cut back to 128K. If a size above the model's own limit still arrives (older clients send 200K on their own), the turn log records the requested size next to the size that was used.
+
+### Fixed
+
+- A turn that repeats the same tool call no longer ends with an error the client renders as "Operation interrupted," which hid the thinking, edits and answer already shown. It now ends with a short pause message, keeps the steps above and saves a checkpoint; reply "continue" to go on.
+- An endpoint that rejects the reasoning effort level Cursor sends now gets one retry with that field removed, so the turn continues at the endpoint's own default level instead of failing with a 400. The rejected level is not sent again for that endpoint and model. The retry only triggers when the error names the reasoning effort field next to a value or enum complaint.
+- A background task finishing no longer leaves the chat with "Error resuming chat: A background task finished, but the chat couldn't resume." When the finished result arrives for a run that has already ended, it is kept for that run instead of being sent on to the server (which answers such a local run with an error). The following resume now continues the turn with the task result and replies, instead of only replaying the old state and ending.
+- A resume that does not repeat the model name is still recognised as one of this app's own runs. It used to be treated as a server-side run, which the server rejects for a custom model, and the chat showed the same resume error.
+- Automatic compaction no longer throws away the conversation when the model returns an empty or blank summary. The history is kept as it was, a warning is logged, and the turn continues (the request is shortened only if the context really overflows).
+- The context estimate used to decide on automatic compaction no longer counts the last reply twice, so a long conversation compacts less often.
+- The API key field on the settings page no longer shows two reveal buttons in Edge: the browser's own icon is hidden, and only the page's eye button remains.
+- A turn stopped because the model kept repeating the same tool call no longer ends as an error ("Operation interrupted." in Cursor, which also hid the thinking, edits and text already shown). It now pauses like the step limit does: a short notice is added ("Paused: the same tool call … repeated 5 times"), the checkpoint is written, and the turn ends normally, so everything already shown stays.
+- Conversations with several MCP servers no longer fail on an endpoint that requires tool names to be unique (DeepSeek's official API answers "Tool names must be unique." and rejects the whole turn). When two servers expose a tool with the same name, the first keeps the plain name and the others are offered under their server-prefixed name, which still calls the right server; built-in tools always keep theirs. As a last resort a repeated definition is dropped before the request is sent.
+- DeepSeek V4.1 Flash and V4 Pro are recognised by name: testing a model whose context window and output limit are left empty now fills in 1,000,000 and 256,000 instead of the 128K/8K defaults used for older DeepSeek models.
+- DeepSeek streams may stay quiet for up to five minutes before the request is treated as stalled (other providers keep 120/150 seconds), which covers long thinking turns at the highest effort over a 1M-token conversation.
+
 ## [0.5.17] - 2026-10-16
 
 ### Added
@@ -414,7 +438,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...HEAD
+[0.5.18]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...v0.5.18
 [0.5.17]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...v0.5.17
 [0.5.16]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...v0.5.16
 [0.5.15]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.14...v0.5.15

@@ -58,34 +58,78 @@ func TestReasoningSwitchChangesPicker(t *testing.T) {
 	}
 }
 
-func TestConfiguredContextBecomesTheDefault(t *testing.T) {
-	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 4000}})
-	if !bytes.Contains(extra, []byte("context=4k")) || !bytes.Contains(extra, []byte("context=200k")) {
-		t.Fatal("context choices missing")
-	}
-	model := protox.Children(extra, 2)[0]
-	var defaults int
+// defaultVariant 返回被标成默认的 variant 的 model id 后缀（field 9）。
+func defaultVariant(t *testing.T, available []byte) string {
+	t.Helper()
+	model := protox.Children(available, 2)[0]
+	var defaults []string
 	for _, item := range protox.Children(model, 30) {
 		fields, err := protox.Fields(item)
 		if err != nil {
 			t.Fatal(err)
 		}
-		marked := false
 		for _, field := range fields {
 			if field.Num == 4 && field.Wire == 0 && field.Val == 1 {
-				marked = true
+				defaults = append(defaults, protox.StringField(item, 9))
 			}
 		}
-		if !marked {
-			continue
-		}
-		defaults++
-		if !bytes.Contains(item, []byte("context=4k")) {
-			t.Fatalf("default is %s", protox.StringField(item, 9))
+	}
+	if len(defaults) != 1 {
+		t.Fatalf("default variants = %v", defaults)
+	}
+	return defaults[0]
+}
+
+func TestConfiguredContextBecomesTheDefault(t *testing.T) {
+	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 4000}})
+	if !bytes.Contains(extra, []byte("context=4k")) {
+		t.Fatal("context choices missing")
+	}
+	if got := defaultVariant(t, extra); !bytes.Contains([]byte(got), []byte("context=4k")) {
+		t.Fatalf("default is %s", got)
+	}
+}
+
+// 模型装不下的档位不该出现在菜单里：选中后会被按模型上限截断，用户只会以为选择器没生效。
+func TestContextChoicesStopAtTheModelWindow(t *testing.T) {
+	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 128000}})
+	for _, over := range []string{"context=200k", "context=356k", "context=500k", "context=800k", "context=1m"} {
+		if bytes.Contains(extra, []byte(over)) {
+			t.Fatalf("%s should not be offered by a 128K model", over)
 		}
 	}
-	if defaults != 1 {
-		t.Fatal(defaults)
+	if !bytes.Contains(extra, []byte("context=128k")) {
+		t.Fatal("missing 128k")
+	}
+	if got := defaultVariant(t, extra); !bytes.Contains([]byte(got), []byte("context=128k")) {
+		t.Fatalf("default is %s", got)
+	}
+}
+
+// 上限正好是固定档位时，保留全部不超限的档位，并把这一档设为默认。
+func TestContextChoicesAtOneMillionKeepTheFixedList(t *testing.T) {
+	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 1000000}})
+	for _, want := range []string{"context=200k", "context=356k", "context=500k", "context=800k", "context=1m"} {
+		if !bytes.Contains(extra, []byte(want)) {
+			t.Fatalf("missing %s", want)
+		}
+	}
+	if got := defaultVariant(t, extra); !bytes.Contains([]byte(got), []byte("context=1m")) {
+		t.Fatalf("default is %s", got)
+	}
+}
+
+// 上限夹在固定档位之间时，上限自己作为额外档位插到最前并成为默认，更大的档位仍然不出现。
+func TestContextChoicesInsertTheWindowBetweenFixedOnes(t *testing.T) {
+	extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: 300000}})
+	if bytes.Contains(extra, []byte("context=356k")) || bytes.Contains(extra, []byte("context=800k")) {
+		t.Fatal("choices above the window must not be offered")
+	}
+	if !bytes.Contains(extra, []byte("context=300k")) || !bytes.Contains(extra, []byte("context=200k")) {
+		t.Fatal("missing 300k or 200k")
+	}
+	if got := defaultVariant(t, extra); !bytes.Contains([]byte(got), []byte("context=300k")) {
+		t.Fatalf("default is %s", got)
 	}
 }
 

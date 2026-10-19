@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/provider"
 
 	"cursor-inner/assets"
 	"cursor-inner/internal/config"
@@ -163,7 +164,18 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, backend.TestDraft(model))
+		streamTest(w, func(progress func(provider.Progress)) provider.Result {
+			return backend.TestDraft(model, progress)
+		})
+	})
+	mux.HandleFunc("GET /api/models/{id}/key", func(w http.ResponseWriter, r *http.Request) {
+		key, err := backend.ModelKey(r.PathValue("id"))
+		if err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]string{"api_key": key})
 	})
 	mux.HandleFunc("DELETE /api/models/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.DeleteModel(r.PathValue("id")); err != nil {
@@ -260,7 +272,9 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeState(w, backend)
 	})
 	mux.HandleFunc("POST /api/models/{id}/test", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, backend.TestSaved(r.PathValue("id")))
+		streamTest(w, func(progress func(provider.Progress)) provider.Result {
+			return backend.TestSaved(r.PathValue("id"), progress)
+		})
 	})
 	mux.HandleFunc("POST /api/cursor", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.OpenCursor(); err != nil {
@@ -351,6 +365,40 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
 	return &handler{Handler: guard(mux), push: push}
+}
+
+// testEvent 是测试接口的一行。第一行给 plan，之后是各阶段进度，最后一行带完整结果。
+type testEvent struct {
+	Plan   []string         `json:"plan,omitempty"`
+	Stage  string           `json:"stage,omitempty"`
+	State  string           `json:"state,omitempty"`
+	OK     bool             `json:"ok,omitempty"`
+	Tokens uint64           `json:"tokens,omitempty"`
+	Result *provider.Result `json:"result,omitempty"`
+}
+
+// streamTest 把能力探测的进度按 NDJSON 逐行写出去，每写完一行就 flush，页面才能实时看到。
+// 最终结果仍是同一个 provider.Result，和以前一次返回的 JSON 相同。
+func streamTest(w http.ResponseWriter, run func(func(provider.Progress)) provider.Result) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeErr(w, http.StatusInternalServerError, i18n.E("当前环境不支持流式响应", "Streaming is not supported here"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	enc := json.NewEncoder(w)
+	send := func(event testEvent) {
+		if err := enc.Encode(event); err != nil {
+			return
+		}
+		flusher.Flush()
+	}
+	result := run(func(p provider.Progress) {
+		send(testEvent{Plan: p.Plan, Stage: p.Stage, State: p.State, OK: p.OK, Tokens: p.Tokens})
+	})
+	send(testEvent{Result: &result})
 }
 
 func writeState(w http.ResponseWriter, backend Backend) {

@@ -390,6 +390,15 @@ func (a *App) DeleteModel(id string) error {
 	})
 }
 
+func (a *App) ModelKey(id string) (string, error) {
+	for _, model := range a.store.Get().Models {
+		if model.ID == id {
+			return model.APIKey, nil
+		}
+	}
+	return "", i18n.E("没有这个模型", "No such model")
+}
+
 func (a *App) SetModelLimits(id string, contextWindow, maxOutput *int) error {
 	if (contextWindow != nil && *contextWindow < 0) || (maxOutput != nil && *maxOutput < 0) {
 		return i18n.E("token 数不能为负", "Token counts cannot be negative")
@@ -450,11 +459,11 @@ func (a *App) SetModelProxy(id string, use bool) error {
 	})
 }
 
-func (a *App) TestSaved(id string) provider.Result {
+func (a *App) TestSaved(id string, progress func(provider.Progress)) provider.Result {
 	cfg := a.store.Get()
 	for _, model := range cfg.Models {
 		if model.ID == id {
-			result := a.probe(model)
+			result := a.probe(model, progress)
 			snap := result.LastTest()
 			_ = a.store.Update(func(f *config.File) error {
 				for i := range f.Models {
@@ -471,7 +480,7 @@ func (a *App) TestSaved(id string) provider.Result {
 	return provider.Result{Error: i18n.T("没有这个模型", "No such model")}
 }
 
-func (a *App) TestDraft(model config.Model) provider.Result {
+func (a *App) TestDraft(model config.Model, progress func(provider.Progress)) provider.Result {
 	if strings.TrimSpace(model.APIKey) == "" && model.ID != "" {
 		for _, existing := range a.store.Get().Models {
 			if existing.ID == model.ID {
@@ -487,10 +496,10 @@ func (a *App) TestDraft(model config.Model) provider.Result {
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}
 	}
-	return a.probe(prepared)
+	return a.probe(prepared, progress)
 }
 
-func (a *App) probe(model config.Model) provider.Result {
+func (a *App) probe(model config.Model, progress func(provider.Progress)) provider.Result {
 	d, err := dialer.ForModel(a.store.Get().Proxy, model.UseProxy)
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}
@@ -498,7 +507,7 @@ func (a *App) probe(model config.Model) provider.Result {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	model = provider.ApplyModelsDevDefaults(ctx, model, d, config.DefaultDir())
-	result, updated := provider.Probe(ctx, model, d)
+	result, updated := provider.Probe(ctx, model, d, progress)
 	if result.OK {
 		_ = a.store.Update(func(f *config.File) error {
 			for i := range f.Models {

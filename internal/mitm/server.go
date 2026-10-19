@@ -488,7 +488,11 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("connect-protocol-version", "1")
 	w.WriteHeader(http.StatusOK)
 	flush(w)
-	if session.Finished() {
+	if session.Finished() && session.HasQueuedInput() {
+		// 这条 run 结束之后又收到了后台任务结果这类输入（见 Hub 的 finished 分支）。
+		// 客户端 resume 它是来取这一轮结果的：接着跑一轮，而不是回放旧状态后直接结束。
+		slog.Debug("RunSSE resume，有新的输入，接着跑一轮", "request", id)
+	} else if session.Finished() {
 		// 这是已答完 run 的 resume（BidiAppend 已带 X-Original-Request-Id 接到原会话）。
 		// 不再调用模型，但要把这一轮最终状态完整回放：客户端靠它确认任务已完成，
 		// 只回 turn_ended 客户端会报 "Error resuming chat" 并反复重试。

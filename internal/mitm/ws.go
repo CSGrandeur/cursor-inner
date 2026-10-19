@@ -157,6 +157,11 @@ func (s *Server) steerWebSocket(client, up net.Conn, toNet, fromNet io.WriteClos
 		noteRaw(toNet, buffered)
 		if start {
 			s.serveLocalAgent(client, local, localID, runID, requestID, helloRelayed, toNet, fromNet)
+		} else if local.Finished() && local.HasQueuedInput() {
+			// 这条 run 结束之后又收到了后台任务结果这类输入（见 Hub 的 finished 分支）。
+			// 客户端 resume 它是来取这一轮的结果的：接着跑一轮，只回放旧状态它只会报 couldn't resume。
+			slog.Debug("Agents resume，有新的输入，接着跑一轮", "request", localID, "run", runID)
+			s.serveLocalAgent(client, local, localID, runID, requestID, helloRelayed, toNet, fromNet)
 		} else if local.Finished() {
 			s.serveLocalIdle(client, local, runID, requestID, helloRelayed, fromNet)
 		} else {
@@ -544,6 +549,7 @@ func (s *Server) serveLocalIdle(client net.Conn, session *agent.Session, runID, 
 	_ = writeLogged(client, fromNet, protox.EncodeAgentRunAccepted(runID, requestID))
 	var seq uint64
 	if session != nil {
+		slog.Debug("Agents resume，回放最终状态", "request", requestID, "run", runID)
 		if frames, err := session.Replay(); err == nil {
 			for _, m := range frames {
 				raw, merr := proto.Marshal(m)

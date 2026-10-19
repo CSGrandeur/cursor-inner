@@ -34,8 +34,9 @@ func Usable(models []Entry) []byte {
 }
 
 var (
-	contexts = [][2]string{{"200k", "200K"}, {"356k", "356K"}, {"500k", "500K"}, {"800k", "800K"}, {"1m", "1M"}}
-	efforts  = [][2]string{{"low", "Low"}, {"medium", "Medium"}, {"high", "High"}, {"xhigh", "Extra High"}, {"max", "Max"}}
+	contexts     = [][2]string{{"200k", "200K"}, {"356k", "356K"}, {"500k", "500K"}, {"800k", "800K"}, {"1m", "1M"}}
+	contextSizes = map[string]int{"200k": 200000, "356k": 356000, "500k": 500000, "800k": 800000, "1m": 1000000}
+	efforts      = [][2]string{{"low", "Low"}, {"medium", "Medium"}, {"high", "High"}, {"xhigh", "Extra High"}, {"max", "Max"}}
 )
 
 func availableModel(model Entry) []byte {
@@ -71,12 +72,26 @@ func availableModel(model Entry) []byte {
 	return msg
 }
 
+// contextChoices 只提供模型装得下的档位。超过模型上限的档位选中后会被 effectiveWindow 截断，
+// 菜单里却照旧显示成可用，用户只会看到「选了 1M，实际还是 128K」。模型设置的上限本身
+// 不在固定档位表里时（例如 128K），插到最前并作为默认档。
 func contextChoices(window int) (list [][2]string, defaultID string) {
-	defaultID = "200k"
 	list = append([][2]string{}, contexts...)
+	if window <= 0 {
+		// 不知道模型上限时保留全部档位，由 effectiveWindow 兜底。
+		return list, "200k"
+	}
+	kept := list[:0]
+	for _, item := range list {
+		if size, ok := contextSizes[item[0]]; ok && size > window {
+			continue
+		}
+		kept = append(kept, item)
+	}
+	list = kept
 	id, label := formatContext(window)
 	if id == "" {
-		return list, defaultID
+		return list, "200k"
 	}
 	for i, item := range list {
 		if item[0] == id {

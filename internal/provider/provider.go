@@ -115,7 +115,9 @@ func RequestURL(m config.Model) (string, error) {
 	}
 }
 
-func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
+// Test 流式请求一次固定的测速提示，记录首字、耗时、输出 token 和速度。
+// onTokens 在流式输出时报告已收到的估算 token 数，供测试页显示进度；可以为 nil。
+func Test(ctx context.Context, m config.Model, dial dialer.Func, onTokens func(uint64)) Result {
 	start := time.Now()
 	result := Result{At: start.UTC().Format(time.RFC3339)}
 	finish := func() Result {
@@ -150,13 +152,19 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func) Result {
 		return finish()
 	}
 	var output strings.Builder
-	var usage uint64
+	var usage, reported uint64
 	record := func(text string) {
 		if result.FirstValidResponseMS == nil {
 			ms := time.Since(start).Milliseconds()
 			result.FirstValidResponseMS = &ms
 		}
 		output.WriteString(text)
+		if onTokens != nil {
+			if tokens := estimateOutputTokens(output.String()); tokens != reported {
+				reported = tokens
+				onTokens(tokens)
+			}
+		}
 	}
 	if n > 0 && rawHead[0] == '{' {
 		body, err := io.ReadAll(io.LimitReader(rest, 8<<20))

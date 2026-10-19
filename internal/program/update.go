@@ -185,6 +185,9 @@ func newUpdateGlue(version, dir string, debug bool, store *config.Store, life *t
 		Keys:     keys,
 		Sources:  debugSources(debug),
 	})
+	for _, f := range updaterHooks {
+		f(dir, g.updater)
+	}
 	return g
 }
 

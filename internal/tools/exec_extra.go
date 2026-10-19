@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -264,14 +265,35 @@ func MCPDefs(ctx *cursorpb.RequestContext) []*cursorpb.McpToolDefinition {
 
 // MCPCatalog 把请求上下文里的 MCP 工具加进模型可见的工具表。
 func MCPCatalog(defs []*cursorpb.McpToolDefinition) []provider.Tool {
-	var out []provider.Tool
+	return Merge(nil, defs)
+}
+
+// Merge 把内置工具和 MCP 工具合成一张表，并保证工具名唯一。
+// 有的端点（DeepSeek 官方）遇到重名工具直接 400：Tool names must be unique。
+// 多个 MCP 服务器会暴露同名工具（同时开了几个 Playwright 实例时都是 browser_*），
+// 所以重名时改用带服务器前缀的 def.Name；MatchMCP 对新旧两个名字都认，调用不受影响。
+func Merge(base []provider.Tool, defs []*cursorpb.McpToolDefinition) []provider.Tool {
+	out := make([]provider.Tool, 0, len(base)+len(defs))
+	taken := make(map[string]bool, len(base)+len(defs))
+	add := func(tool provider.Tool) bool {
+		key := strings.ToLower(strings.TrimSpace(tool.Name))
+		if key == "" || taken[key] {
+			return false
+		}
+		taken[key] = true
+		out = append(out, tool)
+		return true
+	}
+	for _, tool := range base {
+		add(tool)
+	}
 	for _, def := range defs {
 		if def == nil {
 			continue
 		}
-		name := def.GetToolName()
+		name := strings.TrimSpace(def.GetToolName())
 		if name == "" {
-			name = def.GetName()
+			name = strings.TrimSpace(def.GetName())
 		}
 		if name == "" {
 			continue
@@ -280,7 +302,25 @@ func MCPCatalog(defs []*cursorpb.McpToolDefinition) []provider.Tool {
 		if !json.Valid([]byte(schema)) {
 			schema = `{"type":"object"}`
 		}
-		out = append(out, provider.Tool{Name: name, Description: def.GetDescription(), Parameters: []byte(schema)})
+		tool := provider.Tool{Name: name, Description: def.GetDescription(), Parameters: []byte(schema)}
+		if add(tool) {
+			continue
+		}
+		original := tool.Name
+		candidate := strings.TrimSpace(def.GetName())
+		if candidate == "" || strings.EqualFold(candidate, original) {
+			candidate = original + "-mcp"
+		}
+		tool.Name = candidate
+		added := add(tool)
+		for i := 2; !added && i <= 64; i++ {
+			tool.Name = fmt.Sprintf("%s-%d", candidate, i)
+			added = add(tool)
+		}
+		if !added {
+			continue
+		}
+		slog.Debug("mcp_tool_renamed 工具重名，改用带服务器的名字", "from", original, "to", tool.Name)
 	}
 	return out
 }

@@ -41,6 +41,11 @@ var maxSteps = 200
 // stepLimitNotice 是到步数上限时给用户看的说明。
 const stepLimitNotice = "\n\n(Paused after %d tool steps in this turn. Reply \"continue\" to keep going.)"
 
+// loopStopNotice 是同一个工具调用连续重复到上限时给用户看的说明。
+// 这里要正常收尾而不是报错：报错时客户端把整轮渲染成 Operation interrupted.，
+// 已经流出来的思考、文件改动和回答都会跟着看不见。
+const loopStopNotice = "\n\n(Paused: the same tool call (%s) repeated %d times in a row, so I stopped before it looped further. The steps above are kept. Reply \"continue\" to keep going, or tell me what to change.)"
+
 // silentToolLimit 是连续多少次工具调用客户端完全没回应后就结束这一轮。
 // 客户端已放弃这次请求（例如它自己报了认证错误）时，继续发工具只会每次白等一个超时。
 const silentToolLimit = 2
@@ -287,6 +292,31 @@ func (s *Session) deliver(msg *cursorpb.ExecClientMessage) {
 	}
 }
 
+// adopt 接住一条 resume 的 run request。会话已经答完，这时没有别的 goroutine 在读它。
+// resume 偶尔不带会话 id 或模型，缺的沿用上一轮的，否则接着跑的那一轮会读不到历史。
+func (s *Session) adopt(run *cursorpb.AgentRunRequest) {
+	if run == nil || run.GetAction() == nil {
+		return
+	}
+	if s.run != nil {
+		if run.GetConversationId() == "" {
+			run.ConversationId = s.run.ConversationId
+		}
+		if run.GetRequestedModel() == nil {
+			run.RequestedModel = s.run.RequestedModel
+		}
+	}
+	s.run = run
+}
+
+// HasQueuedInput 报告有没有还没并进历史的输入：后台任务结果、订阅通知、中途插入的消息。
+// 这些输入可能在上一轮结束之后才到，客户端随后的 resume 就是来取它们的。
+func (s *Session) HasQueuedInput() bool {
+	s.queueMu.Lock()
+	defer s.queueMu.Unlock()
+	return len(s.queued) > 0 || len(s.inserts) > 0 || len(s.pending) > 0
+}
+
 func (s *Session) deliverInteraction(msg *cursorpb.InteractionResponse) {
 	select {
 	case s.replies <- msg:
@@ -364,6 +394,10 @@ func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
 
 func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr error) {
 	defer s.finished.Store(true)
+	// 已经答完的 run 被 resume 时会在同一个会话上再跑一轮（例如后台任务完成），
+	// 先清掉上一轮的结束标记和自动压缩记录，否则这一轮会被当成「已经结束」或被跳过压缩。
+	s.finished.Store(false)
+	s.autoSummarized = false
 	s.dial = dial
 	turnStarted := time.Now()
 	var mu sync.Mutex
@@ -462,7 +496,8 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	if model.FastSupport && model.Type == "openai-chat" {
 		model.Fast = params.Fast
 	}
-	model.ContextWindow = effectiveWindow(model.ContextWindow, params.ContextTokens)
+	configured, requested := model.ContextWindow, params.ContextTokens
+	model.ContextWindow = effectiveWindow(configured, requested)
 	s.Model = model
 	catalog := s.catalogFor(mode)
 	name := s.Model.DisplayName
@@ -470,8 +505,20 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		name = s.Model.ID
 	}
 	short := conversationID(s.run.GetConversationId())
+	if configured > 0 && requested > configured {
+		// 菜单里不再给出超限档位，但旧客户端仍会带 200k 这类固定值。记下请求值和实际窗口，
+		// 下次用户说「选了没生效」时能直接分辨是选择器没传过来，还是被模型上限截断了。
+		slog.Info("context_clamped 请求的上下文超过模型上限，按模型上限处理",
+			"conversation", short, "requested", requested, "configured", configured, "window", model.ContextWindow)
+	}
 	slog.Info("▶ "+name, "conversation", short, "turn", userTurns(messages), "window", model.ContextWindow)
 	newTurnDiag(s.run, reqCtx, len(s.mcp), len(catalog), messages).log()
+	if skipReason != "" && s.HasQueuedInput() {
+		// 后台任务完成这类输入是在上一轮结束之后送进这条 run 的，动作本身还是「继续运行」，
+		// 但确实有新的输入要交给模型。下一轮循环开头的 drainSteer 会把它并进历史。
+		slog.Info("turn_continue 有新的输入，接着跑一轮", "conversation", short, "action", plan.kind, "reason", skipReason)
+		skipReason = ""
+	}
 	if skipReason != "" {
 		slog.Info("turn_skip 本次不调用模型", "conversation", short, "action", plan.kind, "reason", skipReason)
 		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
@@ -580,7 +627,21 @@ next:
 		}
 		messages = append(messages, reply)
 		if warn, stop := s.loops.observe(reply.ToolCalls); stop {
-			return fmt.Errorf("相同工具调用重复 %d 次，已停止", loopStopAt)
+			// 像步数到上限那样正常收尾，不要用错误结束这一轮。
+			name := ""
+			if len(reply.ToolCalls) > 0 {
+				name = reply.ToolCalls[0].Name
+			}
+			slog.Debug("相同工具调用重复，暂停这一轮", "conversation", short, "tool", name, "limit", loopStopAt)
+			messages = provider.CloseDangling(messages)
+			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: fmt.Sprintf(loopStopNotice, name, loopStopAt)}}})); err != nil {
+				return err
+			}
+			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
+				return err
+			}
+			sentCheckpoint = true
+			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 		} else if warn != "" {
 			messages = append(messages, provider.Message{Role: "user", Content: warn})
 		}
@@ -721,7 +782,8 @@ func (s *Session) catalogFor(mode cursorpb.AgentMode) []provider.Tool {
 	if kind := s.run.GetSubagentTypeName(); kind != "" {
 		base = subagentCatalog(kind, tools.Catalog())
 	}
-	catalog := append(base, tools.MCPCatalog(s.mcp)...)
+	// Merge 保证工具名唯一：自定义端点遇到重名工具会直接拒绝（Tool names must be unique）。
+	catalog := tools.Merge(base, s.mcp)
 	if s.Model.ImageBaseURL == "" {
 		catalog = withoutTool(catalog, "GenerateImage")
 	}

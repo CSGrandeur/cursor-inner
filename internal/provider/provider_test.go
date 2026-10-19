@@ -1,6 +1,9 @@
 package provider
 
 import (
+	"bytes"
+	"encoding/base64"
+	"image/png"
 	"strings"
 	"testing"
 
@@ -70,5 +73,39 @@ func TestParseSSEUsage(t *testing.T) {
 	event = parseSSE(`data: {"type":"message_delta","usage":{"output_tokens":9}}`, "anthropic")
 	if event.textOK || !event.usageOK || event.usage != 9 {
 		t.Fatalf("%+v", event)
+	}
+}
+
+// V4.1（deepseek-flash）是 1M 上下文、256K 输出；旧模型不能跟着一起放大。
+func TestDeepSeekVariantLimits(t *testing.T) {
+	cases := []struct {
+		model        string
+		context, out int
+	}{
+		{"deepseek-flash", 1000000, 256000},
+		{"deepseek-v4-pro", 1000000, 256000},
+		{"deepseek-chat", 0, 0},
+		{"deepseek-reasoner", 0, 0},
+	}
+	for _, tc := range cases {
+		c, o := deepseekVariantLimits(tc.model)
+		if c != tc.context || o != tc.out {
+			t.Fatalf("%s: got %d/%d, want %d/%d", tc.model, c, o, tc.context, tc.out)
+		}
+	}
+}
+
+// 探测看图时不能用 1x1 退化图：DeepSeek 会把它判成不支持的图片，探测就误报不支持看图。
+func TestProbeImageIsARealImage(t *testing.T) {
+	data, err := base64.StdEncoding.DecodeString(probeImageBase64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := png.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Width < 64 || cfg.Height < 64 {
+		t.Fatalf("probe image is %dx%d", cfg.Width, cfg.Height)
 	}
 }

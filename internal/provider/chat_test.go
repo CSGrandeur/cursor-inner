@@ -171,6 +171,18 @@ func TestReasoningEchoAndStrip(t *testing.T) {
 	}
 }
 
+// 名字相同（大小写不同也算）的工具只保留第一次出现的定义，避免严格端点整轮被拒。
+func TestUniqueToolsKeepsTheFirstDefinition(t *testing.T) {
+	got := uniqueTools([]Tool{
+		{Name: "Read", Description: "builtin"},
+		{Name: "read", Description: "mcp"},
+		{Name: "Shell"},
+	})
+	if len(got) != 2 || got[0].Description != "builtin" || got[1].Name != "Shell" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestAnthropicReplaysSignedThinking(t *testing.T) {
 	var seen []byte
 	srv := serve(t, sse(`{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}`, `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig"}}`, `{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"ok"}}`, `{"type":"message_delta","delta":{"stop_reason":"end_turn"}}`), &seen)

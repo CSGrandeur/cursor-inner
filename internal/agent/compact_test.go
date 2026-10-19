@@ -18,6 +18,20 @@ func TestEstimateUsesReportedPromptTokens(t *testing.T) {
 	}
 }
 
+// 报告的 prompt_tokens 已经包含那条助手回复之前的全部输入。估算从它之后开始加，
+// 把这条回复自己再算一遍会让每轮都多估，窗口偏小时反复触发自动压缩。
+func TestEstimateDoesNotCountTheReportedReplyTwice(t *testing.T) {
+	reply := provider.Message{Role: "assistant", Content: strings.Repeat("a", 4000), PromptTokens: 1000}
+	messages := []provider.Message{{Role: "user", Content: "hi"}, reply}
+	if got := estimateTokens(messages); got != 1000 {
+		t.Fatalf("got %d, want the reported 1000", got)
+	}
+	next := append(messages, provider.Message{Role: "tool", Content: strings.Repeat("b", 400)})
+	if got := estimateTokens(next); got != 1100 {
+		t.Fatalf("got %d, want 1000 + 100", got)
+	}
+}
+
 func TestCompactDropsEarlierImages(t *testing.T) {
 	image := []provider.Image{{MIME: "image/png", Data: []byte{1, 2, 3, 4}}}
 	messages := []provider.Message{{Role: "user", Content: "look"}}

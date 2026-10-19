@@ -88,12 +88,14 @@ type Backend interface {
 	AddModel(model config.Model) error
 	UpdateModel(id string, model config.Model) error
 	DeleteModel(id string) error
+	// ModelKey 返回单个模型保存的密钥明文，只供本机配置页复制；其它接口只给 KeyHint。
+	ModelKey(id string) (string, error)
 	SetModelProxy(id string, use bool) error
 	SetModelReasoning(id string, on bool) error
 	SetModelFast(id string, on bool) error
 	SetModelLimits(id string, contextWindow, maxOutput *int) error
-	TestDraft(model config.Model) provider.Result
-	TestSaved(id string) provider.Result
+	TestDraft(model config.Model, progress func(provider.Progress)) provider.Result
+	TestSaved(id string, progress func(provider.Progress)) provider.Result
 	Quit() error
 	QuitPlan() QuitPlan
 	QuitConfirmed(dontAsk bool) error

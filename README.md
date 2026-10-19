@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.17`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.18`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -103,7 +103,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 ## 使用
 
 1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的「启动 Cursor」「启动 Grok」「启动 Codex」再打开它们，不退出 cursor-inner。
-2. 在「模型」里填写显示名、类型、模型名、接口地址和密钥，点「测试」。编辑时密钥留空表示不改。
+2. 在「模型」里填写显示名、类型、模型名、接口地址和密钥，点「测试」。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点「刷新模型列表」（Refresh model list），或执行 Reload Window。
 4. 用完点「退出」。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选「退出」才结束。Cursor 的设置会还原。
 
@@ -114,7 +114,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
 
-- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型在还没输出文字时，用于鉴权失败或限流。
+- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带「密钥」标签，点击即可复制；「复制」会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型在还没输出文字时，用于鉴权失败或限流。
 - **网络**：代理地址、代理范围（「全局」或「仅官方」）、接管 Cursor、接管 Grok、接管 Codex、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
 - **更新**：按钮是「检查更新」和「更新」。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
 - **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容接口。
@@ -220,7 +220,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.17 ./build.sh linux
+VERSION=v0.5.18 ./build.sh linux
 ```
 
 ## 致谢

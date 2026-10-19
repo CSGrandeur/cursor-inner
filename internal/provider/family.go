@@ -3,6 +3,7 @@ package provider
 import (
 	"regexp"
 	"strings"
+	"time"
 
 	"cursor-inner/internal/config"
 )
@@ -96,6 +97,24 @@ func qwenEnableThinking(m config.Model) *bool {
 	}
 	v := m.Reasoning
 	return &v
+}
+
+// DeepSeek V4 的思考可能长时间没有新数据，参考实现允许单次流读取空闲 5 分钟。
+const deepseekStreamIdle = 300 * time.Second
+
+// deepseekVariantLimits 按模型名给出 DeepSeek 各代的输入上下文与单次输出上限。
+// V4.1（deepseek-flash）和 V4 Pro 是 1,000,000 上下文、256,000 输出；V3/R1 仍是 128K/8K，
+// 留空时由家族默认值兜底。
+func deepseekVariantLimits(model string) (contextWindow, maxOut int) {
+	n := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(n, "/"); i >= 0 {
+		n = n[i+1:]
+	}
+	switch {
+	case strings.Contains(n, "v4") || strings.Contains(n, "flash"):
+		return 1000000, 256000
+	}
+	return 0, 0
 }
 
 var reQwen3Dot = regexp.MustCompile(`^qwen3\.\d`)
