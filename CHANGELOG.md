@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.19] - 2026-10-20
+
+### Fixed
+
+- Updating from a build whose file was deleted while it was running (for example, launched from a download folder that was later cleaned up) failed with "备份当前程序失败: ... The system cannot find the file specified." The updater now skips the backup when there is no old file and installs the new version at the same path; if the folder itself is gone, it says so instead. If you are on an older build and hit this, replace it with this release manually once; later updates work normally.
+
 ## [0.5.18] - 2026-10-19
 
 ### Changed
@@ -438,7 +444,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...HEAD
+[0.5.19]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...v0.5.19
 [0.5.18]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...v0.5.18
 [0.5.17]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...v0.5.17
 [0.5.16]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.15...v0.5.16
