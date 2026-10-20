@@ -18,7 +18,7 @@ func flushDNS() {
 
 // commitHosts 直接改原来的 hosts。
 // drivers\etc 允许管理员改已有文件，但不允许在目录里新建文件再替换：
-// MoveFileEx 会返回 Access is denied，即使用户是用「以管理员身份运行」打开的。
+// MoveFileEx 会返回 Access is denied，即使用户是用“以管理员身份运行”打开的。
 func commitHosts(path string, data []byte) error {
 	if err := clearReadOnly(path); err != nil && !os.IsNotExist(err) {
 		return annotateHosts(err)

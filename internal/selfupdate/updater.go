@@ -42,7 +42,7 @@ type Status struct {
 	Source    string         `json:"source,omitempty"` // 选中的更新源
 	Route     string         `json:"route,omitempty"`
 	Sources   []SourceStatus `json:"sources,omitempty"`
-	// CanApply 为假时（没有内置公钥的构建）只提示有新版本，不提供「更新」。
+	// CanApply 为假时（没有内置公钥的构建）只提示有新版本，不提供“更新”。
 	CanApply  bool      `json:"can_apply"`
 	Mirror    string    `json:"mirror,omitempty"` // 实际下载安装包的源
 	Error     string    `json:"error,omitempty"`
@@ -128,7 +128,7 @@ func (u *Updater) set(fn func(*Status)) {
 	u.mu.Unlock()
 }
 
-// Routes 按「默认路径优先，配置了代理再加代理路径」排好。
+// Routes 按“默认路径优先，配置了代理再加代理路径”排好。
 func (u *Updater) Routes() []Route {
 	routes := []Route{DefaultRoute()}
 	if u.opt.Proxy != nil {
@@ -175,7 +175,7 @@ func (u *Updater) Check(ctx context.Context, auto bool) Status {
 		}
 	}
 	// 多个源是备用。有一个能用时，没选中的失败只留在调试日志里。
-	// 全部失败才在终端说「更新源不可用」，避免每次检查都先报一句故障再报成功。
+	// 全部失败才在终端说“更新源不可用”，避免每次检查都先报一句故障再报成功。
 	if best < 0 {
 		slog.Info("更新源不可用", "err", joinSourceErrors(results).Error())
 	} else {

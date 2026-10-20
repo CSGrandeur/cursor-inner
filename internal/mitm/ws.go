@@ -535,7 +535,7 @@ func relayServerData(up, client net.Conn) bool {
 }
 
 // serveLocalIdle 回答同一条已结束 run 上新开的连接。客户端会在回合结束后再发 resume，这条不能交给官方。
-// 回放最终状态（blobs + checkpoint + turn_ended），客户端才认「任务已完成」。
+// 回放最终状态（blobs + checkpoint + turn_ended），客户端才认“任务已完成”。
 func (s *Server) serveLocalIdle(client net.Conn, session *agent.Session, runID, requestID string, helloRelayed bool, fromNet io.Writer) {
 	if runID == "" {
 		runID = requestID

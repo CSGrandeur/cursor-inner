@@ -63,7 +63,7 @@ func summaryHook(seen []*cursorpb.AgentServerMessage) (string, bool) {
 	return "", false
 }
 
-// 模型只回了空白时，历史不能被换成「空摘要 + 尾部两条」：早期上下文会全部丢失，
+// 模型只回了空白时，历史不能被换成“空摘要 + 尾部两条”：早期上下文会全部丢失，
 // 检查点里的 summary 也会变成空串。
 func TestSummarizeKeepsHistoryWhenTheReplyIsBlank(t *testing.T) {
 	conversation := "conv-blank"

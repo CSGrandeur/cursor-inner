@@ -266,7 +266,7 @@ func (s *Session) summarize(ctx context.Context, send Emit, model config.Model, 
 	}
 	text := strings.TrimSpace(reply.Content)
 	if text == "" {
-		// 模型返回空摘要（拒答、只给思考、内容被剥离）时，不能把历史换成「空摘要 + 尾部两条」：
+		// 模型返回空摘要（拒答、只给思考、内容被剥离）时，不能把历史换成“空摘要 + 尾部两条”：
 		// 早期上下文会全部丢失，检查点里也会留下一个空的 summary。保留原历史，
 		// 真的超出上下文窗口时由 chatOrCompact 的 forceCompact 兜底。
 		slog.Warn("摘要只有空白，保留原对话历史", "conversation", s.RequestID, "messages", len(messages))
@@ -289,7 +289,7 @@ func (s *Session) summarize(ctx context.Context, send Emit, model config.Model, 
 }
 
 // finishEmptySummary 在没有可用摘要时结束这次压缩：历史原样保留，界面上的压缩状态也要收尾，
-// 否则客户端会一直停在「正在压缩」。
+// 否则客户端会一直停在“正在压缩”。
 func (s *Session) finishEmptySummary(send Emit, messages []provider.Message) ([]provider.Message, error) {
 	empty := ""
 	return messages, send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_SummaryCompleted{SummaryCompleted: &cursorpb.SummaryCompletedUpdate{HookMessage: &empty}}}))

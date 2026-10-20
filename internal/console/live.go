@@ -53,7 +53,7 @@ func (c *Console) Progress(label string, frac float64, info string) {
 	c.liveShown = true
 }
 
-// ProgressDone 结束活动行：line 不为空时把它作为一条带时间的普通行留在原处（例如「✓ 下载完成 …」），
+// ProgressDone 结束活动行：line 不为空时把它作为一条带时间的普通行留在原处（例如“✓ 下载完成 …”），
 // 为空时擦掉活动行。不能原地刷新时 line 按普通行打印。
 func (c *Console) ProgressDone(line string) {
 	c.mu.Lock()
@@ -117,7 +117,7 @@ func (c *Console) redrawLiveLocked() {
 	c.liveShown = true
 }
 
-// renderLive 画一行：「 标签 ▕进度条▏ 42%  其余信息」，总宽度不超过 cols-1（不折行，否则 \r 回不到行首）。
+// renderLive 画一行：“ 标签 ▕进度条▏ 42%  其余信息”，总宽度不超过 cols-1（不折行，否则 \r 回不到行首）。
 func renderLive(label string, frac float64, info string, cols int) string {
 	limit := cols - 1
 	if limit < 1 {

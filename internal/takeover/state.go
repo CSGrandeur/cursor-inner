@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// 接管状态是三态：配置页绝不能把「还没确定」显示成错误。
+// 接管状态是三态：配置页绝不能把“还没确定”显示成错误。
 //
 //	pending 配置了接管但还没定论：刚启动、热交接中（交出或接入）、接管刚掉线还在宽限期内；
 //	active  接管已生效；
@@ -52,7 +52,7 @@ type Status struct {
 	Since  time.Time
 }
 
-// Tracker 记录阶段和「最早发现没生效」的时刻，把原始事实判成三态。线程安全；时钟可注入，便于测试。
+// Tracker 记录阶段和“最早发现没生效”的时刻，把原始事实判成三态。线程安全；时钟可注入，便于测试。
 type Tracker struct {
 	mu            sync.Mutex
 	now           func() time.Time

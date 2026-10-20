@@ -1012,7 +1012,7 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 				t.Fatal(err)
 			}
 		case err := <-done:
-			// 到上限不报错：给用户说明、发检查点、正常结束这一轮，用户可以说「继续」。
+			// 到上限不报错：给用户说明、发检查点、正常结束这一轮，用户可以说“继续”。
 			if err != nil {
 				t.Fatalf("步数到上限不应报错：%v", err)
 			}
@@ -1855,5 +1855,45 @@ func TestRepeatedToolCallPausesInsteadOfErroring(t *testing.T) {
 	}
 	if !strings.Contains(text, "repeated 5 times") {
 		t.Fatalf("缺少暂停说明：%q", text)
+	}
+}
+
+// 跑满时间预算时也要正常暂停：说明里带预算、检查点照发，客户端不会把这一轮当成错误。
+func TestTurnBudgetPausesTurn(t *testing.T) {
+	oldBudget, oldSteps := turnBudget, maxSteps
+	turnBudget = time.Nanosecond
+	maxSteps = 100
+	t.Cleanup(func() { turnBudget, maxSteps = oldBudget, oldSteps })
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "budget", runRequest("mine", "conv-budget", "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "budget")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	checkpoint, notice, ended := false, false, false
+	err = session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+		if m.GetConversationCheckpointUpdate() != nil {
+			checkpoint = true
+		}
+		if text := m.GetInteractionUpdate().GetTextDelta().GetText(); strings.Contains(text, "budget") {
+			notice = true
+		}
+		if m.GetInteractionUpdate().GetTurnEnded() != nil {
+			ended = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !notice || !ended || !checkpoint {
+		t.Fatalf("notice=%v ended=%v checkpoint=%v", notice, ended, checkpoint)
 	}
 }

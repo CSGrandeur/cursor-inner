@@ -7,7 +7,7 @@ import (
 	"cursor-inner/internal/provider"
 )
 
-// 循环检测评测语料：区分「真的卡住了」与「重复但有产出」，避免误伤正常多轮。
+// 循环检测评测语料：区分“真的卡住了”与“重复但有产出”，避免误伤正常多轮。
 type loopCase struct {
 	name string
 	seq  []provider.ToolCall

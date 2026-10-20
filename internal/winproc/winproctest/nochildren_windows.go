@@ -15,7 +15,7 @@ import (
 
 const env = "CURSOR_INNER_NO_CHILDREN"
 
-// NoChildren 在一个新的测试进程里执行 fn。那个进程先加入「最多 1 个活动进程」的作业，
+// NoChildren 在一个新的测试进程里执行 fn。那个进程先加入“最多 1 个活动进程”的作业，
 // 之后 fn 里任何 CreateProcess 都会失败，fn 应把失败当成测试失败。
 func NoChildren(t *testing.T, fn func()) {
 	t.Helper()

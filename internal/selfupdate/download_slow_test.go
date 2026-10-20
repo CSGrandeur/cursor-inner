@@ -133,7 +133,7 @@ func (t *throttled) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// routeTo 是一条名为 name、不管地址是什么都连到 srv 的路径（模拟「默认网络」和「代理」通向不同速度的同一个文件）。
+// routeTo 是一条名为 name、不管地址是什么都连到 srv 的路径（模拟“默认网络”和“代理”通向不同速度的同一个文件）。
 func routeTo(name string, s *slowServer) Route {
 	addr := strings.TrimPrefix(s.srv.URL, "http://")
 	tr := &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {

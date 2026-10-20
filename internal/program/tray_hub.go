@@ -8,7 +8,7 @@ import (
 	"cursor-inner/internal/selfupdate"
 )
 
-// leakShown 是「自定义模型被带给官方」在提示文字里保留的时长（图标保持警告色）。
+// leakShown 是“自定义模型被带给官方”在提示文字里保留的时长（图标保持警告色）。
 const leakShown = 10 * time.Minute
 
 // trayHub 把程序里的状态汇总给托盘：刷新时读 input，定时 poll 看告警、泄漏计数，订阅更新快照看失败。
@@ -44,7 +44,7 @@ func (h *trayHub) input(now time.Time) trayInput {
 	h.mu.Lock()
 	in.Alerts = append([]string(nil), h.current...)
 	if !h.leakAt.IsZero() && now.Sub(h.leakAt) < leakShown {
-		in.Alerts = append(in.Alerts, pick(h.zh, "自定义模型「"+h.leakName+"」被带给了官方", "Custom model \""+h.leakName+"\" was sent to the official service"))
+		in.Alerts = append(in.Alerts, pick(h.zh, "自定义模型“"+h.leakName+"”被带给了官方", "Custom model \""+h.leakName+"\" was sent to the official service"))
 	}
 	h.mu.Unlock()
 	return in

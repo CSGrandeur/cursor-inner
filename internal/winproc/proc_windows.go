@@ -142,7 +142,7 @@ func KillTree(pids ...uint32) error {
 // Kill 只结束这一个进程，不碰子进程。已经退出的进程不算错。
 //
 // 结束一棵 Electron 进程树时，主进程一死，子进程会自己开始退出。这时对子进程
-// OpenProcess / TerminateProcess 会得到「拒绝访问」，但它几毫秒后就没了。
+// OpenProcess / TerminateProcess 会得到“拒绝访问”，但它几毫秒后就没了。
 // 只看一眼（等 0 毫秒）会把这种情况当成失败，调用方随后就不再重新打开程序，
 // 所以拒绝访问时先等它最多 exitGrace，真退出了就不算错。
 func Kill(pid uint32) error {

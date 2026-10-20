@@ -290,7 +290,7 @@ func replaceString(a args, before string) (string, error) {
 }
 
 // replaceNormalized 依次尝试：精确 → 忽略空白 → 修正常见笔误（行号前缀、尾部多余换行、弯引号）
-// 后再精确/忽略空白 → 唯一高相似度块。只有「找不到」才继续往下试；「不唯一」立即报错，不去猜。
+// 后再精确/忽略空白 → 唯一高相似度块。只有“找不到”才继续往下试；“不唯一”立即报错，不去猜。
 func replaceNormalized(before, old, next string, replaceAll bool) (string, error) {
 	notFound := fmt.Errorf("old_string was not found")
 	try := func(old, next string) (string, error) {
@@ -678,7 +678,7 @@ func editError(path, message string) *cursorpb.EditResult {
 }
 
 // editSuccess 组卡片结果。fresh 表示写之前文件不存在：此时不填 before_full_file_content——
-// Cursor 撤销/拒绝时按它是否存在区分「恢复原内容」与「删掉新建的文件」，填了空串会留下 0 字节文件。
+// Cursor 撤销/拒绝时按它是否存在区分“恢复原内容”与“删掉新建的文件”，填了空串会留下 0 字节文件。
 func editSuccess(path, before, after string, fresh bool) *cursorpb.EditResult {
 	added, removed, diff := unifiedDiff(before, after)
 	ok := &cursorpb.EditSuccess{

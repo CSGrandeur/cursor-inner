@@ -1,4 +1,4 @@
-// Package official 是官方端点清单，以及「代理范围：仅官方」时按目标决定走代理还是直连的规则。
+// Package official 是官方端点清单，以及“代理范围：仅官方”时按目标决定走代理还是直连的规则。
 //
 // 先有名字，再对名单。名单里的域名、TUN 的 fake-ip 段、没有域名的公网 IP 走代理；
 // 回环、LAN/WSL 私网，以及名单以外的域名直连。协议本身不决定走法。
@@ -29,7 +29,7 @@ var Suffixes = []string{
 }
 
 // alsoProxy 是用来解析官方域名的 DoH 服务。严格模式和泄漏检查脚本经 Grok 的代理地址查询它们，
-// 「仅官方」时也走代理：直连可能被污染或不通，而且查询内容就是官方域名。
+// “仅官方”时也走代理：直连可能被污染或不通，而且查询内容就是官方域名。
 var alsoProxy = []string{
 	"cloudflare-dns.com",
 	"dns.google",
@@ -131,7 +131,7 @@ func Reserved(ip netip.Addr) bool {
 	return false
 }
 
-// ForHost 是「仅官方」时一个目标主机（不带端口）的走法。
+// ForHost 是“仅官方”时一个目标主机（不带端口）的走法。
 func ForHost(host string) Route {
 	h := normalize(host)
 	if h == "" {

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.20] - 2026-10-21
+
+### Changed
+
+- A long turn is no longer paused after 200 tool steps. The step limit is now 1000, and a 45-minute time budget takes over the job of stopping a runaway turn. Both pauses still end the turn normally with a checkpoint and a notice that says why it stopped, so what was already done stays visible and replying "continue" resumes.
+- The context window and max output fields, and the two matching table headers, now have a ? that opens a small help card: a title, a one-line summary, a few short rows and a footnote, instead of a wall of text. It explains what the number means, how an empty value behaves, that the smaller of the model limit and Cursor's choice wins, and that Test can fill it in.
+
+### Fixed
+
+- The context usage popover in Cursor shows the real window for custom models. Catalog entries now carry the default and maximum context size, the same two numbers the built-in models have; without them Cursor fell back to 256K, so a model configured with a 1M window still showed "/ 256K" next to the used tokens.
+- Hot swap and self-update no longer wait the full 12 minutes for an idle model turn when a finished chat is still open in Cursor. Only a turn that is actually running counts as busy now.
+- A resume that arrives with a new request id is matched to the finished run of the same chat, so the chat no longer shows "Error resuming chat"; a resume never replays an older turn once a newer one has started.
+- The fallback field takes the names of other models in the list instead of internal ids, which the page never showed. Names with spaces work, ids saved by older versions are still accepted and shown as names when editing, and a name that is not in the list is reported instead of being silently dropped.
+- Update notes on the Update tab are shown as headings and bullet lists instead of raw Markdown (`### Fixed`, `- …`).
+- On the Network tab the labels “接管 Cursor” and “接管 Codex” are no longer cut off with an ellipsis, and the endpoint column in the model list is wider.
+- When takeover does not come up in time, the message now also says what to do: reopen Cursor with Open Cursor, then check the logs.
+
 ## [0.5.19] - 2026-10-20
 
 ### Fixed
@@ -444,7 +461,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...HEAD
+[0.5.20]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...v0.5.20
 [0.5.19]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...v0.5.19
 [0.5.18]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...v0.5.18
 [0.5.17]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.16...v0.5.17

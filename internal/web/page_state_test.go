@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 状态判定的页面逻辑（「还没定论的状态不能显示成错误」）单独抽出来用 node 跑；没有 node 就跳过。
+// 状态判定的页面逻辑（“还没定论的状态不能显示成错误”）单独抽出来用 node 跑；没有 node 就跳过。
 func TestPageStateLogic(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
@@ -54,6 +54,18 @@ eq("link retrying is neutral", networkLevel(S({takeover_state: "active"}), "pend
 eq("link lost is red", networkLevel(S({takeover_state: "active"}), "lost"), "bad");
 eq("no state, link fine", networkLevel(null, "ok"), "");
 
+// 备用模型按名称填写，提交 id；空格名称、旧 id、未知名称、自己和重复都要处理对。
+const ms = [{id: "h1", display_name: "Qwen3-VL (vLLM)", model: "qwen3vl"}, {id: "h2", display_name: "", model: "deepseek-chat"}, {id: "h3", display_name: "Kimi K2", model: "kimi"}];
+eq("fallback by display name with spaces", resolveFallback("Qwen3-VL (vLLM), deepseek-chat", ms, ""), {ids: ["h1", "h2"], unknown: []});
+eq("fallback accepts legacy ids and full-width commas", resolveFallback("h3，kimi k2", ms, ""), {ids: ["h3"], unknown: []});
+eq("fallback reports unknown names", resolveFallback("nope, Kimi K2", ms, ""), {ids: ["h3"], unknown: ["nope"]});
+eq("fallback skips the model itself", resolveFallback("Kimi K2", ms, "h3"), {ids: [], unknown: []});
+eq("fallback shows names", fallbackText(["h2", "h1", "gone"], ms), "deepseek-chat, Qwen3-VL (vLLM), gone");
+
+// 更新说明：Markdown 标题和列表要结构化显示，不能把 ### 原样露给用户。
+eq("notes blocks", notesBlocks("### Fixed\n\n- One\n  continued\n- Two \u0060x\u0060\n\nPlain text."), [{kind: "h", text: "Fixed"}, {kind: "li", text: "One continued"}, {kind: "li", text: "Two \u0060x\u0060"}, {kind: "p", text: "Plain text."}]);
+eq("notes empty", notesBlocks(""), []);
+
 // proxyStatus
 eq("proxy ok", proxyStatus(S({}), {kind: "active"}), "ok");
 eq("proxy direct", proxyStatus(S({proxy: {enabled: false}}), {kind: "active"}), "direct");
@@ -97,7 +109,7 @@ func TestPagePollsAndNeverPaintsPendingRed(t *testing.T) {
 	src := pageSource(t)
 	for _, want := range []string{
 		"function schedulePoll()", "async function pollState()", "needsFastPoll(",
-		`err.status !== 404 && tries < 30`, // 更新器没就绪时重试，不把「更新」标签永久藏掉
+		`err.status !== 404 && tries < 30`, // 更新器没就绪时重试，不把“更新”标签永久藏掉
 		".dot.pending", ".pill.pending", ".tab-dot.pending",
 	} {
 		if !strings.Contains(src, want) {

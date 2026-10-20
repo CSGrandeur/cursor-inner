@@ -143,3 +143,42 @@ func TestUsableHasLocalCredentials(t *testing.T) {
 		t.Fatal("missing api_key credentials")
 	}
 }
+
+// Cursor 用字段 15（默认窗口）和 16（最大窗口）算上下文占用比例。缺这两个字段时客户端
+// 按 256K 兜底，选择器里选了 1M，右上角的预览仍然显示 /256K。
+func TestAvailableReportsTheContextWindow(t *testing.T) {
+	cases := []struct {
+		window      int
+		wantDefault uint64
+		wantMax     uint64
+	}{
+		{1000000, 1000000, 1000000},
+		{128000, 128000, 128000},
+		{4000, 4000, 4000},
+		{0, 200000, 1000000},
+	}
+	for _, tc := range cases {
+		extra := Available([]Entry{{ID: "deadbeef", DisplayName: "Mine", ContextWindow: tc.window}})
+		model := protox.Children(extra, 2)[0]
+		if got := varintField(t, model, 15); got != tc.wantDefault {
+			t.Fatalf("window=%d default=%d, want %d", tc.window, got, tc.wantDefault)
+		}
+		if got := varintField(t, model, 16); got != tc.wantMax {
+			t.Fatalf("window=%d max=%d, want %d", tc.window, got, tc.wantMax)
+		}
+	}
+}
+
+func varintField(t *testing.T, body []byte, num int) uint64 {
+	t.Helper()
+	fields, err := protox.Fields(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range fields {
+		if field.Num == num && field.Wire == 0 {
+			return field.Val
+		}
+	}
+	return 0
+}

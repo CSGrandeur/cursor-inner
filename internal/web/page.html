@@ -182,7 +182,7 @@
   }
 
   .row {
-    display: grid; grid-template-columns: 5.5em minmax(0, 1fr) max-content;
+    display: grid; grid-template-columns: 7.2em minmax(0, 1fr) max-content;
     column-gap: 14px; align-items: start;
     min-height: 44px; padding: 10px 16px;
   }
@@ -197,7 +197,7 @@
   .desc, .meta {
     margin: 0; min-width: 0;
   }
-  /* 一行短说明，长说明在「?」的悬停提示里。 */
+  /* 一行短说明，长说明在“?”的悬停提示里。 */
   .desc {
     display: flex; align-items: center; gap: 6px;
     color: var(--faint); font-size: 12px; line-height: 1.45;
@@ -241,12 +241,18 @@
   @keyframes up-wait { 50% { opacity: .5; } }
   .upinfo { font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.4; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .upbar.bad .upinfo { color: var(--bad); }
-  pre.notes {
-    max-width: 640px; max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 8px 10px;
-    white-space: pre-wrap; font: 12px/1.5 var(--sans); color: var(--muted);
+  .notes {
+    max-width: 640px; max-height: 200px; overflow: auto; margin: 8px 0 0; padding: 10px 12px;
+    font: 12px/1.55 var(--sans); color: var(--muted);
     background: var(--raise); border: 1px solid var(--line); border-radius: 7px;
   }
-  pre.notes[hidden] { display: none; }
+  .notes[hidden] { display: none; }
+  .notes h4 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--text); }
+  .notes h4:not(:first-child) { margin-top: 10px; }
+  .notes ul { margin: 0; padding-left: 16px; }
+  .notes li + li { margin-top: 3px; }
+  .notes p { margin: 0 0 4px; }
+  .notes code { font: 11px var(--mono); padding: 0 3px; border-radius: 3px; background: var(--panel); }
 
   .switch { position: relative; width: 34px; height: 20px; flex: none; }
   .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
@@ -320,7 +326,7 @@
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   col.c-name { width: 132px; }
   col.c-test { width: 108px; }
-  col.c-sw { width: 76px; }
+  col.c-sw { width: 64px; }
   col.c-num { width: 78px; }
   col.c-ops { width: 216px; }
   th {
@@ -346,7 +352,7 @@
   .api-head .tag { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .url-line { display: flex; align-items: baseline; gap: 6px; max-width: 100%; min-width: 0; }
   .api .url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  /* 密钥和接口类型同一行，带「密钥」标签，不能让它看着像被截断的地址尾巴。 */
+  /* 密钥和接口类型同一行，带“密钥”标签，不能让它看着像被截断的地址尾巴。 */
   button.key-hint {
     display: inline-flex; align-items: center; gap: 4px; flex: none;
     height: auto; min-width: 0; padding: 1px 5px; border: 0; border-radius: 4px;
@@ -434,6 +440,7 @@
   .add h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
   .grid { display: grid; grid-template-columns: 1.1fr 132px 1fr 1.4fr 1.2fr; gap: 8px; align-items: end; }
   label.field { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+  label.field.wide { grid-column: span 2; }
   .secret { position: relative; display: block; }
   .secret input { padding-right: 34px; }
   .secret button {
@@ -475,6 +482,16 @@
     border: 1px solid var(--line-strong); box-shadow: var(--shadow);
     font-size: 12px; line-height: 1.45; pointer-events: none;
   }
+
+  /* “?”的结构化帮助卡：标题 + 一句摘要 + 短行 + 备注，不把一整段文字平铺出来。 */
+  .hover-tip.card { width: 380px; max-width: calc(100vw - 16px); padding: 12px 14px; }
+  .tip-title { font-size: 13px; font-weight: 600; line-height: 1.4; }
+  .tip-summary { margin: 3px 0 10px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+  .tip-rows { display: grid; gap: 7px; margin: 0; font-size: 12px; line-height: 1.55; }
+  .tip-key { color: var(--faint); font-weight: 500; }
+  .tip-key::after { content: " · "; color: var(--line-strong); }
+  .tip-note { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; line-height: 1.5; color: var(--faint); }
+  th .qa { margin-left: 4px; vertical-align: -2px; }
 
   @media (max-width: 860px) {
     main { padding: 0 16px 32px; }
@@ -637,8 +654,8 @@
             <th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy">代理</th>
             <th class="mid" data-i18n="colReason" data-i18n-tip="tipReason">推理</th>
             <th class="mid" data-i18n="colFast" data-i18n-tip="tipFast">Fast</th>
-            <th class="mid" data-i18n="colContext" data-i18n-tip="tipContext">上下文</th>
-            <th class="mid" data-i18n="colMax" data-i18n-tip="tipMax">最大</th>
+            <th class="mid"><span data-i18n="colContext">上下文</span><button type="button" class="qa" data-help="context" data-i18n-aria="more">?</button></th>
+            <th class="mid"><span data-i18n="colMax">最大</span><button type="button" class="qa" data-help="maxOut" data-i18n-aria="more">?</button></th>
             <th class="ops" data-i18n="colOps" data-i18n-tip="tipOps">操作</th>
           </tr>
         </thead>
@@ -686,14 +703,14 @@
             </span>
           </label>
           <label class="field"><span data-i18n="promptCacheKey">缓存键</span><input name="prompt_cache_key" type="text" spellcheck="false" class="mono" data-i18n-placeholder="optional" placeholder="可选"></label>
-          <label class="field"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它模型 id，逗号分隔"></label>
+          <label class="field wide"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它已添加模型的名称，逗号分隔"></label>
         </div>
         <div class="actions">
           <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
           <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
           <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
-          <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
-          <label class="mini"><span data-i18n="maxOutput">最大输出</span><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><button type="button" class="qa" data-help="context" data-i18n-aria="more">?</button><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
+          <label class="mini"><span data-i18n="maxOutput">最大输出</span><button type="button" class="qa" data-help="maxOut" data-i18n-aria="more">?</button><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
           <label class="mini"><span data-i18n="maxImages">图片张数上限</span><input name="max_images" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="defaultImages" placeholder="默认 20"></label>
           <label class="mini"><span data-i18n="imageBudget">图片总量上限（MB）</span><input name="image_budget_mb" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="defaultBudget" placeholder="默认 24"></label>
           <span class="spacer"></span>
@@ -822,7 +839,7 @@
             <div class="upinfo" id="up-info"></div>
           </div>
           <p class="meta warn" id="update-warn"></p>
-          <pre class="notes" id="update-notes" hidden></pre>
+          <div class="notes" id="update-notes" hidden></div>
         </div>
         <div class="tail"><button id="update-check" type="button" class="sm" data-i18n="updateCheck">检查更新</button> <button id="update-apply" type="button" class="sm primary" data-i18n="updateApply" hidden>更新</button></div>
       </div>
@@ -855,9 +872,9 @@
 const BOOT_HASH = location.hash;
 const MESSAGES = {
   zh: {
-    modelAddedRefresh: "已添加。Cursor 在窗口聚焦时约每 5 分钟拉一次模型列表（失焦时约 30 分钟），所以新模型不会立刻出现；想马上看到：Cursor 设置 → Models → 点「刷新模型列表」（Refresh model list），或执行 Reload Window。",
+    modelAddedRefresh: "已添加。Cursor 在窗口聚焦时约每 5 分钟拉一次模型列表（失焦时约 30 分钟），所以新模型不会立刻出现；想马上看到：Cursor 设置 → Models → 点“刷新模型列表”（Refresh model list），或执行 Reload Window。",
     openCursor: "启动 Cursor", openCursorTitle: "启动 Cursor，不关闭 cursor-inner", cursorStarted: "已启动 Cursor",
-    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", openCodex: "启动 Codex", openCodexTitle: "启动 Codex，不关闭 cursor-inner", codexStarted: "已启动 Codex", update: "更新", updateDesc: "只装签名有效的版本，更新时 Grok 和 Cursor 不用重启。", updateTip: "启动时检查一次 GitHub 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upSec: "{n} 秒", upMin: "{n} 分钟", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "清单 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", upApplying: "更新到 {latest}", upStepSign: "验签清单", upStepDownload: "下载", upStepVerify: "校验", upStepPreflight: "自检", upStepHandover: "热交接", upEtaLeft: "剩余约 {eta}", upMeasuring: "测速中", upTrying: "{route}，并行试{probe}", upInfoVerify: "核对大小和 sha256", upInfoPreflight: "试运行新版本 {latest} --version", upInfoHandover: "新版本 {latest} 接过本机端口，Grok 和 Cursor 不需要重启", upInfoDone: "已交给 {latest}，正在连接新版本…", upInfoFailed: "停在「{step}」，当前版本继续运行", upUpdated: "已从 {from} 更新到 {to}", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
+    openGrok: "启动 Grok", openGrokTitle: "启动 Grok，不关闭 cursor-inner", grokStarted: "已启动 Grok", openCodex: "启动 Codex", openCodexTitle: "启动 Codex，不关闭 cursor-inner", codexStarted: "已启动 Codex", update: "更新", updateDesc: "只装签名有效的版本，更新时 Grok 和 Cursor 不用重启。", updateTip: "启动时检查一次 GitHub 上的 Release，只安装签名有效的版本。更新时新版本接过同一组本机端口，Grok 和 Cursor 不需要重启；新版本没通过健康检查会自动回滚。", updateCheck: "检查更新", updateApply: "更新", upChecking: "正在检查更新…", upUpToDate: "已是最新版本 {current}", upAvailable: "有新版本 {latest}（当前 {current}）", upSec: "{n} 秒", upMin: "{n} 分钟", upWaiting: "自定义模型回合进行中，结束后再更新", upHandover: "正在交接到新版本…", upDone: "已交给新版本，页面稍后自动刷新", upFailed: "更新失败：{error}", upCheckFailed: "检查更新失败", upApplyFailed: "更新没有完成", upFrom: "清单 {source} · {route}", upRouteDefault: "默认网络", upRouteProxy: "代理", upVerified: "签名已验证", upMirror: "安装包 {source}", upSkipped: "{source} 未采用：{reason}", upManual: "此构建没有内置更新公钥，不能自动更新。请到 Releases 页面手动下载 {latest}。", upKeep: "没有下载或替换任何文件，当前版本继续运行。", upE_sig_missing: "更新清单没有签名，已拒绝。", upE_sig_invalid: "更新清单签名校验失败，内容可能被篡改，已拒绝。", upE_key_unknown: "更新清单不是用可信密钥签的，已拒绝。", upE_expired: "更新清单已过期，已拒绝。", upE_rollback: "更新源给出的版本比之前见过的旧，可能是被回放的旧清单，已忽略。", upE_bad_manifest: "更新源返回的清单无效，已拒绝。", upE_checksum: "下载的安装包和签名清单里的 SHA256 对不上，已删除。", upE_network: "连不上更新源。", upDetail: "详情：{error}", upConfirm: "更新到 {latest}？更新期间 Grok 和 Cursor 不需要重启。", upApplying: "更新到 {latest}", upStepSign: "验签清单", upStepDownload: "下载", upStepVerify: "校验", upStepPreflight: "自检", upStepHandover: "热交接", upEtaLeft: "剩余约 {eta}", upMeasuring: "测速中", upTrying: "{route}，并行试{probe}", upInfoVerify: "核对大小和 sha256", upInfoPreflight: "试运行新版本 {latest} --version", upInfoHandover: "新版本 {latest} 接过本机端口，Grok 和 Cursor 不需要重启", upInfoDone: "已交给 {latest}，正在连接新版本…", upInfoFailed: "停在“{step}”，当前版本继续运行", upUpdated: "已从 {from} 更新到 {to}", openLogs: "打开日志", logsOpened: "已打开日志文件夹", leakCheck: "泄漏检查", leakStarted: "已触发泄漏检查，结果写入 logs/grok/events.jsonl",
     tun: "TUN 模式", tunDesc: "在网络层只把官方端点转进代理，需要管理员授权。", tunTip: "用 sing-box TUN 只把官方端点（Grok、x.ai、Cursor、OpenAI）在网络层转进当前代理，连应用自己绕过代理的 HTTP/2、写死 IP 也拦得住；其它网站的解析和直连完全不变。需要管理员授权（UAC）。失败会自动回退到普通代理接管。", tunOn: "开启", tunOff: "关闭", tunAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     strict: "严格模式", strictDesc: "用防火墙禁止 Grok Bot 和 Cursor 直连官方端点，需要管理员授权。", strictTip: "用 Windows 防火墙禁止 Grok Bot 和 Cursor 直连官方端点（Grok、x.ai、Cursor、OpenAI），GitHub、Google 等第三方不受影响。需要管理员授权；按 IP 拦截，共享 CDN 上同 IP 的其他网站也会被这两个程序直连拦下。", strictOn: "开启", strictOff: "关闭", strictAsked: "已请求管理员授权，结果见弹出的 PowerShell 窗口",
     quit: "退出", quitTitle: "退出 cursor-inner，并关闭经由它联网的 Cursor、Grok、Codex",
@@ -879,7 +896,7 @@ const MESSAGES = {
     background: "后台运行", backgroundDesc: "启动时不开控制台窗口，只留通知区域图标。", backgroundTip: "启动时不开控制台窗口，只留通知区域图标。单击图标打开配置页，右键可显示控制台或退出。",
     notify: "通知", notifyDesc: "更新结果和泄漏告警弹系统通知。", notifyTip: "更新完成或失败、官方端点可能泄漏时弹系统通知。关掉后图标颜色和悬停提示照常变化。",
     models: "自定义模型", modelsOnly: "仅支持 Cursor", modelsHint: "测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置",
-    promptCacheKey: "缓存键", fallback: "备用模型", fallbackHint: "其它模型 id，逗号分隔",
+    promptCacheKey: "缓存键", fallback: "备用模型", fallbackHint: "其它已添加模型的名称，逗号分隔", fallbackUnknown: "备用模型“{name}”不在模型列表里。请填列表中已有模型的名称，多个用逗号分隔。",
     colModel: "模型", colEndpoint: "接口", colLastTest: "上次测试", colProxy: "代理", colReason: "推理", colFast: "Fast", colContext: "上下文", colMax: "最大", colOps: "操作",
     tipModel: "上面是显示名，下面是请求使用的模型名。点击模型名复制，悬停可看被截断的全名。",
     tipEndpoint: "上面是接口类型和密钥，下面是地址。类型标签和密钥都可以点击复制。",
@@ -887,8 +904,6 @@ const MESSAGES = {
     tipProxy: "这个模型的请求是否经过页面上方的代理。",
     tipReason: "打开后，Cursor 的模型菜单里可以选择推理力度，请求会带上这个力度。",
     tipFast: "打开后，Cursor 里可以使用 Fast，请求带 service_tier。只有 OpenAI Chat 能开。",
-    tipContext: "这个模型的上下文上限，单位是 token。留空时按 128k。Cursor 里选更小的档会取更小的那个。",
-    tipMax: "单次回复最多输出的 token。留空时 OpenAI 兼容接口不传上限，Anthropic 用 8192。",
     tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥", keyLabel: "密钥",
@@ -912,7 +927,7 @@ const MESSAGES = {
     capToolsNative: "支持原生工具调用", capToolsText: "不支持原生工具调用，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "不支持工具调用",
     capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试失败：{error}",
     ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
-    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。", takeTimeout: "接管等待超时，仍没有接上。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
+    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", takeTimeout: "接管等待超时，仍没有接上。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
     switchLang: "EN"
   },
   en: {
@@ -940,7 +955,7 @@ const MESSAGES = {
     background: "Run in background", backgroundDesc: "No console window at startup; notification-area icon only.", backgroundTip: "Starts without a console window and keeps only the notification-area icon. Click the icon for settings; right-click to show the console or quit.",
     notify: "Notifications", notifyDesc: "System notifications for update results and leak warnings.", notifyTip: "Shows a system notification when an update finishes or fails, or when official endpoints may leak. The icon and its tooltip still change when this is off.",
     models: "Custom models", modelsOnly: "Cursor only", modelsHint: "Tests probe tools, reasoning, images and cache, record speed, and can auto-fill settings",
-    promptCacheKey: "Cache key", fallback: "Fallback", fallbackHint: "Other model ids, comma-separated",
+    promptCacheKey: "Cache key", fallback: "Fallback", fallbackHint: "Names of other added models, comma-separated", fallbackUnknown: "Fallback model \"{name}\" is not in the model list. Use the names of models already in the list, separated by commas.",
     colModel: "Model", colEndpoint: "Endpoint", colLastTest: "Last test", colProxy: "Proxy", colReason: "Reasoning", colFast: "Fast", colContext: "Context", colMax: "Max", colOps: "Actions",
     tipModel: "Display name on top, request model name below. Click the model name to copy it. Hover to read a truncated name.",
     tipEndpoint: "Endpoint type and key on top, URL below. Click the type tag or the key to copy it.",
@@ -948,8 +963,6 @@ const MESSAGES = {
     tipProxy: "Whether this model's requests go through the proxy above.",
     tipReason: "Shows an effort picker in Cursor's model menu and sends that effort.",
     tipFast: "Allows Fast in Cursor and sends service_tier. OpenAI Chat only.",
-    tipContext: "Context limit in tokens. Empty uses 128k. A smaller Cursor choice wins when it is smaller.",
-    tipMax: "Max output tokens for one reply. Empty omits the limit for OpenAI-compatible endpoints and uses 8192 for Anthropic.",
     tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key", keyLabel: "Key",
@@ -974,8 +987,55 @@ const MESSAGES = {
     capToolsNative: "Native tool calls supported", capToolsText: "Native tool calls not supported; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calls not supported",
     capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test failed: {error}",
     ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
-    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time.", takeTimeout: "Timed out waiting for takeover; it is still not in place.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
+    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", takeTimeout: "Timed out waiting for takeover; it is still not in place. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
     switchLang: "中文"
+  }
+};
+// 结构化帮助卡：给“?”用的短行说明。普通 data-i18n-tip 仍是一句话，不受影响。
+const HELP = {
+  zh: {
+    context: {
+      title: "上下文窗口",
+      summary: "这个模型一次能装下的最大 token 数，输入、历史和输出一起算。",
+      rows: [
+        ["填了", "Cursor 的档位菜单只显示不超过它的选项，右上角的上下文预览也用它。"],
+        ["留空", "菜单给出 200K–1M 全部档位，实际用多少由 Cursor 里选的档决定。"],
+        ["两边都有", "取较小的那个。"]
+      ],
+      note: "不知道填多少就点“测试”，会按探测结果或模型家族默认值补上。"
+    },
+    maxOut: {
+      title: "最大输出",
+      summary: "单次回复最多生成多少 token，超过时回答会被截断。",
+      rows: [
+        ["留空", "OpenAI 兼容接口不发送上限，由服务端默认决定。"],
+        ["Anthropic / Responses", "留空时用 8192。"],
+        ["与压缩无关", "自动压缩的阈值只看上下文窗口的 70%。"]
+      ],
+      note: "DeepSeek V4 这类模型点“测试”会填 256000。"
+    }
+  },
+  en: {
+    context: {
+      title: "Context window",
+      summary: "The most tokens this model can hold, counting input, history and output together.",
+      rows: [
+        ["When set", "Cursor's size menu only lists options up to it, and the context preview uses it."],
+        ["When empty", "All sizes (200K–1M) are listed; the one picked in Cursor decides."],
+        ["Both set", "The smaller one wins."]
+      ],
+      note: "Unsure? Press Test and a probed or family default is filled in."
+    },
+    maxOut: {
+      title: "Max output",
+      summary: "The most tokens one reply may generate; longer replies are cut off.",
+      rows: [
+        ["When empty", "OpenAI-compatible endpoints get no limit and the server default applies."],
+        ["Anthropic / Responses", "8192 is used when empty."],
+        ["Not compaction", "Auto-compaction only looks at 70% of the context window."]
+      ],
+      note: "For models like DeepSeek V4, Test fills in 256000."
+    }
   }
 };
 const LANG_KEY = "cursor-inner-lang";
@@ -1146,7 +1206,7 @@ async function send(url, options) {
 
 function formModel() {
   const fd = new FormData(form);
-  const fallback = String(fd.get("fallback") || "").split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+  const fallback = resolveFallback(fd.get("fallback"), lastState ? lastState.models : [], editingId);
   const body = {
     display_name: fd.get("display_name") || "",
     type: fd.get("type"),
@@ -1198,7 +1258,7 @@ function fillForm(model, mode, apiKey) {
   form.max_images.value = model.max_images > 0 ? String(model.max_images) : "";
   form.image_budget_mb.value = model.image_budget_mb > 0 ? String(model.image_budget_mb) : "";
   form.prompt_cache_key.value = model.prompt_cache_key || "";
-  form.fallback.value = (model.fallback || []).join(", ");
+  form.fallback.value = fallbackText(model.fallback, lastState ? lastState.models : []);
   editingId = mode === "edit" ? model.id : "";
   setKeyRevealed(false);
   syncFormMode();
@@ -1620,7 +1680,7 @@ async function pollState() {
     }
     renderStatus();
   } catch (_) {
-    // 交接空窗、后台重启：不是错误，先显示「正在重新连接」，很久连不上才标红。
+    // 交接空窗、后台重启：不是错误，先显示“正在重新连接”，很久连不上才标红。
     if (!linkLostSince) linkLostSince = Date.now();
     renderStatus();
   }
@@ -1676,7 +1736,10 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const editing = editingId;
   act(async () => {
-    const payload = JSON.stringify(formModel());
+    const body = formModel();
+    if (body.fallback.unknown.length) throw new Error(t("fallbackUnknown", {name: body.fallback.unknown[0]}));
+    body.fallback = body.fallback.ids;
+    const payload = JSON.stringify(body);
     const state = editing
       ? await send("/api/models/" + editing, {method: "PUT", headers: {"Content-Type": "application/json"}, body: payload})
       : await send("/api/models", {method: "POST", headers: {"Content-Type": "application/json"}, body: payload});
@@ -1692,6 +1755,7 @@ document.querySelector("#form-clear").addEventListener("click", () => {
 const draftTest = document.querySelector("#draft-test");
 draftTest.addEventListener("click", () => {
   const draft = formModel();
+  draft.fallback = draft.fallback.ids;
   runTest(draftTest, draft.display_name || t("addModel"), (onEvent) =>
     streamTest("/api/models/test", draft, onEvent));
 });
@@ -1826,7 +1890,7 @@ document.querySelector("#reveal-key").addEventListener("click", () => {
   setKeyRevealed(document.querySelector("#api-key").type === "password");
 });
 document.addEventListener("mouseover", (event) => {
-  const node = event.target.closest ? event.target.closest("[data-tip]") : null;
+  const node = event.target.closest ? event.target.closest("[data-tip],[data-help]") : null;
   if (node === tipAnchor) return;
   if (!node) {
     if (tipAnchor && !(tipAnchor.classList.contains("qa") && tipAnchor === document.activeElement)) hideTip();
@@ -1836,7 +1900,7 @@ document.addEventListener("mouseover", (event) => {
 });
 document.addEventListener("mouseout", (event) => {
   if (!tipAnchor) return;
-  const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest("[data-tip]") : null;
+  const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest("[data-tip],[data-help]") : null;
   if (next === tipAnchor) return;
   if (tipAnchor.classList.contains("qa") && tipAnchor === document.activeElement) return; // 键盘或点按打开的，留着
   hideTip();
@@ -1845,7 +1909,7 @@ document.addEventListener("mouseout", (event) => {
 // 当前标签记在 URL hash（#models / #network / #update / #general）：刷新、热交接后的自动刷新、托盘直达都停在同一个标签。
 const TABS = ["models", "network", "general", "update"];
 const tabButtons = [...document.querySelectorAll('.tabs [role="tab"]')];
-let upMissing = false; // 后端没有更新器（/api/update 不可用）：隐藏「更新」标签
+let upMissing = false; // 后端没有更新器（/api/update 不可用）：隐藏“更新”标签
 function tabFromHash() {
   const name = decodeURIComponent(location.hash.replace(/^#/, "")).toLowerCase();
   if (name === "update" && upMissing) return "models";
@@ -1893,8 +1957,8 @@ function setDot(tab, kind) {
 const TUN_STARTING = 1, TUN_ON = 2, TUN_FAILED = 3; // 与 internal/tunnel.State 一致
 const upTrust = ["sig_missing", "sig_invalid", "key_unknown", "expired", "rollback", "bad_manifest", "checksum"];
 const upApplying = ["downloading", "verifying", "preflight", "waiting_idle", "handover"];
-const LINK_GRACE_MS = 60000; // 连不上后台：这段时间内是「正在重新连接」，超过才算断开
-// 接管三态：后台给 takeover_state（off / pending / active / error）；缺这个字段时按旧字段推，且不把「没生效」直接当错误。
+const LINK_GRACE_MS = 60000; // 连不上后台：这段时间内是“正在重新连接”，超过才算断开
+// 接管三态：后台给 takeover_state（off / pending / active / error）；缺这个字段时按旧字段推，且不把“没生效”直接当错误。
 function takeStatus(state) {
   if (!state) return {kind: "pending", reason: "loading"};
   const kind = state.takeover_state
@@ -1938,6 +2002,44 @@ function updateLevel(st) {
   if (st.state === "available") return "warn";
   return "";
 }
+// 备用模型：界面上填写和显示的是模型名称（显示名，没有显示名时是模型名），提交时换成内部 id。
+// 内部 id 是配置的哈希，用户在界面上看不到，不能让用户去填它。名称里可能有空格，所以只按逗号、分号和换行分隔；
+// 旧配置里直接写的 id 照样认。找不到的名称交给调用方报错，不悄悄丢掉。
+function modelLabel(m) { return (m.display_name || m.model || m.id || "").trim(); }
+function resolveFallback(text, models, selfId) {
+  const ids = [], unknown = [];
+  for (const raw of String(text || "").split(/[,，;；\n]+/)) {
+    const name = raw.trim();
+    if (!name) continue;
+    const low = name.toLowerCase();
+    const hit = (models || []).find(m => m.id === name) ||
+      (models || []).find(m => modelLabel(m).toLowerCase() === low) ||
+      (models || []).find(m => (m.model || "").toLowerCase() === low);
+    if (!hit) { unknown.push(name); continue; }
+    if (hit.id !== selfId && !ids.includes(hit.id)) ids.push(hit.id);
+  }
+  return {ids, unknown};
+}
+function fallbackText(ids, models) {
+  return (ids || []).map(id => { const m = (models || []).find(x => x.id === id); return m ? modelLabel(m) : id; }).join(", ");
+}
+// notesBlocks 把更新说明拆成标题、列表项和段落；列表项的续行并进上一项。
+function notesBlocks(md) {
+  const out = [];
+  for (const raw of String(md || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) { if (out.length) out[out.length - 1].closed = true; continue; }
+    let m;
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) out.push({kind: "h", text: m[1]});
+    else if ((m = line.match(/^[-*]\s+(.*)$/))) out.push({kind: "li", text: m[1]});
+    else {
+      const last = out[out.length - 1];
+      if (last && last.kind !== "h" && !last.closed) last.text += " " + line;
+      else out.push({kind: "p", text: line});
+    }
+  }
+  return out.map(({kind, text}) => ({kind, text}));
+}
 // </state-logic>
 // 接管状态的过程文字 / 失败原因文字（没有就返回空串）。
 function takeText(take) {
@@ -1947,7 +2049,7 @@ function takeText(take) {
   if (take.kind === "error") return take.reason === "timeout" ? t("takeTimeout") : take.reason === "not_active" ? t("takeNotActive") : "";
   return "";
 }
-// 状态条第一项：{kind, text}。连接断开也在这里表达：刚断是中性的「重新连接」，断很久才红。
+// 状态条第一项：{kind, text}。连接断开也在这里表达：刚断是中性的“重新连接”，断很久才红。
 function takeDisplay(state, link) {
   const take = takeStatus(state);
   const updating = upLast && (upApplying.includes(upLast.state) || upLast.state === "done");
@@ -2012,10 +2114,70 @@ function renderStatus() {
 }
 
 // —— 悬停提示 ——
-// 带 data-tip 的元素悬停时显示；「?」按钮还支持键盘聚焦和点按（触屏没有悬停）。
-function placeTip(node, text) {
-  hoverTip.textContent = text;
-  hoverTip.hidden = false;
+// 带 data-tip 的元素悬停时显示；“?”按钮还支持键盘聚焦和点按（触屏没有悬停）。
+// 把 HELP 里的一条渲染成卡片：标题、摘要、短行（dt/dd 两列）、备注。
+function renderHelp(node) {
+  const spec = (HELP[lang] || HELP.zh)[node.dataset.help];
+  if (!spec) return false;
+  hoverTip.className = "hover-tip card";
+  hoverTip.replaceChildren();
+  const title = document.createElement("div");
+  title.className = "tip-title";
+  title.textContent = spec.title;
+  hoverTip.append(title);
+  if (spec.summary) {
+    const summary = document.createElement("p");
+    summary.className = "tip-summary";
+    summary.textContent = spec.summary;
+    hoverTip.append(summary);
+  }
+  if (spec.rows && spec.rows.length) {
+    const rows = document.createElement("div");
+    rows.className = "tip-rows";
+    for (const [label, text] of spec.rows) {
+      const row = document.createElement("div");
+      const key = document.createElement("span");
+      key.className = "tip-key";
+      key.textContent = label;
+      const body = document.createElement("span");
+      body.textContent = text;
+      row.append(key, body);
+      rows.append(row);
+    }
+    hoverTip.append(rows);
+  }
+  if (spec.note) {
+    const note = document.createElement("p");
+    note.className = "tip-note";
+    note.textContent = spec.note;
+    hoverTip.append(note);
+  }
+  return true;
+}
+// 更新说明是 CHANGELOG 的 Markdown 片段：只认标题、列表、段落和行内代码，全部用 textContent 写入，不解释 HTML。
+function inlineCode(parent, text) {
+  String(text).split("`").forEach((part, i) => {
+    if (!part) return;
+    if (i % 2) { const c = document.createElement("code"); c.textContent = part; parent.append(c); }
+    else parent.append(part.replace(/\*\*(.+?)\*\*/g, "$1"));
+  });
+}
+function renderNotes(node, md) {
+  node.replaceChildren();
+  let list = null;
+  for (const block of notesBlocks(md)) {
+    if (block.kind === "li") {
+      if (!list) { list = document.createElement("ul"); node.append(list); }
+      const li = document.createElement("li"); inlineCode(li, block.text); list.append(li);
+      continue;
+    }
+    list = null;
+    const el = document.createElement(block.kind === "h" ? "h4" : "p");
+    inlineCode(el, block.text);
+    node.append(el);
+  }
+}
+function placeTip(node) {
   const rect = node.getBoundingClientRect();
   const width = hoverTip.offsetWidth;
   const height = hoverTip.offsetHeight;
@@ -2031,10 +2193,19 @@ function showTip(node) {
   if (node === tipAnchor && !hoverTip.hidden) return;
   if (tipAnchor && tipAnchor.classList.contains("qa")) tipAnchor.setAttribute("aria-expanded", "false");
   tipAnchor = node;
-  const text = node && node.dataset.tip;
-  if (!text) { hoverTip.hidden = true; return; }
+  if (!node) { hoverTip.hidden = true; return; }
+  let ready = false;
+  if (node.dataset.help) {
+    ready = renderHelp(node);
+  } else if (node.dataset.tip) {
+    hoverTip.className = "hover-tip";
+    hoverTip.textContent = node.dataset.tip;
+    ready = true;
+  }
+  if (!ready) { hoverTip.hidden = true; return; }
   if (node.classList.contains("qa")) node.setAttribute("aria-expanded", "true");
-  placeTip(node, text);
+  hoverTip.hidden = false;
+  placeTip(node);
 }
 function hideTip() {
   if (tipAnchor && tipAnchor.classList && tipAnchor.classList.contains("qa")) tipAnchor.setAttribute("aria-expanded", "false");
@@ -2114,7 +2285,7 @@ function renderBar(st) {
   const applying = upApplying.includes(st.state) || st.state === "done";
   if (applying) upApplied = st;
   else if (st.state === "checking" || st.state === "up_to_date") upApplied = null;
-  // 更新失败后后端回到「有新版本」并带着错误：进度条停在出错的阶段，标红。
+  // 更新失败后后端回到“有新版本”并带着错误：进度条停在出错的阶段，标红。
   const failed = !applying && upApplied && st.error && (st.state === "failed" || st.state === "available");
   if (!applying && !failed) { bar.hidden = true; return; }
   const shown = applying ? st : upApplied;
@@ -2188,7 +2359,7 @@ function renderUpdate(st) {
   warn.classList.toggle("warn", upTrust.includes(code) || (st.sources || []).some(s => upTrust.includes(s.code)) || code === "no_key");
   const showNotes = st.notes && (st.state === "available" || applying);
   notes.hidden = !showNotes;
-  notes.textContent = showNotes ? st.notes : "";
+  renderNotes(notes, showNotes ? st.notes : "");
   apply.hidden = st.state !== "available" || st.can_apply === false;
   const busyNow = st.state === "checking" || applying || st.state === "done";
   document.querySelector("#update-check").disabled = busyNow;
@@ -2245,7 +2416,7 @@ document.querySelector("#update-apply").addEventListener("click", async () => {
   try { renderUpdate(await send("/api/update/apply", {method: "POST"})); } catch (err) { showError(err.message); }
 });
 document.querySelector("#lang").addEventListener("click", () => { if (upLast) { const st = upLast; upLast = null; renderUpdate(st); } });
-// 刚热交接过来：提示一次「已从 A 更新到 B」。
+// 刚热交接过来：提示一次“已从 A 更新到 B”。
 try {
   const done = JSON.parse(sessionStorage.getItem("cursor-inner-updated") || "null");
   sessionStorage.removeItem("cursor-inner-updated");
@@ -2259,7 +2430,7 @@ function initUpdate(tries) {
     if (st.checked_at && st.checked_at[0] !== "0") renderUpdate(st); else checkUpdate(true);
     upStream();
   }).catch((err) => {
-    // 只有后台明确说没有更新器（404，例如预览后端）才藏起「更新」标签；
+    // 只有后台明确说没有更新器（404，例如预览后端）才藏起“更新”标签；
     // 连不上、5xx 多半是热交接刚完成、后台还没就绪：稍后重试，别把标签永久藏掉。
     if (err.status !== 404 && tries < 30) { setTimeout(() => initUpdate(tries + 1), 1000); return; }
     upMissing = true;

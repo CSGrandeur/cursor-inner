@@ -16,7 +16,7 @@ func TestDynamicToolNamesMapToMCP(t *testing.T) {
 	if got.Name != "CallMcpTool" || !strings.Contains(got.Arguments, `"server":"github"`) || !strings.Contains(got.Arguments, `"toolName":"get_issue"`) {
 		t.Fatalf("CallDynamicTool -> %+v", got)
 	}
-	// 改名后由本机的 MCP 列表处理，不再落到「is not available」。
+	// 改名后由本机的 MCP 列表处理，不再落到“is not available”。
 	if _, _, _, handled := ListMCP(Canonical(provider.ToolCall{ID: "3", Name: "GetDynamicTools", Arguments: `{}`}), nil); !handled {
 		t.Fatal("GetDynamicTools should be answered by the local MCP listing")
 	}

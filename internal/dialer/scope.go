@@ -16,9 +16,9 @@ import (
 )
 
 // Scoped 返回 Cursor 和 Grok Bot 流量用的拨号。代理范围是全局时与 FromProxy 相同；
-// 「仅官方」时按名字分流：名单里的域名、fake-ip 段、没有域名的公网 IP 走代理，回环和私网直连。
+// “仅官方”时按名字分流：名单里的域名、fake-ip 段、没有域名的公网 IP 走代理，回环和私网直连。
 // 其它域名先看 TLS SNI / HTTP Host；首包里没有主机名就用拨号目标上的名字。
-// 自定义模型和 cursor-inner 自己的联网不用它，各看模型自己的「走代理」。
+// 自定义模型和 cursor-inner 自己的联网不用它，各看模型自己的“走代理”。
 func Scoped(p config.Proxy) (Func, error) {
 	via, err := FromProxy(p)
 	if err != nil {
@@ -86,7 +86,7 @@ func reservedFirst(next, direct Func) Func {
 	}
 }
 
-// directDial 是「仅官方」时的直连拨号，测试里换成记录用的假拨号。
+// directDial 是“仅官方”时的直连拨号，测试里换成记录用的假拨号。
 var directDial = Direct
 
 // inspectWait 是等 TLS SNI 或 HTTP Host 的时间。到点还没有，就用拨号目标上的名字。

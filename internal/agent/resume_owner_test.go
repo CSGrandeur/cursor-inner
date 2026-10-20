@@ -63,7 +63,7 @@ func TestResumeOfLocalFinishedRunIsClaimed(t *testing.T) {
 	}
 }
 
-// resume 的 run request 常常不带 requested_model。不能因为「认不出模型」就把本机答完的 run
+// resume 的 run request 常常不带 requested_model。不能因为“认不出模型”就把本机答完的 run
 // 交给官方：官方会返回 401，客户端弹出的正是 Error resuming chat。
 func TestResumeWithoutAModelStaysLocal(t *testing.T) {
 	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
@@ -191,5 +191,120 @@ func TestBackgroundCompletionOnAFinishedRunContinues(t *testing.T) {
 	}
 	if !strings.Contains(text, "handled the task") {
 		t.Fatalf("client text = %q", text)
+	}
+}
+
+// 客户端 resume 时常换一个新的 request id（不带 X-Original-Request-Id），动作还是 ResumeAction。
+// 这时要按会话找回已经答完的那条 run 回放，不能当成新的一轮。
+func TestResumeWithANewRequestIDFindsTheFinishedRun(t *testing.T) {
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-a", runRequest("mine", "conv-new-id", "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "run-a")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	if err := session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	hub.Done("run-a")
+
+	conversation := "conv-new-id"
+	resume := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_RunRequest{RunRequest: &cursorpb.AgentRunRequest{
+		ConversationId: &conversation,
+		Action: &cursorpb.ConversationAction{Action: &cursorpb.ConversationAction_ResumeAction{ResumeAction: &cursorpb.ResumeAction{
+			RequestContext: &cursorpb.RequestContext{Env: &cursorpb.RequestContextEnv{}},
+		}}},
+	}}}
+	route, err := hub.Bidi(bidi(t, "run-b", resume))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !route.Local {
+		t.Fatal("换 id 的 resume 也要留在本机")
+	}
+	got, err := hub.Wait(ctx, "run-b")
+	if err != nil || got != session {
+		t.Fatalf("resume 应拿到原会话: same=%v err=%v", got == session, err)
+	}
+
+	// 同一会话里带用户消息的请求必须当成新的一轮，不能回放旧 run。
+	next := runRequest("mine", conversation, "next question", &cursorpb.RequestContextEnv{})
+	if route, err := hub.Bidi(bidi(t, "run-c", next)); err != nil || !route.Local {
+		t.Fatalf("用户消息应留在本机: local=%v err=%v", route.Local, err)
+	}
+	fresh, err := hub.Wait(ctx, "run-c")
+	if err != nil || fresh == session {
+		t.Fatalf("带用户消息的请求不能被当成 resume: same=%v err=%v", fresh == session, err)
+	}
+}
+
+// 同一会话已经开了新的一轮时，换 id 的 resume 不能再回放更早那条答完的 run。
+func TestResumeWithANewRequestIDSkipsAStaleRun(t *testing.T) {
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	conversation := "conv-stale"
+	if _, err := hub.Bidi(bidi(t, "run-a", runRequest("mine", conversation, "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	first, err := hub.Wait(ctx, "run-a")
+	if err != nil || first == nil {
+		t.Fatalf("session=%v err=%v", first, err)
+	}
+	if err := first.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	hub.Done("run-a")
+	if _, err := hub.Bidi(bidi(t, "run-b", runRequest("mine", conversation, "next", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	resume := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_RunRequest{RunRequest: &cursorpb.AgentRunRequest{
+		ConversationId: &conversation,
+		Action:         &cursorpb.ConversationAction{Action: &cursorpb.ConversationAction_ResumeAction{ResumeAction: &cursorpb.ResumeAction{}}},
+	}}}
+	if _, err := hub.Bidi(bidi(t, "run-c", resume)); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := hub.Wait(ctx, "run-c")
+	if got == first {
+		t.Fatal("新一轮已经开始，resume 不能回放上一轮答完的 run")
+	}
+}
+
+// 热替换和自更新等“回合空闲”只看正在跑的回合：答完但槽位还在的会话不算忙。
+func TestActiveCountsOnlyRunningTurns(t *testing.T) {
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-a", runRequest("mine", "conv-active", "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "run-a")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	session.running.Add(1)
+	if got := hub.Active(); got != 1 {
+		t.Fatalf("正在跑的回合 Active = %d, want 1", got)
+	}
+	session.running.Add(-1)
+	if err := session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if got := hub.Active(); got != 0 {
+		t.Fatalf("答完但槽位还在 Active = %d, want 0", got)
 	}
 }

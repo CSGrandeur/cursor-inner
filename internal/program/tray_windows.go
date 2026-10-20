@@ -542,7 +542,7 @@ func removeTrayIcon() {
 	_, _, _ = procSendMessageTimeoutW.Call(hwnd, wmTrayRemove, 0, 0, smtoAbortIfHung, uintptr((2 * time.Second).Milliseconds()), uintptr(unsafe.Pointer(&res)))
 }
 
-// setTrayUpdate 挂上托盘菜单「检查更新」。
+// setTrayUpdate 挂上托盘菜单“检查更新”。
 func setTrayUpdate(fn func()) { residentUpdate = fn }
 
 func consoleVisible() bool {

@@ -37,12 +37,15 @@ type Hub struct {
 	mu       sync.Mutex
 	slots    map[string]*slot
 	finished map[string]*finished
-	lookup   func(id string) (config.Model, bool)
-	history  *History
+	// byConv 按会话记最近一条答完的 run。客户端 resume 时经常换一个新的 request id
+	// （不带 X-Original-Request-Id），只按 id 找会把这条当成新的一轮，客户端拿不到 checkpoint。
+	byConv  map[string]*finished
+	lookup  func(id string) (config.Model, bool)
+	history *History
 }
 
 func New(lookup func(id string) (config.Model, bool), history *History) *Hub {
-	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, lookup: lookup, history: history}
+	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, byConv: map[string]*finished{}, lookup: lookup, history: history}
 }
 
 // Bidi 处理一条已解压的 BidiAppend 请求体。
@@ -94,10 +97,27 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				s.session.adopt(m.RunRequest)
 			}
 		}
+		if s.session == nil && resumeOnly(m.RunRequest.GetAction()) {
+			// resume 常常换一个新的 request id（不总带 X-Original-Request-Id）。按会话找到
+			// 最近答完的那条 run 回放，否则会被当成新的一轮：模型一看历史已完整就 turn_skip，
+			// 客户端什么 checkpoint 都拿不到，弹 Error resuming chat。
+			if conv := m.RunRequest.GetConversationId(); conv != "" {
+				if f := h.byConv[conv]; f != nil && !f.session.Running() {
+					s.session = f.session
+					// 和同 id 的 resume 一样接住新动作，否则继续跑的那一轮会沿用上一轮的用户消息。
+					s.session.adopt(m.RunRequest)
+				}
+			}
+		}
 		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
 		if s.session == nil && route.ModelID != "" && h.lookup != nil {
 			if model, ok := h.lookup(route.ModelID); ok {
 				s.session = newSession(requestID, model, m.RunRequest, h.history)
+				// 同一会话开了新的一轮：之前答完的那条 run 已经过时，换 id 的 resume 不能再回放它，
+				// 否则客户端会拿到上一轮的检查点，把这一轮的内容盖掉。新一轮答完时 Done 会重新登记。
+				if conv := m.RunRequest.GetConversationId(); conv != "" {
+					delete(h.byConv, conv)
+				}
 				for _, id := range model.Fallback {
 					if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
 						s.session.Fallbacks = append(s.session.Fallbacks, fb)
@@ -171,13 +191,16 @@ func (h *Hub) Wait(ctx context.Context, requestID string) (*Session, error) {
 	return s.session, nil
 }
 
-// Active 是正在本进程里跑的自定义模型会话数。
+// Active 是正在本进程里跑的自定义模型回合数。
+// 只看“正在跑”，不看槽位里挂着的历史会话：Cursor 会把 Agents 的 WebSocket 留在池里，
+// 那一轮早就答完了，槽位却还在。以前按槽位计数，热替换和自更新会一直以为有回合在跑，
+// 等满 12 分钟都等不到空闲（2026-10-20 的实际现象）。
 func (h *Hub) Active() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	n := 0
 	for _, s := range h.slots {
-		if s.session != nil && time.Since(s.born) < 2*time.Hour {
+		if s.session != nil && s.session.Running() {
 			n++
 		}
 	}
@@ -192,8 +215,18 @@ func (h *Hub) Done(requestID string) {
 	if s != nil && s.session != nil && s.session.Finished() {
 		// 已答完的 run 保留一段时间：客户端会在回合结束后再用同一条 run 发 resume，
 		// 或是带 X-Original-Request-Id 重新开一条请求。见 resumeFinished / runSSE 的恢复路径。
-		h.finished[requestID] = &finished{session: s.session, at: time.Now()}
+		f := &finished{session: s.session, at: time.Now()}
+		h.finished[requestID] = f
+		if conv := s.session.ConversationID(); conv != "" {
+			h.byConv[conv] = f
+		}
 	}
+}
+
+// resumeOnly 表示这条 run request 只是让未完成的运行继续，不会带新的用户输入。
+// 只有这种请求才按会话去认领已经答完的 run；带用户消息的必须当成新的一轮。
+func resumeOnly(action *cursorpb.ConversationAction) bool {
+	return action.GetResumeAction() != nil || action.GetGoalContinuationAction() != nil
 }
 
 // Finished 报告 requestID 是不是本机已经答完的一条 run。
@@ -261,6 +294,11 @@ func (h *Hub) sweepLocked() {
 	for id, f := range h.finished {
 		if time.Since(f.at) > 2*time.Hour {
 			delete(h.finished, id)
+		}
+	}
+	for conv, f := range h.byConv {
+		if time.Since(f.at) > 2*time.Hour {
+			delete(h.byConv, conv)
 		}
 	}
 }

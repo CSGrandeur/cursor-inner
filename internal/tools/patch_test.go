@@ -99,7 +99,7 @@ func TestAnchorPicksTheRightDuplicate(t *testing.T) {
 	if err != nil || got != "func a() {\n\treturn nil\n}\n\nfunc b() {\n\treturn errB\n}\n" {
 		t.Fatalf("%q %v", got, err)
 	}
-	// 没有定位行时仍按「不唯一」报错，不去猜。
+	// 没有定位行时仍按“不唯一”报错，不去猜。
 	ops, _ = parsePatch("*** Begin Patch\n*** Update File: x.go\n@@\n-\treturn nil\n+\treturn errB\n*** End Patch")
 	if _, err := applyPatchHunks(before, ops[0].hunks); err == nil || !strings.Contains(err.Error(), "not unique") {
 		t.Fatalf("ambiguous hunk without anchor must fail: %v", err)

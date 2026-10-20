@@ -11,7 +11,7 @@ import (
 // 多文件 / Move / 混合操作的 apply_patch。
 //
 // 流程对齐 Codex（openai/codex codex-rs/apply-patch）的语义：按补丁里的顺序 Add（已存在则覆盖）、
-// Update、Delete，Move 写新路径后删旧路径，结果是「Success. Updated the following files:」加 A/M/D 行。
+// Update、Delete，Move 写新路径后删旧路径，结果是“Success. Updated the following files:”加 A/M/D 行。
 // 与 Codex 不同的是先把所有要读的文件读完、在内存里算好全部结果再动手：
 // 任何一块对不上、要改/删的文件不存在，整份补丁一个文件都不写，模型重发即可，不会留下改了一半的工作区。
 // 写入阶段 Cursor 报错或用户拒绝时停在那一步，结果里写明已经改了哪些、哪些没改。

@@ -408,7 +408,7 @@ func (a args) str(names ...string) (string, bool) {
 	return "", false
 }
 
-// rawString 区分「字段缺失」和「值为空字符串」。
+// rawString 区分“字段缺失”和“值为空字符串”。
 func (a args) rawString(names ...string) (string, bool) {
 	for _, name := range names {
 		if v, ok := a[name].(string); ok {

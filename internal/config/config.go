@@ -17,7 +17,7 @@ type Proxy struct {
 	Enabled bool   `json:"enabled"`
 	Address string `json:"address"`
 	// Scope 是 Cursor 和 Grok Bot 流量的代理范围：空或 "official"（默认）只接管官方端点，
-	// 其余直连、不经代理；明确写 "global" 才全部走代理。自定义模型的「走代理」开关不看它。
+	// 其余直连、不经代理；明确写 "global" 才全部走代理。自定义模型的“走代理”开关不看它。
 	Scope string `json:"scope,omitempty"`
 }
 
@@ -26,7 +26,7 @@ const (
 	ScopeOfficial = "official"
 )
 
-// ScopeName 返回规范化的代理范围。默认只接管官方流量：空值、旧配置和认不出的值都按「仅官方」，
+// ScopeName 返回规范化的代理范围。默认只接管官方流量：空值、旧配置和认不出的值都按“仅官方”，
 // 只有明确选了 global 才全局。
 func (p Proxy) ScopeName() string {
 	if strings.EqualFold(strings.TrimSpace(p.Scope), ScopeGlobal) {
@@ -111,7 +111,7 @@ type File struct {
 	Desktop       Desktop  `json:"desktop,omitzero"`
 	Image         ImageAPI `json:"image,omitempty"`
 	Models        []Model  `json:"models"`
-	// QuitNoConfirm 为真时退出不再弹确认框（确认框里勾了「不再询问」）。
+	// QuitNoConfirm 为真时退出不再弹确认框（确认框里勾了“不再询问”）。
 	QuitNoConfirm bool `json:"quit_no_confirm,omitempty"`
 }
 

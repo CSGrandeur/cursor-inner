@@ -54,7 +54,7 @@ type fakeRelease struct {
 	files    map[string][]byte
 	hits     map[string]int
 	down     bool
-	// giteeTag 非空时还提供 Gitee 风格的「最新版本」API。
+	// giteeTag 非空时还提供 Gitee 风格的“最新版本”API。
 	giteeTag string
 }
 

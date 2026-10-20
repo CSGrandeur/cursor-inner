@@ -112,7 +112,7 @@ func markBlocked(name, why string, cooldown time.Duration) {
 
 // searchBlocked 认出人机验证页，返回交给模型的原因；不是验证页时返回空串。
 // 特征取自 2026-10-11 的真实请求（testdata/*-block.html）：
-//   - 百度：302（偶尔 503）跳到 wappass.baidu.com/static/captcha/…，落地页标题「百度安全验证」；
+//   - 百度：302（偶尔 503）跳到 wappass.baidu.com/static/captcha/…，落地页标题“百度安全验证”；
 //   - DuckDuckGo HTML 版：HTTP 202，页面是 anomaly-modal 选鸭子的挑战；
 //   - 其余（搜狗 /antispider/、Startpage /sp/captcha-block、Mojeek 标题 Captcha）按地址和标题通用识别。
 func searchBlocked(page searchPage) string {
@@ -176,7 +176,7 @@ func FederatedSearch(web dialer.Func, term string) ([]*cursorpb.WebSearchReferen
 				if page.status < 400 {
 					hits = engine.parse(page.body)
 				}
-				// 解析得出结果的页面不会是验证页；只在没有结果时才判断，免得查询词里带「captcha」「安全验证」时误判。
+				// 解析得出结果的页面不会是验证页；只在没有结果时才判断，免得查询词里带“captcha”“安全验证”时误判。
 				if len(hits) == 0 {
 					if reason := searchBlocked(page); reason != "" {
 						markBlocked(engine.name, "it returned a bot-check page recently", blockCooldown)

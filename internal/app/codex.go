@@ -10,7 +10,7 @@ import (
 	"cursor-inner/internal/i18n"
 )
 
-// codexProxy 算出给 Codex 桌面版的代理地址。这个进程的联网全部走代理，不按「仅官方」拆开：
+// codexProxy 算出给 Codex 桌面版的代理地址。这个进程的联网全部走代理，不按“仅官方”拆开：
 // OpenAI 的地址不在官方名单里，拆开就会直连。
 //   - keep 为真：现在给不出可靠地址，保持现状，绝不改成直连。
 //   - proxyURL 为空且 keep 为假：用户关掉了代理，按用户选择不带代理。
@@ -48,7 +48,7 @@ func (a *App) codexProxy(cfg config.File) (proxyURL string, keep bool) {
 	return u, false
 }
 
-// SyncCodex 按「接管 Codex」开关处理正在运行的 Codex 桌面版。
+// SyncCodex 按“接管 Codex”开关处理正在运行的 Codex 桌面版。
 // 代理写在启动参数和这个进程的环境变量里，正在运行的进程读不到，所以状态不对时会关掉并重新打开。
 // 没在运行不拉起。
 func (a *App) SyncCodex() {

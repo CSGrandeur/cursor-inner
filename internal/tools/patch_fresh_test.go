@@ -8,7 +8,7 @@ import (
 )
 
 // 新建的文件（Add、Move 的新路径、Write 到不存在的路径）卡片不带 before_full_file_content：
-// Cursor 拒绝/撤销时按它是否存在区分「恢复原内容」和「删掉新文件」，带空串会留下 0 字节文件（2026-10-11 隔离 Cursor 实测）。
+// Cursor 拒绝/撤销时按它是否存在区分“恢复原内容”和“删掉新文件”，带空串会留下 0 字节文件（2026-10-11 隔离 Cursor 实测）。
 func TestPatchCardsMarkNewFiles(t *testing.T) {
 	call := provider.ToolCall{ID: "p1", Name: "apply_patch", Arguments: patchArgs(t, flowPatch)}
 	_, ui, pending, err := Request(1, call)

@@ -22,7 +22,7 @@ func Size(n int64) string {
 	return strconv.FormatInt(max(1, (n+512)/1024), 10) + " KB"
 }
 
-// SizePair 是「已下 / 总大小」，单位跟总大小走：「6.2 / 14.9 MB」。
+// SizePair 是“已下 / 总大小”，单位跟总大小走：“6.2 / 14.9 MB”。
 func SizePair(done, total int64) string {
 	if total <= 0 {
 		return Size(done)
@@ -33,7 +33,7 @@ func SizePair(done, total int64) string {
 	return strconv.FormatInt((done+512)/1024, 10) + " / " + Size(total)
 }
 
-// Speed：「1.3 MB/s」「64 KB/s」。
+// Speed：“1.3 MB/s”“64 KB/s”。
 func Speed(bps int64) string { return Size(bps) + "/s" }
 
 // ETA：不到 90 秒按秒，否则按分钟向上取整。
@@ -44,7 +44,7 @@ func ETA(sec int64) string {
 	return strconv.FormatInt((sec+59)/60, 10) + " 分钟"
 }
 
-// Duration 是已经用掉的时间：「11.7 秒」「2 分 05 秒」。
+// Duration 是已经用掉的时间：“11.7 秒”“2 分 05 秒”。
 func Duration(d time.Duration) string {
 	if d < time.Minute {
 		return strconv.FormatFloat(d.Seconds(), 'f', 1, 64) + " 秒"

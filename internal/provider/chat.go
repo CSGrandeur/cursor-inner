@@ -229,7 +229,7 @@ func TextToolActive(m config.Model) bool {
 	return ok && v.(bool)
 }
 
-// wantsTextToolMode 判断这是不是「端点不支持原生工具」的 400（vLLM 没配 tool 解析器）。
+// wantsTextToolMode 判断这是不是“端点不支持原生工具”的 400（vLLM 没配 tool 解析器）。
 func wantsTextToolMode(err error) bool {
 	var api *APIError
 	if !errors.As(err, &api) {

@@ -79,7 +79,7 @@ func TestInteractiveUpgradeStages(t *testing.T) {
 	}
 	got := strings.Join(sink.lines, "\n")
 	want := []string{
-		"有新版本 v0.5.4（当前 v0.5.3） · 清单 GitHub · 代理 · 签名已验证（密钥 eb68418a）；在配置页点「更新」安装",
+		"有新版本 v0.5.4（当前 v0.5.3） · 清单 GitHub · 代理 · 签名已验证（密钥 eb68418a）；在配置页点“更新”安装",
 		"▶ 更新到 v0.5.4：下载 cursor-inner-v0.5.4-windows-amd64.exe（15.0 MB）",
 		"… 默认网络太慢（64 KB/s），并行试代理",
 		"↻ 改走代理，从已下载的位置接着下",
@@ -242,7 +242,7 @@ func TestStaleSnapshotIgnored(t *testing.T) {
 		}
 	}
 	lines, live := len(f.lines), len(f.live)
-	v.Update(snaps[1]) // 旧的「有新版本」
+	v.Update(snaps[1]) // 旧的“有新版本”
 	v.Update(snaps[at])
 	if len(f.lines) != lines || len(f.live) != live {
 		t.Fatalf("stale snapshot changed output: %q %q", f.lines[lines:], f.live[live:])

@@ -34,7 +34,7 @@ func isProcessInJob(process windows.Handle) (bool, error) {
 }
 
 // spawnError 是一次 CreateProcess 失败：带上程序路径、创建标志和 errno。
-// 原来只返回裸的 errno（「Access is denied.」），没法知道是哪个程序、哪组标志失败。
+// 原来只返回裸的 errno（“Access is denied.”），没法知道是哪个程序、哪组标志失败。
 type spawnError struct {
 	Path  string
 	Via   string // 经 conhost 启动时，真正要运行的程序
@@ -65,7 +65,7 @@ func newSpawnError(argv []string, flags uint32, err error) *spawnError {
 	return e
 }
 
-// deniedBreakaway 判断这次失败是不是「带了 CREATE_BREAKAWAY_FROM_JOB，但所在作业不允许脱离」：
+// deniedBreakaway 判断这次失败是不是“带了 CREATE_BREAKAWAY_FROM_JOB，但所在作业不允许脱离”：
 // 作业没有 JOB_OBJECT_LIMIT_BREAKAWAY_OK / SILENT_BREAKAWAY_OK 时，CreateProcess 以 ERROR_ACCESS_DENIED 失败。
 func deniedBreakaway(err error, flags uint32) bool {
 	var se *spawnError
@@ -125,7 +125,7 @@ func (j jobInfo) canBreakaway() bool {
 	return j.Flags&(windows.JOB_OBJECT_LIMIT_BREAKAWAY_OK|windows.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK) != 0
 }
 
-// queryJob 查本进程所在的作业。句柄传 0 表示「调用进程所在的作业」。
+// queryJob 查本进程所在的作业。句柄传 0 表示“调用进程所在的作业”。
 func queryJob() jobInfo {
 	in, err := isProcessInJob(windows.CurrentProcess())
 	if err != nil {

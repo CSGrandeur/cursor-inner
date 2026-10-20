@@ -16,7 +16,7 @@ type Source struct {
 	Name string // 显示用，例如 github
 	// URL 是固定的清单地址（GitHub 的 releases/latest/download/manifest.json 走重定向，不调 API、不受匿名限流）。
 	URL string
-	// LatestAPI 和 DownloadBase 给没有「最新版」固定地址的源：先从 API 取最新 tag，
+	// LatestAPI 和 DownloadBase 给没有“最新版”固定地址的源：先从 API 取最新 tag，
 	// 再拼 DownloadBase + tag + "/manifest.json"。tag 必须是版本号。
 	LatestAPI    string
 	DownloadBase string
@@ -108,7 +108,7 @@ func (u *Updater) fetchSource(ctx context.Context, src Source, routes []Route) s
 			res.err, res.elapsed = fmt.Errorf("取签名失败：%w", serr), time.Since(start)
 			return res
 		}
-		sig = s // 404 时为空，ParseManifest 报「没有签名」
+		sig = s // 404 时为空，ParseManifest 报“没有签名”
 	}
 	m, keyID, perr := ParseManifest(got.Body, sig, u.opt.Keys, u.now())
 	if perr != nil {

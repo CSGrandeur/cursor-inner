@@ -99,5 +99,5 @@ func chatWithFallback(ctx context.Context, primary config.Model, catalog []confi
 
 // fallbackNotice 是切换备用模型时写进对话界面的一行提示。只给人看，不进模型历史。
 func fallbackNotice(primary, used config.Model) string {
-	return "> 「" + primary.DisplayName + "」暂不可用，本轮已改用备用模型「" + used.DisplayName + "」。\n\n"
+	return "> “" + primary.DisplayName + "”暂不可用，本轮已改用备用模型“" + used.DisplayName + "”。\n\n"
 }

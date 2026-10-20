@@ -165,7 +165,7 @@ func pick(zh bool, cn, en string) string {
 	return en
 }
 
-// 菜单项编号。0 留给「没选」（TrackPopupMenu 返回 0）。
+// 菜单项编号。0 留给“没选”（TrackPopupMenu 返回 0）。
 const (
 	menuOpen    = 1
 	menuConsole = 2
@@ -181,7 +181,7 @@ type trayItem struct {
 	Disabled bool
 }
 
-// trayMenu 是右键菜单。控制台显示时第二项是「隐藏」，隐藏时是「显示」；更新进行中「检查更新」变灰。
+// trayMenu 是右键菜单。控制台显示时第二项是“隐藏”，隐藏时是“显示”；更新进行中“检查更新”变灰。
 func trayMenu(zh, consoleShown, canCheck, updating bool) []trayItem {
 	console := pick(zh, "显示控制台窗口", "Show console window")
 	if consoleShown {
@@ -278,7 +278,7 @@ func (n *trayNotifier) title() string {
 	return "cursor-inner"
 }
 
-// update 看一条新的更新快照。只有从「正在更新」掉到失败才弹；检查失败不弹（不打扰）。
+// update 看一条新的更新快照。只有从“正在更新”掉到失败才弹；检查失败不弹（不打扰）。
 func (n *trayNotifier) update(st selfupdate.Status) *balloon {
 	prev := n.prev
 	n.prev = st.State
@@ -303,7 +303,7 @@ func (n *trayNotifier) leak(count int, name string, now time.Time) *balloon {
 	if first || !grew {
 		return nil
 	}
-	return n.once("leak", pageModels, now, pick(n.zh, "有请求带着自定义模型「"+name+"」转给了官方。打开配置页查看。",
+	return n.once("leak", pageModels, now, pick(n.zh, "有请求带着自定义模型“"+name+"”转给了官方。打开配置页查看。",
 		"A request carrying the custom model \""+name+"\" was forwarded to the official service. Open settings for details."))
 }
 
@@ -320,7 +320,7 @@ func (n *trayNotifier) once(key, page string, now time.Time, text string) *ballo
 	return &balloon{Title: n.title(), Text: text, Warn: true, Page: page}
 }
 
-// updatedBalloon 是交接确认后新进程弹的「已更新」。
+// updatedBalloon 是交接确认后新进程弹的“已更新”。
 func updatedBalloon(zh, debug bool, from, to string) balloon {
 	n := trayNotifier{zh: zh, debug: debug}
 	return balloon{Title: n.title(), Text: pick(zh, "已从 "+from+" 更新到 "+to+"，Grok 和 Cursor 无需重启。",

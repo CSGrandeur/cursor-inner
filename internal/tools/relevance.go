@@ -5,8 +5,8 @@ import (
 	"unicode"
 )
 
-// 搜索结果相关度：按查询词覆盖率估算。用来发现搜索引擎「偏题」——例如不带 cookie 的 Bing
-// 对「Go 1.25 release notes」只按 Go 返回 Google 首页、围棋百科——这时再查别的引擎补上。
+// 搜索结果相关度：按查询词覆盖率估算。用来发现搜索引擎“偏题”——例如不带 cookie 的 Bing
+// 对“Go 1.25 release notes”只按 Go 返回 Google 首页、围棋百科——这时再查别的引擎补上。
 //
 // 查询词切法：按空白和标点切开；英文词、版本号按词边界整词匹配（"go" 不算命中 "Google"，
 // "1.25" 算命中 "1.25.3"）；连续汉字按相邻两字切成二元组，一段里命中一半以上算这一段命中。
@@ -79,7 +79,7 @@ func termCoverage(terms []queryTerm, hit webHit) float64 {
 	if len(terms) == 0 {
 		return 1
 	}
-	// 结果页把命中词加粗，去标签后会在「Node</b>.js」处留下空格，先合回去。
+	// 结果页把命中词加粗，去标签后会在“Node</b>.js”处留下空格，先合回去。
 	text := strings.ReplaceAll(strings.ToLower(hit.title+" "+hit.chunk+" "+hit.url), " .", ".")
 	matched := 0
 	for _, t := range terms {

@@ -11,7 +11,7 @@ import (
 
 const (
 	loopWarnAt     = 3 // 连续相同调用到第 3 次给出警告
-	loopStopAt     = 5 // 连续相同调用到第 5 次停止；压在 DashScope 服务端「重复调用」判定之下，避免整段对话被 400（见 qwen-code #5019）
+	loopStopAt     = 5 // 连续相同调用到第 5 次停止；压在 DashScope 服务端“重复调用”判定之下，避免整段对话被 400（见 qwen-code #5019）
 	loopHardStopAt = 8 // 同一调用累计到第 8 次停止，兜底 A/B 交替这类非连续死循环
 
 	contentChunk    = 50   // 正文复读检测的窗口大小（字符）

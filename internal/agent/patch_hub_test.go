@@ -24,7 +24,7 @@ func toolCallSSE(t *testing.T, id, name string, args map[string]string) string {
 }
 
 // 一次 apply_patch 改两个文件：Cursor 看到两张编辑卡片（第二张用派生 id），模型拿到 Codex 格式的摘要，
-// 两个文件都记进「改过的文件」，压缩后会提醒模型重读。
+// 两个文件都记进“改过的文件”，压缩后会提醒模型重读。
 func TestMultiFileApplyPatchThroughTheHub(t *testing.T) {
 	patch := "*** Begin Patch\n*** Update File: /w/a.go\n@@\n-hello\n+world\n*** Add File: /w/b.go\n+package b\n*** End Patch"
 	fm := &fakeModel{responses: []string{
@@ -81,7 +81,7 @@ func TestMultiFileApplyPatchThroughTheHub(t *testing.T) {
 	}
 }
 
-// StrReplace 由 Cursor 执行（不走本地卡片），以前不进「改过的文件」，压缩后不会提醒重读。
+// StrReplace 由 Cursor 执行（不走本地卡片），以前不进“改过的文件”，压缩后不会提醒重读。
 func TestClientEditsAreNotedForCompaction(t *testing.T) {
 	fm := &fakeModel{responses: []string{
 		toolCallSSE(t, "call_edit", "StrReplace", map[string]string{"path": "/w/a.go", "old_string": "hello", "new_string": "world"}),

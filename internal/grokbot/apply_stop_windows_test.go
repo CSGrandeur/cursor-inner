@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// 复现 Grok Bot 0.70 闪退：接管时结束裸启动的 Grok，结束报「拒绝访问」但进程其实都已退出。
+// 复现 Grok Bot 0.70 闪退：接管时结束裸启动的 Grok，结束报“拒绝访问”但进程其实都已退出。
 // 旧代码直接返回错误，不再重新打开，窗口闪一下就没了。
 func TestApplyRestartsWhenStopErrsButNothingLeft(t *testing.T) {
 	oldList, oldStop, oldStart := listGrok, stopGrok, startGrok

@@ -8,7 +8,7 @@ import (
 	"cursor-inner/internal/web"
 )
 
-// SetTray 由 program 在通知区域图标挂上之后调用：配置页据此显示「后台运行」「通知」两行；
+// SetTray 由 program 在通知区域图标挂上之后调用：配置页据此显示“后台运行”“通知”两行；
 // apply 在设置变化后调用，让控制台窗口立即按新设置显示或隐藏。
 func (a *App) SetTray(apply func(config.Desktop)) {
 	a.mu.Lock()
@@ -23,7 +23,7 @@ func (a *App) desktopView(cfg config.File) web.DesktopView {
 	return web.DesktopView{Tray: tray, Background: cfg.Desktop.Background, Notify: !cfg.Desktop.Quiet}
 }
 
-// SetDesktop 改「后台运行」和「通知」。nil 表示不改。
+// SetDesktop 改“后台运行”和“通知”。nil 表示不改。
 func (a *App) SetDesktop(background, notify *bool) error {
 	a.mu.Lock()
 	apply := a.trayApply
@@ -48,7 +48,7 @@ func (a *App) SetDesktop(background, notify *bool) error {
 	return nil
 }
 
-// Alert 是托盘图标要变成「警告」的原因。Leak 表示官方端点可能泄漏或已经带出了自定义模型，值得弹通知。
+// Alert 是托盘图标要变成“警告”的原因。Leak 表示官方端点可能泄漏或已经带出了自定义模型，值得弹通知。
 type Alert struct {
 	Text i18n.Text
 	Leak bool

@@ -556,7 +556,7 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 
 // decodeParts 宽松地读 Cursor 的 content 数组。官方轮次写进检查点的部件字段类型不总和本机写的一样：
 // tool-result 的 result 可能是对象或数组，text 可能缺省，还会带本机不认识的字段。严格解析时整条 root 失败，
-// 官方轮次之后切到自定义模型就整轮报「root content is not a Cursor content array」。
+// 官方轮次之后切到自定义模型就整轮报“root content is not a Cursor content array”。
 // 这里逐个部件解析，字段类型不对时转成文本保留，只有 content 根本不是数组才算错。
 func decodeParts(raw json.RawMessage) ([]wirePart, error) {
 	var items []json.RawMessage

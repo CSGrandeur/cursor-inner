@@ -113,7 +113,7 @@ func TestPageMessagesCoverBothLanguages(t *testing.T) {
 			t.Errorf("en missing %q", k)
 		}
 	}
-	// 设置项默认只有一行短说明，详细的放在「?」里：短说明不能比详细说明长，也不能太长。
+	// 设置项默认只有一行短说明，详细的放在“?”里：短说明不能比详细说明长，也不能太长。
 	descRe := regexp.MustCompile(`([a-zA-Z]+)Desc: "([^"]*)"`)
 	for _, block := range []string{src[zhAt:enAt], src[enAt:endAt]} {
 		for _, m := range descRe.FindAllStringSubmatch(block, -1) {

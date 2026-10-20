@@ -107,7 +107,7 @@ func Main(version string) {
 		return
 	}
 	// 后台运行：不开控制台窗口，只留通知区域图标（只有 Windows 有托盘）。交接时旧进程用 --background 把
-	// 「控制台此刻收着」传过来；否则看配置。
+	// “控制台此刻收着”传过来；否则看配置。
 	background := traySupported && (opt.background || peekBackground(dir))
 	if !background {
 		if handoffToClassicConsole() {
@@ -209,7 +209,7 @@ func Main(version string) {
 	life := takeover.New(dir, proxy)
 	application := app.New(store, life, autostart.New(), executable())
 	if succ != nil {
-		application.SetTakeoverPhase(takeover.PhaseHandover) // 接入中：接管没接上之前是「正在切换」，不是故障
+		application.SetTakeoverPhase(takeover.PhaseHandover) // 接入中：接管没接上之前是“正在切换”，不是故障
 	}
 	if opt.debug {
 		application.Isolate()
@@ -293,7 +293,7 @@ func Main(version string) {
 		os.Exit(0)
 	}
 	watchConsole(shutdown)
-	// 托盘「退出」：有程序会被一并关掉且没选过不再询问时，打开配置页的确认框；Ctrl+C、注销、关机不问。
+	// 托盘“退出”：有程序会被一并关掉且没选过不再询问时，打开配置页的确认框；Ctrl+C、注销、关机不问。
 	trayQuit := func() {
 		if application.QuitPlan().Confirm {
 			openPage("quit")
@@ -388,7 +388,7 @@ func Main(version string) {
 	} else if life.ClearStale() {
 		log.Printf("已清除上次留下的接管设置，并结束 Cursor")
 	}
-	// 启动 / 交接流程走完：从这里起接管没生效才算「真的没生效」（见 takeover.Tracker）。
+	// 启动 / 交接流程走完：从这里起接管没生效才算“真的没生效”（见 takeover.Tracker）。
 	application.SetTakeoverPhase(takeover.PhaseSettled)
 	if _, _, err := dialer.EffectiveAddress(cfg.Proxy); err != nil {
 		slog.Error(fmt.Sprintf("代理地址无效：%v", err))
@@ -447,7 +447,7 @@ func Main(version string) {
 	select {}
 }
 
-// peekBackground 只读地看配置里有没有打开「后台运行」。
+// peekBackground 只读地看配置里有没有打开“后台运行”。
 func peekBackground(dir string) bool {
 	if dir == "" {
 		return false

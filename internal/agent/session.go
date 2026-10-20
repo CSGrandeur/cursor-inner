@@ -35,11 +35,20 @@ const (
 )
 
 // maxSteps 是一轮里连续调用工具的上限。到上限不报错：告诉用户已暂停、发检查点并正常结束这一轮，
-// 用户说「继续」就能接着做。原来 50 步就报错，长任务做着做着无声停下。测试可以改小。
-var maxSteps = 200
+// 用户说“继续”就能接着做。原来 50 步就报错，长任务做着做着无声停下；200 步对长任务又太紧，
+// Claude Code / Codex 这类交互式 agent 不按步数截断，只在用户按停止时结束。这里放到 1000，
+// 真正的死循环交给 loopTracker，时间和成本用 turnBudget 兜底。测试可以改小。
+var maxSteps = 1000
+
+// turnBudget 是一轮最多跑多久。到点像步数到上限那样暂停并写检查点，用户说“继续”再开一轮。
+// 按时间兜底比按步数更贴近长任务：干活的一轮可以跑很久，跑飞的一轮有时间上限。
+var turnBudget = 45 * time.Minute
 
 // stepLimitNotice 是到步数上限时给用户看的说明。
-const stepLimitNotice = "\n\n(Paused after %d tool steps in this turn. Reply \"continue\" to keep going.)"
+const stepLimitNotice = "\n\n(Paused after %d tool steps in this turn. The steps above are kept. Reply \"continue\" to keep going.)"
+
+// turnBudgetNotice 是一轮跑满时间预算时给用户看的说明。
+const turnBudgetNotice = "\n\n(Paused: this turn has been running for %d minutes (budget %d). The steps above are kept. Reply \"continue\" to keep going.)"
 
 // loopStopNotice 是同一个工具调用连续重复到上限时给用户看的说明。
 // 这里要正常收尾而不是报错：报错时客户端把整轮渲染成 Operation interrupted.，
@@ -68,7 +77,7 @@ var quietThinkingAfter = 2 * time.Second
 type Session struct {
 	RequestID        string
 	Model            config.Model
-	Proxy            config.Proxy   // 出站代理设置，供备用模型按各自「走代理」开关拨号
+	Proxy            config.Proxy   // 出站代理设置，供备用模型按各自“走代理”开关拨号
 	Fallbacks        []config.Model // 流式前失败时的备用模型
 	Web              dialer.Func    // 联网工具（WebFetch、WebSearch、出图）按全局出站代理拨号
 	run              *cursorpb.AgentRunRequest
@@ -103,6 +112,7 @@ type Session struct {
 	baseState        *cursorpb.ConversationStateStructure
 	kv               chan *cursorpb.KvClientMessage
 	finished         atomic.Bool
+	running          atomic.Int32
 	summaries        uint32
 	summaryText      string
 	notifyMu         sync.Mutex
@@ -292,6 +302,14 @@ func (s *Session) deliver(msg *cursorpb.ExecClientMessage) {
 	}
 }
 
+// ConversationID 是这条 run 所属的会话，用于按会话找回已经答完的 run。
+func (s *Session) ConversationID() string {
+	if s.run == nil {
+		return ""
+	}
+	return s.run.GetConversationId()
+}
+
 // adopt 接住一条 resume 的 run request。会话已经答完，这时没有别的 goroutine 在读它。
 // resume 偶尔不带会话 id 或模型，缺的沿用上一轮的，否则接着跑的那一轮会读不到历史。
 func (s *Session) adopt(run *cursorpb.AgentRunRequest) {
@@ -340,8 +358,12 @@ type Emit func(*cursorpb.AgentServerMessage) error
 // Finished 表示这一轮模型循环已经返回。之后同一条 run 上新开的连接是恢复，不是新的一轮。
 func (s *Session) Finished() bool { return s.finished.Load() }
 
+// Running 表示这一轮正在跑。热替换等“回合空闲”用这个判断，不看 Finished：
+// 答完但连接还挂着的会话不算忙。
+func (s *Session) Running() bool { return s.running.Load() > 0 }
+
 // Replay 生成这一轮最终状态的完整回放：全部引用的 blob（SetBlobArgs）+ 最后一份 checkpoint。
-// 客户端在回合结束后会 resume 同一条 run，用它确认「任务已完成、内容是什么」；
+// 客户端在回合结束后会 resume 同一条 run，用它确认“任务已完成、内容是什么”；
 // 只回 turn_ended 的话客户端会报 Error resuming chat 并反复重试。
 func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
 	state := s.baseState
@@ -393,9 +415,11 @@ func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
 }
 
 func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr error) {
+	s.running.Add(1)
+	defer s.running.Add(-1)
 	defer s.finished.Store(true)
 	// 已经答完的 run 被 resume 时会在同一个会话上再跑一轮（例如后台任务完成），
-	// 先清掉上一轮的结束标记和自动压缩记录，否则这一轮会被当成「已经结束」或被跳过压缩。
+	// 先清掉上一轮的结束标记和自动压缩记录，否则这一轮会被当成“已经结束”或被跳过压缩。
 	s.finished.Store(false)
 	s.autoSummarized = false
 	s.dial = dial
@@ -507,14 +531,14 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	short := conversationID(s.run.GetConversationId())
 	if configured > 0 && requested > configured {
 		// 菜单里不再给出超限档位，但旧客户端仍会带 200k 这类固定值。记下请求值和实际窗口，
-		// 下次用户说「选了没生效」时能直接分辨是选择器没传过来，还是被模型上限截断了。
+		// 下次用户说“选了没生效”时能直接分辨是选择器没传过来，还是被模型上限截断了。
 		slog.Info("context_clamped 请求的上下文超过模型上限，按模型上限处理",
 			"conversation", short, "requested", requested, "configured", configured, "window", model.ContextWindow)
 	}
 	slog.Info("▶ "+name, "conversation", short, "turn", userTurns(messages), "window", model.ContextWindow)
 	newTurnDiag(s.run, reqCtx, len(s.mcp), len(catalog), messages).log()
 	if skipReason != "" && s.HasQueuedInput() {
-		// 后台任务完成这类输入是在上一轮结束之后送进这条 run 的，动作本身还是「继续运行」，
+		// 后台任务完成这类输入是在上一轮结束之后送进这条 run 的，动作本身还是“继续运行”，
 		// 但确实有新的输入要交给模型。下一轮循环开头的 drainSteer 会把它并进历史。
 		slog.Info("turn_continue 有新的输入，接着跑一轮", "conversation", short, "action", plan.kind, "reason", skipReason)
 		skipReason = ""
@@ -565,6 +589,16 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	}
 next:
 	for step := 0; step < maxSteps; step++ {
+		if turnBudget > 0 {
+			if elapsed := time.Since(turnStarted); elapsed >= turnBudget {
+				slog.Debug("一轮跑满时间预算，暂停", "conversation", short, "elapsed_s", int(elapsed.Seconds()), "budget_s", int(turnBudget.Seconds()))
+				if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(turnBudgetNotice, int(elapsed.Minutes()), int(turnBudget.Minutes()))); err != nil {
+					return err
+				}
+				sentCheckpoint = true
+				return nil
+			}
+		}
 		var err error
 		messages, _, err = s.drainSteer(send, messages)
 		if err != nil {
@@ -633,15 +667,11 @@ next:
 				name = reply.ToolCalls[0].Name
 			}
 			slog.Debug("相同工具调用重复，暂停这一轮", "conversation", short, "tool", name, "limit", loopStopAt)
-			messages = provider.CloseDangling(messages)
-			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: fmt.Sprintf(loopStopNotice, name, loopStopAt)}}})); err != nil {
-				return err
-			}
-			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
+			if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(loopStopNotice, name, loopStopAt)); err != nil {
 				return err
 			}
 			sentCheckpoint = true
-			return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
+			return nil
 		} else if warn != "" {
 			messages = append(messages, provider.Message{Role: "user", Content: warn})
 		}
@@ -740,13 +770,23 @@ next:
 		}
 	}
 	slog.Debug("一轮工具步数到上限，暂停", "conversation", short, "steps", maxSteps)
-	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: fmt.Sprintf(stepLimitNotice, maxSteps)}}})); err != nil {
+	if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(stepLimitNotice, maxSteps)); err != nil {
+		return err
+	}
+	sentCheckpoint = true
+	return nil
+}
+
+// pauseTurn 正常结束这一轮并留下检查点。步数上限、时间预算和重复工具调用都走这里：
+// 用错误结束的话，客户端会把整轮渲染成 Operation interrupted.，已经流出来的思考和改动都看不见。
+func (s *Session) pauseTurn(send Emit, conversation, system string, messages []provider.Message, mode cursorpb.AgentMode, notice string) error {
+	messages = provider.CloseDangling(messages)
+	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: notice}}})); err != nil {
 		return err
 	}
 	if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
 		return err
 	}
-	sentCheckpoint = true
 	return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 }
 

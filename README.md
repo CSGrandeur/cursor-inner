@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.19`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.20`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -73,11 +73,11 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 <details>
 <summary><b>首次运行要信任本机证书</b></summary>
 
-第一次接管时，cursor-inner 会生成本机根证书「cursor-inner Local CA」，并请求系统信任它。不信任的话，Cursor 连不上本机代理。
+第一次接管时，cursor-inner 会生成本机根证书“cursor-inner Local CA”，并请求系统信任它。不信任的话，Cursor 连不上本机代理。
 
 | 平台 | 会看到什么 |
 | --- | --- |
-| Windows | 询问是否安装证书，选「是」 |
+| Windows | 询问是否安装证书，选“是” |
 | macOS | 要求登录密码，把证书写入登录钥匙串并设为受信任 |
 | Linux | polkit 授权框；缺少 `certutil` 时在同一次授权里安装 |
 
@@ -102,22 +102,22 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 ## 使用
 
-1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的「启动 Cursor」「启动 Grok」「启动 Codex」再打开它们，不退出 cursor-inner。
-2. 在「模型」里填写显示名、类型、模型名、接口地址和密钥，点「测试」。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
-3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点「刷新模型列表」（Refresh model list），或执行 Reload Window。
-4. 用完点「退出」。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选「退出」才结束。Cursor 的设置会还原。
+1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的“启动 Cursor”“启动 Grok”“启动 Codex”再打开它们，不退出 cursor-inner。
+2. 在“模型”里填写显示名、类型、模型名、接口地址和密钥，点“测试”。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
+3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点“刷新模型列表”（Refresh model list），或执行 Reload Window。
+4. 用完点“退出”。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选“退出”才结束。Cursor 的设置会还原。
 
-   退出前会问一次「退出 cursor-inner？」，并列出「这些程序正经由 cursor-inner 联网，会一并关闭：」（Cursor，以及 cursor-inner 接管的 Grok 和 Codex），提示「下次启动时可一键恢复 Grok 和 Codex，照常走代理。」。勾「不再询问」以后直接退出，点「取消」不退出；Ctrl+C、注销、关机不问。只关 cursor-inner 自己接管的进程，你自己另开的不动；cursor-inner 被强杀时由守护进程补关。下次打开 cursor-inner，配置页顶部会显示上次关掉的程序：点「恢复」按当前接管设置带代理重新打开（拿不到可用代理就报错，绝不直连），点「忽略」不再提示。
+   退出前会问一次“退出 cursor-inner？”，并列出“这些程序正经由 cursor-inner 联网，会一并关闭：”（Cursor，以及 cursor-inner 接管的 Grok 和 Codex），提示“下次启动时可一键恢复 Grok 和 Codex，照常走代理。”。勾“不再询问”以后直接退出，点“取消”不退出；Ctrl+C、注销、关机不问。只关 cursor-inner 自己接管的进程，你自己另开的不动；cursor-inner 被强杀时由守护进程补关。下次打开 cursor-inner，配置页顶部会显示上次关掉的程序：点“恢复”按当前接管设置带代理重新打开（拿不到可用代理就报错，绝不直连），点“忽略”不再提示。
 
 > [!IMPORTANT]
 > 选 **Auto** 时 Cursor 只用官方模型。要用自定义模型，必须在列表里手动选。
 
 配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
 
-- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带「密钥」标签，点击即可复制；「复制」会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型在还没输出文字时，用于鉴权失败或限流。
-- **网络**：代理地址、代理范围（「全局」或「仅官方」）、接管 Cursor、接管 Grok、接管 Codex、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
-- **更新**：按钮是「检查更新」和「更新」。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
-- **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在「出图」里填 OpenAI 兼容接口。
+- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带“密钥”标签，点击即可复制；“复制”会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型填写其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流；填了列表里没有的名称会提示，不会保存。上下文窗口和最大输出旁的“?”会打开一张小帮助卡，说明数值含义、留空时怎么算。有新版本时，更新页按标题和列表显示更新说明。
+- **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
+- **更新**：按钮是“检查更新”和“更新”。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
+- **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在“出图”里填 OpenAI 兼容接口。
 
 <details>
 <summary><b>命令行</b></summary>
@@ -196,7 +196,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 <details>
 <summary><b>怎么卸载？</b></summary>
 
-1. 开过开机启动的话，先在配置页关掉，再点「退出」。
+1. 开过开机启动的话，先在配置页关掉，再点“退出”。
 2. 删除根证书：
 
    | 平台 | 命令 |
@@ -220,7 +220,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.19 ./build.sh linux
+VERSION=v0.5.20 ./build.sh linux
 ```
 
 ## 致谢

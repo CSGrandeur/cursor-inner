@@ -171,7 +171,7 @@ func TestNotifierLeaksAndAlertsAreRateLimited(t *testing.T) {
 	if n.leak(3, "Mine", now.Add(time.Second)) != nil {
 		t.Fatal("unchanged count must not pop")
 	}
-	if b := n.leak(4, "Mine", now.Add(2*time.Second)); b == nil || b.Page != pageModels || !strings.Contains(b.Text, "「Mine」") {
+	if b := n.leak(4, "Mine", now.Add(2*time.Second)); b == nil || b.Page != pageModels || !strings.Contains(b.Text, "“Mine”") {
 		t.Fatalf("new leak must pop: %+v", b)
 	}
 	if n.leak(5, "Mine", now.Add(time.Minute)) != nil {

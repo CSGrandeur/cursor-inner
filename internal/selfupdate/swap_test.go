@@ -52,7 +52,7 @@ func TestSwapMissingStagedKeepsOld(t *testing.T) {
 }
 
 // 从下载目录直接运行、文件随后被清理掉时，路径上已经没有可备份的旧版本。
-// 只要目录还在，就把新版本放到原路径继续更新，不能卡在「备份当前程序失败」。
+// 只要目录还在，就把新版本放到原路径继续更新，不能卡在“备份当前程序失败”。
 func TestSwapWhenCurrentExeIsGone(t *testing.T) {
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "cursor-inner.exe")

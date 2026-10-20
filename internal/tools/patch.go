@@ -22,7 +22,7 @@ import (
 // 单个 Add 等同 Write，单个 Delete 等同 Delete。多文件、Move，以及混合操作走 patchState：
 // 先经 Cursor 读完所有要改/删的文件，在内存里按顺序算出每个文件的结果，任何一块对不上就整份不写；
 // 全部算好之后再逐个下发 Write / Delete，每个文件一张卡片，结果按 Codex 的
-// 「Success. Updated the following files:」格式交回模型。
+// “Success. Updated the following files:”格式交回模型。
 
 type patchOp struct {
 	kind  string // update / add / delete

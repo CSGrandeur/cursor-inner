@@ -231,7 +231,7 @@ func (g *updateGlue) handover(ctx context.Context, to string) error {
 		ReadyTimeout: 30 * time.Second,
 		OKTimeout:    30 * time.Second,
 	}
-	slog.Info("开始交接到 "+to, logx.FileOnly) // 控制台由进度视图显示「热交接」
+	slog.Info("开始交接到 "+to, logx.FileOnly) // 控制台由进度视图显示“热交接”
 	ack, err := c.Run(ctx, plan)
 	if err != nil {
 		g.app.Freeze(false)
@@ -295,8 +295,8 @@ func (g *updateGlue) cleanupOld(justHandedOver bool) {
 	}()
 }
 
-// trayCheck 是托盘菜单「检查更新」：后台检查一次，同时打开配置页的「更新」标签。
-// 结果、更新说明和「更新」按钮都在页面上（实时推送），不再弹原生对话框。
+// trayCheck 是托盘菜单“检查更新”：后台检查一次，同时打开配置页的“更新”标签。
+// 结果、更新说明和“更新”按钮都在页面上（实时推送），不再弹原生对话框。
 func (g *updateGlue) trayCheck(open func(page string)) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)

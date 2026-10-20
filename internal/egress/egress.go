@@ -1,4 +1,4 @@
-// Package egress 提供可选的「严格模式」：用 Windows 防火墙禁止 Grok Bot / Cursor 直连官方端点。
+// Package egress 提供可选的“严格模式”：用 Windows 防火墙禁止 Grok Bot / Cursor 直连官方端点。
 // 规则由内嵌的 strict-egress.ps1 以管理员身份创建（需要 UAC），cursor-inner 自己不带管理员权限。
 package egress
 

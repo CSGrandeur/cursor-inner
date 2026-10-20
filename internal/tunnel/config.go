@@ -32,7 +32,7 @@ const (
 // Config 生成 sing-box 配置：
 //   - 只有官方域名经 fake-ip 落入 198.18/fc00 段，再由 route 规则交给代理；
 //   - 其它域名用用户真实 DNS 原样解析、直连，连接不进 TUN；
-//   - route_address 只含 fake-ip 段和 DNS 服务器 IP，所以只有「官方连接」和「DNS」进 TUN，别的流量不受影响；
+//   - route_address 只含 fake-ip 段和 DNS 服务器 IP，所以只有“官方连接”和“DNS”进 TUN，别的流量不受影响；
 //   - sniff + 按 ip_cidr(fake 段) 兜底，覆盖写死 IP / DoH 情况下仍把官方流量送进代理；
 //   - 代理出站拨号经 direct 的真实网卡，不回环进 TUN，避免成环；v2rayN 自身到上游的连接是真实 IP，不在捕获段内。
 func Config(o Options) ([]byte, error) {

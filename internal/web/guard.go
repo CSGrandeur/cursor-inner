@@ -15,7 +15,7 @@ import (
 //   - 改动类请求若带 Origin，必须与 Host 同源；带 Sec-Fetch-Site 时只接受 same-origin / none，
 //     挡住跨站表单或 text/plain fetch 这类不触发预检的 CSRF（例如偷偷加模型、退出程序）；
 //   - /api/ 下的读取也按同样规则挡跨站：有的接口返回明文密钥（复制 API Key），
-//     不能只靠浏览器同源策略和「没有 CORS 头」这一层。
+//     不能只靠浏览器同源策略和“没有 CORS 头”这一层。
 //
 // 不带这些头的本机客户端（curl、测试）照常可用。
 func guard(next http.Handler) http.Handler {

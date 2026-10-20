@@ -21,7 +21,7 @@ var grokApply = grokbot.Apply
 //   - proxyURL 为空且 keep 为假：用户关掉了代理，按用户选择不带代理。
 //
 // 地址带认证或是 socks 时，Grok Bot 自己用不了，改由本机回环上的代理桥转发。
-// 代理范围是「仅官方」时也一律经代理桥：桥按目标分流，官方端点走代理，其余直连。
+// 代理范围是“仅官方”时也一律经代理桥：桥按目标分流，官方端点走代理，其余直连。
 // 桥的端口只由代理地址决定，所以 socks / 带认证的代理切换范围时 Grok Bot 不用重开。
 func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	spec, on, err := dialer.EffectiveAddress(cfg.Proxy)
@@ -56,7 +56,7 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	return u, false
 }
 
-// SyncGrok 按「接管 Grok」开关处理正在运行的 Grok Bot。代理写在启动参数里，正在运行的进程读不到，
+// SyncGrok 按“接管 Grok”开关处理正在运行的 Grok Bot。代理写在启动参数里，正在运行的进程读不到，
 // 所以状态不对时会关掉并按当前选择重新打开。没在运行不拉起。不改系统 hosts。
 func (a *App) SyncGrok() {
 	if a.frozen.Load() {

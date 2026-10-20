@@ -629,7 +629,7 @@ func (s *Server) warnCustomModel(path string, body []byte, encoding string) {
 		return
 	}
 	// 目录 id 出现在遥测或被索引的文件里时，请求本身仍要转发给 Cursor。
-	// 这不是故障，不升成警告，也不计入「被带给了官方」。对话没留在本机的拒绝在各自的处理函数里。
+	// 这不是故障，不升成警告，也不计入“被带给了官方”。对话没留在本机的拒绝在各自的处理函数里。
 	slog.Debug("转发给官方的请求带有自定义模型", "path", path, "model", id)
 }
 

@@ -83,7 +83,7 @@ const (
 	envPID    = "CI_SPAWN_PIDFILE"
 )
 
-// 被启动的「新进程」：睡一会儿就退出。
+// 被启动的“新进程”：睡一会儿就退出。
 func TestSpawnHelperSleep(t *testing.T) {
 	if os.Getenv(envHelper) == "" {
 		t.Skip("helper")
@@ -232,7 +232,7 @@ func TestSpawnMiddle(t *testing.T) {
 	time.Sleep(20 * time.Second)
 }
 
-// 回答「新进程会不会随作业一起结束」：会。热交接的新进程留在启动者的作业里，作业被关闭（KILL_ON_JOB_CLOSE）时一并结束。
+// 回答“新进程会不会随作业一起结束”：会。热交接的新进程留在启动者的作业里，作业被关闭（KILL_ON_JOB_CLOSE）时一并结束。
 func TestSpawnedChildEndsWithJobClose(t *testing.T) {
 	if os.Getenv(envJob) != "" {
 		t.Skip("inner")

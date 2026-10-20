@@ -192,7 +192,7 @@ func TestFederatedSearchSkipsVerificationPages(t *testing.T) {
 	}
 }
 
-// bing.html 是 2026-10-11 不带 cookie 的 Bing 对「Go 1.25 release notes」的真实结果：只按「Go」搜，
+// bing.html 是 2026-10-11 不带 cookie 的 Bing 对“Go 1.25 release notes”的真实结果：只按“Go”搜，
 // 全是首页、教程、Gene Ontology。它不算相关结果，要触发 Brave，并且排在后面或丢掉。
 func TestOffTopicResultsTriggerFallbackAndRankLast(t *testing.T) {
 	f := &fakeEngines{pages: map[string]searchPage{
@@ -370,7 +370,7 @@ func TestEveryEngineBlockedIsAClearError(t *testing.T) {
 	}
 }
 
-// 查询词本身含「安全验证」「captcha」时，有结果的页面不能被当成验证页。
+// 查询词本身含“安全验证”“captcha”时，有结果的页面不能被当成验证页。
 func TestQueryWordsDoNotLookLikeAVerificationPage(t *testing.T) {
 	f := &fakeEngines{pages: map[string]searchPage{
 		"www.bing.com": {status: 200, body: "<title>百度安全验证 captcha - 搜索</title>" + readFixture(t, "bing.html")},

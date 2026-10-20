@@ -15,13 +15,13 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// 控制台窗口的显示和隐藏（托盘菜单、配置页「后台运行」、关闭按钮）。
+// 控制台窗口的显示和隐藏（托盘菜单、配置页“后台运行”、关闭按钮）。
 //
 // 隐藏：经典控制台直接 SW_HIDE，进程仍挂在上面，再显示是瞬间的；别的宿主（例如 Windows Terminal）收不起来，
 // 就 FreeConsole 拆下来。
 // 显示：还挂着控制台就恢复窗口；已经没有控制台（后台启动、或者拆下来过）时，让 conhost 托管一个
 // 只负责占住控制台的小进程（本程序的 --console-holder），再 AttachConsole 过去。直接 AllocConsole 在
-// Windows 11 上会按「默认终端」开进 Windows Terminal，关标签页会连进程一起结束，关闭按钮也拦不住。
+// Windows 11 上会按“默认终端”开进 Windows Terminal，关标签页会连进程一起结束，关闭按钮也拦不住。
 
 var (
 	consoleMu     sync.Mutex
@@ -214,5 +214,5 @@ func runConsoleHolder(owner int, pidFile string) {
 // traySupported：Windows 有通知区域图标，可以后台运行。
 const traySupported = true
 
-// concealConsoleAtStart 记下「后台启动、没有控制台」。
+// concealConsoleAtStart 记下“后台启动、没有控制台”。
 func concealConsoleAtStart() { trayConcealed.Store(true) }

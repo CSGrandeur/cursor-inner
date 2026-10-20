@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// 主进程被结束后，Electron 子进程正在自己退出：结束它会得到「拒绝访问」，
+// 主进程被结束后，Electron 子进程正在自己退出：结束它会得到“拒绝访问”，
 // 但它很快就退出了。这种情况不能算失败，否则调用方不会再重新打开程序。
 func TestKillTreatsAccessDeniedOnExitingProcessAsDone(t *testing.T) {
 	exitsAfter := 50 * time.Millisecond

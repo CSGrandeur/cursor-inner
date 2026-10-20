@@ -22,7 +22,7 @@ import (
 
 // TestProxyEnvForcesCONNECTThroughProxy 证明：即使进程环境里有 NO_PROXY=*（PAC/系统
 // 代理常见残留），按 ProxyEnv 装配后的客户端仍对目标发 CONNECT，而不会直连原点。
-// 这对应 v2rayN PAC 模式下「部分流量绕过 cursor-inner 注入的代理」的回归。
+// 这对应 v2rayN PAC 模式下“部分流量绕过 cursor-inner 注入的代理”的回归。
 func TestProxyEnvForcesCONNECTThroughProxy(t *testing.T) {
 	originHost, originPort := startTLSOrigin(t)
 	proxyURL, sawCONNECT := startCONNECTProxy(t)
@@ -64,7 +64,7 @@ func TestProxyEnvForcesCONNECTThroughProxy(t *testing.T) {
 }
 
 // TestDirectWouldBypassWhenNoProxyStar 对照：若错误地保留 NO_PROXY=*，同一客户端会直连、
-// 代理收不到 CONNECT。用来说明「继承系统 no_proxy」为何在 PAC 下会漏。
+// 代理收不到 CONNECT。用来说明“继承系统 no_proxy”为何在 PAC 下会漏。
 func TestDirectWouldBypassWhenNoProxyStar(t *testing.T) {
 	originHost, originPort := startTLSOrigin(t)
 	_, sawCONNECT := startCONNECTProxy(t)

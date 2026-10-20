@@ -114,7 +114,7 @@ func startClassicConsole() error {
 	conhost := filepath.Join(os.Getenv("SystemRoot"), "System32", "conhost.exe")
 	err := launchDetached(append([]string{conhost, exe, "--classic-console"}, extra...), classicConsoleCreationFlags())
 	if err == nil || errors.Is(err, errLauncherExited) {
-		// conhost 的启动进程经常马上退出，真正的窗口还在。这时再拉起一份就会出现两个「已经在运行」。
+		// conhost 的启动进程经常马上退出，真正的窗口还在。这时再拉起一份就会出现两个“已经在运行”。
 		return nil
 	}
 	return launchDetached(append([]string{exe, "--classic-console"}, extra...), fallbackConsoleCreationFlags())

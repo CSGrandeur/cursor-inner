@@ -86,7 +86,7 @@ func (a *App) tracker() *takeover.Tracker {
 	return a.track
 }
 
-// SetTakeoverPhase 由启动流程和热交接设置：配置页据此区分「还在建立」和「真的没生效」。
+// SetTakeoverPhase 由启动流程和热交接设置：配置页据此区分“还在建立”和“真的没生效”。
 func (a *App) SetTakeoverPhase(p takeover.Phase) { a.tracker().SetPhase(p) }
 
 // SetTakeoverSkipped 记录这次启动用 --no-takeover 明确跳过了接管。

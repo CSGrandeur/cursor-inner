@@ -113,7 +113,7 @@ func (v *View) Update(st selfupdate.Status) {
 		case prev.State == selfupdate.StateChecking && !st.CanApply:
 			v.finish(fmt.Sprintf("有新版本 %s（当前 %s）%s；此构建没有内置更新公钥，请到 Releases 页面手动下载", st.Latest, st.Current, manifestNote(st)))
 		case prev.State == selfupdate.StateChecking:
-			v.finish(fmt.Sprintf("有新版本 %s（当前 %s）%s；在配置页点「更新」安装", st.Latest, st.Current, manifestNote(st)))
+			v.finish(fmt.Sprintf("有新版本 %s（当前 %s）%s；在配置页点“更新”安装", st.Latest, st.Current, manifestNote(st)))
 		case applying(prev.State):
 			// 失败后又回到可更新：失败那一行已经打过（state=failed）。这里只收尾活动行。
 			v.finish("")
@@ -194,7 +194,7 @@ func (v *View) downloading(prev, st selfupdate.Status) {
 		v.setLive("下载", frac(st), info)
 		return
 	}
-	// 降级：跨过一个步长或隔了足够久才打一行；100% 由「下载完成」那一行代替。
+	// 降级：跨过一个步长或隔了足够久才打一行；100% 由“下载完成”那一行代替。
 	now := v.now()
 	step := st.Percent / plainStep * plainStep
 	if st.Percent < 100 && (step > v.plainPct || now.Sub(v.plainAt) >= plainInterval) && st.Done > 0 {
@@ -274,7 +274,7 @@ func frac(st selfupdate.Status) float64 {
 	return float64(st.Percent) / 100
 }
 
-// Info 是进度条右边的文字：「6.2 / 14.9 MB · 1.3 MB/s · 剩余约 9 秒 · 代理」。
+// Info 是进度条右边的文字：“6.2 / 14.9 MB · 1.3 MB/s · 剩余约 9 秒 · 代理”。
 // 配置页 page.html 里的 upInfo 按同样的规则排版。
 func Info(st selfupdate.Status) string {
 	parts := []string{SizePair(st.Done, st.Total)}

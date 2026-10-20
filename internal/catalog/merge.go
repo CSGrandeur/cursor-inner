@@ -51,6 +51,20 @@ func availableModel(model Entry) []byte {
 	msg = protox.AppendBool(msg, 9, true)
 	msg = protox.AppendBool(msg, 10, true)
 	msg = protox.AppendBool(msg, 14, true)
+	choices, defaultContext := contextChoices(model.ContextWindow)
+	// 15/16 是 Cursor 用来算上下文占用的“默认窗口”和“最大窗口”（官方目录里 Grok 4.7 =
+	// 256k/500k，Claude = 300k/1m）。不写这两个字段时客户端按 256K 兜底：选择器里选了 1M，
+	// 右上角的上下文预览仍然显示 /256K。
+	if n := contextTokens(defaultContext); n > 0 {
+		msg = protox.AppendVarint(msg, 15, uint64(n))
+	}
+	maxWindow := model.ContextWindow
+	if maxWindow <= 0 {
+		maxWindow = largestContext(choices)
+	}
+	if maxWindow > 0 {
+		msg = protox.AppendVarint(msg, 16, uint64(maxWindow))
+	}
 	msg = protox.AppendString(msg, 17, name)
 	msg = protox.AppendString(msg, 18, model.ID)
 	msg = protox.AppendBool(msg, 19, true)
@@ -58,7 +72,6 @@ func availableModel(model Entry) []byte {
 	msg = protox.AppendBool(msg, 22, true)
 	msg = protox.AppendString(msg, 24, name)
 	msg = protox.AppendBool(msg, 25, true)
-	choices, defaultContext := contextChoices(model.ContextWindow)
 	msg = append(msg, parameterDefinitions(model.Reasoning, model.Fast, choices)...)
 	msg = append(msg, variants(model.ID, name, tooltip, model.Reasoning, model.Fast, choices, defaultContext)...)
 	msg = protox.AppendVarint(msg, 38, 1)
@@ -73,7 +86,7 @@ func availableModel(model Entry) []byte {
 }
 
 // contextChoices 只提供模型装得下的档位。超过模型上限的档位选中后会被 effectiveWindow 截断，
-// 菜单里却照旧显示成可用，用户只会看到「选了 1M，实际还是 128K」。模型设置的上限本身
+// 菜单里却照旧显示成可用，用户只会看到“选了 1M，实际还是 128K”。模型设置的上限本身
 // 不在固定档位表里时（例如 128K），插到最前并作为默认档。
 func contextChoices(window int) (list [][2]string, defaultID string) {
 	list = append([][2]string{}, contexts...)
@@ -99,6 +112,37 @@ func contextChoices(window int) (list [][2]string, defaultID string) {
 		}
 	}
 	return append([][2]string{{id, label}}, list...), id
+}
+
+// contextTokens 把档位 id 换算成 token 数：固定档位查表，模型自带的档位（128k、300000）按数字解析。
+func contextTokens(id string) int {
+	if n, ok := contextSizes[id]; ok {
+		return n
+	}
+	value := strings.TrimSpace(strings.ToLower(id))
+	mult := 1
+	switch {
+	case strings.HasSuffix(value, "m"):
+		mult, value = 1000000, strings.TrimSuffix(value, "m")
+	case strings.HasSuffix(value, "k"):
+		mult, value = 1000, strings.TrimSuffix(value, "k")
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n * mult
+}
+
+// largestContext 返回档位表里最大的 token 数，用于模型没设上限时的“最大窗口”。
+func largestContext(list [][2]string) int {
+	max := 0
+	for _, item := range list {
+		if n := contextTokens(item[0]); n > max {
+			max = n
+		}
+	}
+	return max
 }
 
 func formatContext(window int) (id, label string) {

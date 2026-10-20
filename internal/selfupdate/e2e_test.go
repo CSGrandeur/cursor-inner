@@ -214,7 +214,7 @@ func TestE2EDowngradeAndRollback(t *testing.T) {
 	if st.State != StateAvailable || st.Latest != "v0.6.0" || st.Source != "gitee" {
 		t.Fatalf("%+v", st)
 	}
-	// 装上 v0.6.0 以后，源给 v0.5.0 只是「已是最新」，不报回滚。
+	// 装上 v0.6.0 以后，源给 v0.5.0 只是“已是最新”，不报回滚。
 	if st := e.updater("v0.6.0", []TrustedKey{k.key}, githubSource(ghSrv)).Check(context.Background(), false); st.State != StateUpToDate {
 		t.Fatalf("%+v", st)
 	}
