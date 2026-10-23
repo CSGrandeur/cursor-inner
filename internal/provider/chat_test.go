@@ -370,6 +370,15 @@ func TestCloseDanglingFillsMissingResults(t *testing.T) {
 	}
 }
 
+func TestCloseDanglingClosesTrailingUser(t *testing.T) {
+	out := CloseDangling([]Message{
+		{Role: "user", Content: "previous instruction"},
+	})
+	if len(out) != 2 || out[1].Role != "assistant" || out[1].Content != interruptedTurn {
+		t.Fatalf("%+v", out)
+	}
+}
+
 func TestChatNoteRecordsBytesNotText(t *testing.T) {
 	secret := "super-secret-reply"
 	var notes []runlog.Note

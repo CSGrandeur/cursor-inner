@@ -18,6 +18,7 @@ import (
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/provider"
+	"cursor-inner/internal/proxywait"
 	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
 	"cursor-inner/internal/tunnel"
@@ -47,6 +48,9 @@ type App struct {
 	isolated    atomic.Bool
 	trackOnce   sync.Once
 	track       *takeover.Tracker
+	pwOnce      sync.Once
+	pw          *proxywait.Waiter
+	updPending  atomic.Bool // 自动检查更新等代理就绪后再做
 
 	trayApply func(config.Desktop) // 托盘挂上后才有，见 SetTray
 }
@@ -167,6 +171,9 @@ func (a *App) State() (web.View, error) {
 	view.Proxy.Scope = cfg.Proxy.ScopeName()
 	view.Proxy.Bridged = on && grokbot.NeedsBridge(spec)
 	view.Proxy.Effective = on && perr == nil
+	if on {
+		view.Proxy.Wait, view.Proxy.WaitAddr, view.Proxy.WaitSince = a.proxyWaitView()
+	}
 	view.Image.BaseURL = cfg.Image.BaseURL
 	view.Image.Model = cfg.Image.Model
 	view.Image.KeyHint = config.Model{APIKey: cfg.Image.APIKey}.KeyHint()
@@ -259,6 +266,7 @@ func (a *App) SetProxy(enabled bool, address string) error {
 		return err
 	}
 	a.life.SyncDirect()
+	a.WatchProxy()
 	a.SyncGrok()
 	a.SyncCodex()
 	return nil

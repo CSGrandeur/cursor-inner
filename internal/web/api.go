@@ -60,6 +60,10 @@ type ProxyView struct {
 	Enabled   bool   `json:"enabled"`
 	Address   string `json:"address"`
 	Effective bool   `json:"effective"`
+	// Wait 是等代理开始监听的进度：""（不在等）/ "waiting"（还没定论，中性）/ "down"（超时仍没监听）。
+	Wait      string `json:"wait,omitempty"`
+	WaitAddr  string `json:"wait_addr,omitempty"`
+	WaitSince string `json:"wait_since,omitempty"`
 	Scope     string `json:"scope"`   // global / official
 	Bridged   bool   `json:"bridged"` // 地址本身就要经本机代理桥（socks / 带认证）：切换范围时 Grok Bot 不用重开
 }

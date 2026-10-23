@@ -2,11 +2,10 @@ package agent
 
 import (
 	"context"
+	"google.golang.org/protobuf/proto"
 	"strings"
 	"sync"
 	"time"
-
-	"google.golang.org/protobuf/proto"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
@@ -55,6 +54,8 @@ func (h *Hub) Bidi(body []byte) (Route, error) {
 		return Route{}, err
 	}
 	var msg cursorpb.AgentClientMessage
+	// 不做“读一部分”的挽救：读不成 AgentClientMessage 的，多半根本不是 agent 回合
+	// （例如 Cursor 3.26 本地循环的 InferenceClientMessage），硬认成本地回合会把请求吞掉，客户端一直等。
 	if err := proto.Unmarshal(raw, &msg); err != nil {
 		return Route{}, err
 	}
@@ -125,6 +126,11 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				}
 				start = true
 			}
+		}
+		// NoteResume 会先把已答完的会话挂到新 request id 上，却来不及 adopt。
+		// 若不接住新动作，接着跑时仍用上一轮的 UserMessageAction，等于把旧指令再插一遍。
+		if s.session != nil && !start && !s.session.Running() {
+			s.session.adopt(m.RunRequest)
 		}
 		if !s.decided {
 			s.decided = true
@@ -269,6 +275,19 @@ func (h *Hub) NoteResume(oldID, newID string) bool {
 	}
 	if newID == "" {
 		newID = oldID
+	}
+	// RunSSE 常和 BidiAppend resume 几乎同时到。Wait 会先 slotLocked 出一个空槽并卡在 ready 上；
+	// 这里如果整槽替换，Wait 仍等旧 channel，30 秒后超时把自定义模型 resume 转给官方，
+	// 客户端就弹 Error resuming chat（2026-10-22 17F: request 56924b58 / 47530dec）。
+	if s := h.slots[newID]; s != nil {
+		s.session = sess
+		s.decided = true
+		select {
+		case <-s.ready:
+		default:
+			close(s.ready)
+		}
+		return true
 	}
 	ready := make(chan struct{})
 	close(ready)

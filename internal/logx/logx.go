@@ -55,7 +55,8 @@ func (s *split) Enabled(context.Context, slog.Level) bool { return true }
 func (s *split) Handle(_ context.Context, r slog.Record) error {
 	line := format(r)
 	if s.file != nil {
-		fmt.Fprintln(s.file, line)
+		n, _ := fmt.Fprintln(s.file, line)
+		noteWrite(s.file, n)
 	}
 	emitSinks(r)
 	show := (r.Level >= slog.LevelInfo || s.verbose) && !fileOnly(r)

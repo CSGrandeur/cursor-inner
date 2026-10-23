@@ -20,12 +20,24 @@ var Suffixes = []string{
 	"cursor-cdn.com",
 	"cursorvm.com",
 	"anysphere.co",
+	// Cursor 3.26 product.json 的 isolatedBackendTargets：Cursor 自己的独立后端（api.cursor.spacex.com 等）。
+	// 只收 Cursor 子域，不收整个 spacex.com。
+	"cursor.spacex.com",
+	"cursor-staging.spacex.com",
 	// OpenAI 帮助中心里列出的第一方后缀。Stripe、Sentry、Intercom 这类第三方不在名单里。
 	"openai.com",
 	"chatgpt.com",
 	"oaistatic.com",
 	"oaiusercontent.com",
 	"oaistatsig.com",
+}
+
+// Hosts 是只按完整主机名匹配的官方端点：它们的上级域名是公共云或第三方，不能按后缀收。
+// 依据是 inner.log 里 Grok Bot 桥的实际目标（2026-10-20 起直连）和 Cursor 3.26 product.json。
+var Hosts = []string{
+	"agent-stores.s3.us-east-1.amazonaws.com", // Grok Bot 的 agent store
+	"workoscdn.com",                // 登录页资源（只见过裸域名）
+	"cursor.blob.core.windows.net", // Cursor 远程服务器包下载（serverDownloadUrlTemplate）
 }
 
 // alsoProxy 是用来解析官方域名的 DoH 服务。严格模式和泄漏检查脚本经 Grok 的代理地址查询它们，
@@ -103,14 +115,24 @@ func matchSuffix(host string, list []string) bool {
 
 // Name 报告 host 是不是官方域名（含子域名）。
 func Name(host string) bool {
-	return matchSuffix(normalize(host), Suffixes)
+	h := normalize(host)
+	return matchSuffix(h, Suffixes) || matchExact(h, Hosts)
+}
+
+func matchExact(host string, list []string) bool {
+	for _, s := range list {
+		if host == s {
+			return true
+		}
+	}
+	return false
 }
 
 // MustProxy 报告这个名字是否必须走代理：官方域名或解析官方域名用的 DoH。
 // 这类名字一律不在本地解析、不按解析结果直连，防 DNS 重绑定把官方流量引到直连。
 func MustProxy(host string) bool {
 	h := normalize(host)
-	return matchSuffix(h, Suffixes) || matchSuffix(h, alsoProxy)
+	return matchSuffix(h, Suffixes) || matchExact(h, Hosts) || matchSuffix(h, alsoProxy)
 }
 
 // Reserved 报告 ip 是否属于直连的内网预留段（回环、未指定、私网、CGNAT、链路本地等）。
@@ -153,7 +175,8 @@ func ForHost(host string) Route {
 		// 公网 IP 没有域名，对不上名单。官方客户端有时直接连 IP，所以走代理。
 		return Proxy
 	}
-	if matchSuffix(h, Suffixes) || matchSuffix(h, alsoProxy) {
+	// 与 MustProxy 同一套判断：后缀名单、精确主机名单、DoH，所有路径只认这一处。
+	if MustProxy(h) {
 		return Proxy
 	}
 	if h == "localhost" || strings.HasSuffix(h, ".localhost") || h == "wsl.localhost" || strings.HasSuffix(h, ".local") {

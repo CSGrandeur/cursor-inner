@@ -522,7 +522,7 @@ func (j *job) fetch(ctx context.Context, l *leg) {
 func (j *job) fetchLeg(ctx context.Context, l *leg) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, j.url, nil)
 	if err != nil {
-		return err
+		return redactErr(err)
 	}
 	req.Header.Set("User-Agent", "cursor-inner-updater")
 	if l.start > 0 {
@@ -530,7 +530,7 @@ func (j *job) fetchLeg(ctx context.Context, l *leg) error {
 	}
 	resp, err := l.route.Client.Do(req)
 	if err != nil {
-		return err
+		return redactErr(err)
 	}
 	defer resp.Body.Close()
 	pos := l.start

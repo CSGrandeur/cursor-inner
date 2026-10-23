@@ -36,7 +36,7 @@ func compactMessages(messages []provider.Message, window int) []provider.Message
 			continue
 		}
 		body := out[i].Content
-		out[i].Content = body[:300] + "\n…[earlier tool output compacted]…\n" + body[len(body)-200:]
+		out[i].Content = headUTF8(body, 300) + "\n…[earlier tool output compacted]…\n" + tailUTF8(body, 200)
 	}
 	return out
 }

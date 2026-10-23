@@ -17,13 +17,16 @@ func EndError(message string) []byte {
 
 func DecodeBidi(payload []byte) (requestID string, client []byte, err error) {
 	raw, _ := Unary(payload)
-	hexData := StringField(raw, 1)
-	if hexData == "" {
+	// 新版 Cursor 可能改用 data_binary（字段 4）直接放字节，不再十六进制编码。
+	if hexData := StringField(raw, 1); hexData != "" {
+		client, err = decodeHex(hexData)
+		if err != nil {
+			return "", nil, err
+		}
+	} else if bin := Child(raw, 4); len(bin) > 0 {
+		client = bin
+	} else {
 		return "", nil, errNoData
-	}
-	client, err = decodeHex(hexData)
-	if err != nil {
-		return "", nil, err
 	}
 	id := StringField(Child(raw, 2), 1)
 	if id == "" {

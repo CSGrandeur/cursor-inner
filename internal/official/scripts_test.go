@@ -10,6 +10,7 @@ import (
 	"testing"
 )
 
+var exactLine = regexp.MustCompile(`(?m)^\$OfficialExactHosts = @\(([^)]*)\)`)
 var suffixLine = regexp.MustCompile(`(?m)^\$OfficialSuffixes = @\(([^)]*)\)`)
 
 // 脚本里的官方域名清单要和 Go 里的一致；Windows PowerShell 5 需要 BOM 才能正确读中文。
@@ -22,6 +23,10 @@ func TestScriptsShareOfficialList(t *testing.T) {
 		}
 		if !bytes.HasPrefix(raw, []byte("\xef\xbb\xbf")) {
 			t.Errorf("%s needs a UTF-8 BOM", name)
+		}
+		wantHosts := "'" + strings.Join(Hosts, "', '") + "'"
+		if h := exactLine.FindSubmatch(raw); h == nil || string(h[1]) != wantHosts {
+			t.Errorf("%s: exact hosts %q, want %q", name, h, wantHosts)
 		}
 		m := suffixLine.FindSubmatch(raw)
 		if m == nil || string(m[1]) != want {

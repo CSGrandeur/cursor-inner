@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -306,5 +307,210 @@ func TestActiveCountsOnlyRunningTurns(t *testing.T) {
 	}
 	if got := hub.Active(); got != 0 {
 		t.Fatalf("答完但槽位还在 Active = %d, want 0", got)
+	}
+}
+
+// RunSSE 先到会建空槽卡在 ready 上；随后的 NoteResume 必须叫醒它，不能整槽替换把 Wait 晾在旧 channel。
+func TestNoteResumeWakesWaitThatArrivedFirst(t *testing.T) {
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-race", runRequest("mine", "conv-race", "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "run-race")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	if err := session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	hub.Done("run-race")
+
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer waitCancel()
+	var (
+		got  *Session
+		werr error
+		wg   sync.WaitGroup
+	)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		got, werr = hub.Wait(waitCtx, "run-race-2")
+	}()
+	// 给 Wait 一点时间先建出空槽。
+	time.Sleep(50 * time.Millisecond)
+	if !hub.NoteResume("run-race", "run-race-2") {
+		t.Fatal("本机答完的 run 的 resume 应接回本机")
+	}
+	wg.Wait()
+	if werr != nil || got != session {
+		t.Fatalf("Wait 应被 NoteResume 叫醒并拿到原会话: same=%v err=%v", got == session, werr)
+	}
+}
+
+// 取消发生在模型还没回出助手消息时，历史会停在上一条用户消息。
+// 若不补“已中断”，下一轮新指令紧跟在后面，模型会先想上一条。
+func TestCancelBeforeReplyThenNewUserDoesNotLeaveTrailingUser(t *testing.T) {
+	hold := make(chan struct{})
+	fm := &fakeModel{
+		responses: []string{
+			sse(`{"choices":[{"delta":{"content":"should not finish"}}]}`),
+			sse(`{"choices":[{"delta":{"content":"answered the new one"}}]}`),
+		},
+		pause: hold,
+	}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	dir := t.TempDir()
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(dir))
+
+	if _, err := hub.Bidi(bidi(t, "run-old", runRequest("mine", "conv-trail", "previous instruction", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	session, err := hub.Wait(ctx, "run-old")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil })
+	}()
+	select {
+	case <-hold:
+	case <-time.After(5 * time.Second):
+		t.Fatal("model did not start")
+	}
+	cancel()
+	hold <- struct{}{}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancelled run did not return")
+	}
+	fm.mu.Lock()
+	fm.pause = nil
+	fm.mu.Unlock()
+	hub.Done("run-old")
+
+	history := NewHistory(dir).Load("conv-trail")
+	if len(history) < 2 || history[len(history)-1].Role != "assistant" || history[len(history)-1].Content != "Operation interrupted." {
+		t.Fatalf("cancelled turn must close trailing user: %+v", history)
+	}
+	if history[len(history)-2].Role != "user" || !strings.Contains(history[len(history)-2].Content, "previous instruction") {
+		t.Fatalf("expected previous user before interrupt: %+v", history)
+	}
+
+	if _, err := hub.Bidi(bidi(t, "run-new", runRequest("mine", "conv-trail", "brand new instruction", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	fresh, err := hub.Wait(ctx2, "run-new")
+	if err != nil || fresh == nil || fresh == session {
+		t.Fatalf("new turn session=%v same=%v err=%v", fresh != nil, fresh == session, err)
+	}
+	if err := fresh.Run(ctx2, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	fm.mu.Lock()
+	requests := append([]string{}, fm.requests...)
+	fm.mu.Unlock()
+	if len(requests) < 2 {
+		t.Fatalf("model calls=%d want >=2", len(requests))
+	}
+	body := requests[len(requests)-1]
+	if !strings.Contains(body, "brand new instruction") {
+		t.Fatalf("new instruction missing from model body: %s", body)
+	}
+	if !strings.Contains(body, "Operation interrupted.") {
+		t.Fatalf("interrupt marker missing between turns: %s", body)
+	}
+	// The latest user turn must be the new instruction, not a bare re-ask of the previous one.
+	prevIdx := strings.LastIndex(body, "previous instruction")
+	newIdx := strings.LastIndex(body, "brand new instruction")
+	if prevIdx < 0 || newIdx < 0 || newIdx < prevIdx {
+		t.Fatalf("new instruction should come after previous in the request")
+	}
+}
+
+// NoteResume 挂上旧会话后仍要 Bidi/adopt 新动作；否则续跑会把上一轮用户消息再插一遍。
+func TestNoteResumeAdoptsNewActionInsteadOfReplayingOldUser(t *testing.T) {
+	fm := &fakeModel{responses: []string{
+		sse(`{"choices":[{"delta":{"content":"first answer"}}]}`),
+		sse(`{"choices":[{"delta":{"content":"handled resume input"}}]}`),
+	}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-nr", runRequest("mine", "conv-nr", "old user text", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "run-nr")
+	if err != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, err)
+	}
+	if err := session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	hub.Done("run-nr")
+
+	detail := "task done"
+	completions := &cursorpb.BackgroundTaskCompletionAction{Completions: []*cursorpb.BackgroundTaskCompletion{{
+		TaskId: "t1",
+		Kind:   cursorpb.BackgroundTaskKind_BACKGROUND_TASK_KIND_SHELL,
+		Status: cursorpb.BackgroundTaskStatus_BACKGROUND_TASK_STATUS_SUCCESS,
+		Reason: cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED,
+		Detail: &detail,
+	}}}
+	action := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_ConversationAction{ConversationAction: &cursorpb.ConversationAction{
+		Action: &cursorpb.ConversationAction_BackgroundTaskCompletionAction{BackgroundTaskCompletionAction: completions},
+	}}}
+	if route, err := hub.Bidi(bidi(t, "run-nr", action)); err != nil || !route.Local {
+		t.Fatalf("queue completion: local=%v err=%v", route.Local, err)
+	}
+	if !hub.NoteResume("run-nr", "run-nr-2") {
+		t.Fatal("NoteResume should attach finished run")
+	}
+	conversation := "conv-nr"
+	resume := &cursorpb.AgentClientMessage{Message: &cursorpb.AgentClientMessage_RunRequest{RunRequest: &cursorpb.AgentRunRequest{
+		ConversationId: &conversation,
+		Action: &cursorpb.ConversationAction{Action: &cursorpb.ConversationAction_ResumeAction{ResumeAction: &cursorpb.ResumeAction{
+			RequestContext: &cursorpb.RequestContext{Env: &cursorpb.RequestContextEnv{}},
+		}}},
+	}}}
+	if route, err := hub.Bidi(bidi(t, "run-nr-2", resume)); err != nil || !route.Local {
+		t.Fatalf("bidi after NoteResume: local=%v err=%v", route.Local, err)
+	}
+	got, err := hub.Wait(ctx, "run-nr-2")
+	if err != nil || got != session {
+		t.Fatalf("same session? %v err=%v", got == session, err)
+	}
+	if !session.HasQueuedInput() {
+		t.Fatal("queued completion missing")
+	}
+	if err := session.Run(ctx, dialer.Direct(), func(*cursorpb.AgentServerMessage) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	fm.mu.Lock()
+	requests := append([]string{}, fm.requests...)
+	fm.mu.Unlock()
+	if len(requests) != 2 {
+		t.Fatalf("model calls=%d want 2", len(requests))
+	}
+	body := requests[1]
+	if !strings.Contains(body, "task done") {
+		t.Fatalf("resume input missing: %s", body)
+	}
+	// Must not re-append the original user turn as a brand-new trailing user_query.
+	if strings.Count(body, "old user text") != 1 {
+		t.Fatalf("old user text re-inserted: count=%d body=%s", strings.Count(body, "old user text"), body)
 	}
 }

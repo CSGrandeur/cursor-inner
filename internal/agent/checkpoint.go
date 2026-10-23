@@ -34,6 +34,7 @@ type wirePart struct {
 	Type       string          `json:"type"`
 	Text       string          `json:"text,omitempty"`
 	Signature  string          `json:"signature,omitempty"`
+	SignedBy   string          `json:"signedBy,omitempty"`
 	ToolCallID string          `json:"toolCallId,omitempty"`
 	ToolName   string          `json:"toolName,omitempty"`
 	Args       json.RawMessage `json:"args,omitempty"`
@@ -101,6 +102,11 @@ func writeCheckpoint(system, requestID string, messages []provider.Message, mode
 		}
 		state.Summary = raw
 		state.SelfSummaryCount = summaries
+	} else if prev != nil && len(prev.GetSummary()) > 0 {
+		// 这一轮没有新摘要：沿用上一份检查点里的摘要和计数。新的一轮（或重启后续聊）是新会话，
+		// summaryText 为空，不沿用就会把已压缩对话的摘要从 Cursor 的会话状态里抹掉。
+		state.Summary = append([]byte(nil), prev.GetSummary()...)
+		state.SelfSummaryCount = max(summaries, prev.GetSelfSummaryCount())
 	}
 	return checkpointBuild{State: state, Blobs: blobs}, nil
 }
@@ -178,7 +184,7 @@ func wireMessage(message provider.Message, index int, names map[string]string) w
 	case "assistant":
 		doc.ID = "1"
 		if message.Reasoning != "" || message.ReasoningSignature != "" {
-			doc.Content = append(doc.Content, wirePart{Type: "reasoning", Text: message.Reasoning, Signature: message.ReasoningSignature})
+			doc.Content = append(doc.Content, wirePart{Type: "reasoning", Text: message.Reasoning, Signature: message.ReasoningSignature, SignedBy: message.ReasoningBy})
 		}
 		if message.Content != "" {
 			doc.Content = append(doc.Content, wirePart{Type: "text", Text: message.Content})
@@ -513,6 +519,9 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 				if part.Signature != "" {
 					message.ReasoningSignature = part.Signature
 				}
+				if part.SignedBy != "" {
+					message.ReasoningBy = part.SignedBy
+				}
 			case "tool-call":
 				message.ToolCalls = append(message.ToolCalls, provider.ToolCall{ID: part.ToolCallID, Name: part.ToolName, Arguments: argsText(part.Args)})
 			}
@@ -578,6 +587,7 @@ func decodeParts(raw json.RawMessage) ([]wirePart, error) {
 			Type:       looseString(loose["type"]),
 			Text:       looseString(loose["text"]),
 			Signature:  looseString(loose["signature"]),
+			SignedBy:   looseString(loose["signedBy"]),
 			ToolCallID: looseString(loose["toolCallId"]),
 			ToolName:   looseString(loose["toolName"]),
 			Args:       loose["args"],
@@ -628,7 +638,7 @@ func argsText(raw json.RawMessage) string {
 }
 
 func sameMessage(a, b provider.Message) bool {
-	if a.Role != b.Role || a.Content != b.Content || a.Reasoning != b.Reasoning || a.ReasoningSignature != b.ReasoningSignature || a.ToolCallID != b.ToolCallID || a.IsError != b.IsError || len(a.ToolCalls) != len(b.ToolCalls) || len(a.Images) != len(b.Images) {
+	if a.Role != b.Role || a.Content != b.Content || a.Reasoning != b.Reasoning || a.ReasoningSignature != b.ReasoningSignature || a.ReasoningBy != b.ReasoningBy || a.ToolCallID != b.ToolCallID || a.IsError != b.IsError || len(a.ToolCalls) != len(b.ToolCalls) || len(a.Images) != len(b.Images) {
 		return false
 	}
 	for i := range a.ToolCalls {

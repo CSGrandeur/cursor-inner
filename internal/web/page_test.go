@@ -123,3 +123,14 @@ func TestPageMessagesCoverBothLanguages(t *testing.T) {
 		}
 	}
 }
+
+// 更新失败的原始错误可能带下载地址（含签名查询串）等开发细节：页面只显示分类后的说明，不拼原始错误。
+func TestUpdatePageNeverShowsRawError(t *testing.T) {
+	src := pageSource(t)
+	if strings.Contains(src, `t("upDetail"`) || strings.Contains(src, `: (error || "")`) {
+		t.Fatal("update status must not render the raw error text")
+	}
+	if !strings.Contains(src, `upE_unknown:`) {
+		t.Fatal("unclassified update failures need a what-to-do message")
+	}
+}

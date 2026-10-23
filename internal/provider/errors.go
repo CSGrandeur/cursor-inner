@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Kind 是模型接口错误的类别。可重试的是限流、服务端、传输、超时和空响应。
@@ -117,7 +118,11 @@ func explainKind(err error) string {
 	}
 	text := err.Error()
 	if len(text) > 80 {
-		text = text[:80]
+		cut := 80
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = text[:cut]
 	}
 	return text
 }

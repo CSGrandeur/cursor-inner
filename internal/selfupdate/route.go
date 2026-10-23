@@ -86,12 +86,12 @@ func fetch(ctx context.Context, r Route, url string, timeout time.Duration, limi
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, "", err
+		return nil, "", redactErr(err)
 	}
 	req.Header.Set("User-Agent", "cursor-inner-updater")
 	resp, err := r.Client.Do(req)
 	if err != nil {
-		return nil, "", err
+		return nil, "", redactErr(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {

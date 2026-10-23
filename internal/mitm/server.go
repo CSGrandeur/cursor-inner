@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"cursor-inner/internal/inference"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
@@ -60,6 +62,12 @@ type Server struct {
 	wsTLS      *tls.Config
 	conns      connCounter
 	released   string
+	localLoop  localLoopSet
+	// runs 是本机原生接下的本地循环会话；nativeLoop=false 时退回“给出说明并结束”。
+	runs inference.Runs
+	// sseSeen 记下打开过 RunInferenceSSE 的 request id：这样的 BidiAppend 一定是本地循环的消息。
+	sseSeen    localLoopSet
+	nativeLoop bool
 }
 
 // Traffic 是顶栏要显示的计数。
@@ -75,7 +83,7 @@ type Traffic struct {
 }
 
 func New(proxy func() config.Proxy, entries func() []catalog.Entry, lookup func(string) (config.Model, bool), history *agent.History) *Server {
-	s := &Server{proxy: proxy, entries: entries, lookup: lookup, hub: agent.New(lookup, history)}
+	s := &Server{proxy: proxy, entries: entries, lookup: lookup, hub: agent.New(lookup, history), nativeLoop: nativeLoopEnabled()}
 	s.direct = procfwd.New(s.dialContext)
 	s.client = &http.Client{Transport: upstreamTransport(s.dialContext), CheckRedirect: func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
@@ -332,6 +340,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.bidi(w, r)
 	case "/agent.v1.AgentService/RunSSE":
 		s.runSSE(w, r)
+	case runInferenceSSEPath:
+		s.runInferenceSSE(w, r)
+	case bootstrapStatsigPath:
+		s.bootstrapStatsig(w, r)
 	case "/aiserver.v1.CmdKService/StreamCmdK", "/aiserver.v1.CmdKService/StreamTerminalCmdK", "/aiserver.v1.AiService/SlashEdit":
 		s.inline(w, r)
 	default:
@@ -406,6 +418,9 @@ func (s *Server) heartbeatRoute(plain []byte) (agent.Route, bool) {
 func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 32<<20))
 	plain, err := protox.Plain(body, r.Header.Get("Content-Encoding"))
+	if err == nil && s.localLoopAppend(w, plain) {
+		return
+	}
 	var route agent.Route
 	if err == nil {
 		if hb, ok := s.heartbeatRoute(plain); ok {
@@ -421,7 +436,14 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 				if newID, _, perr := protox.DecodeBidi(plain); perr == nil {
 					if s.hub.NoteResume(original, newID) {
 						slog.Debug("BidiAppend resume", "original", original, "request", newID)
-						route = agent.Route{RequestID: newID, ModelID: "", Local: true}
+						// 必须继续走 Bidi：把 resume/后台任务等新动作 adopt 进原会话。
+						// 只挂槽位的话，HasQueuedInput 续跑仍用上一轮 UserMessageAction。
+						if r2, berr := s.hub.Bidi(plain); berr == nil {
+							route = r2
+						} else {
+							route = agent.Route{RequestID: newID, ModelID: "", Local: true}
+							err = berr
+						}
 					}
 				}
 			}
@@ -438,7 +460,21 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("BidiAppend", "request", route.RequestID, "model", route.ModelID, "where", where(route.Local))
 	}
 	if err != nil || !route.Local {
-		if id := leakedModel(body, s.entries()); id != "" {
+		if id := leakedBidiModel(body, r.Header.Get("Content-Encoding"), s.entries()); id != "" {
+			// 读不成 AgentClientMessage 却带着自定义模型：Cursor 3.26 的本地循环（RunInference）。
+			// 收下（回 200，免得客户端反复重发），由 RunInferenceSSE 在本机给出说明并结束。
+			if reqID, client, derr := protox.DecodeBidi(plain); err != nil && derr == nil {
+				if s.startLocalLoop(reqID, client, plain) {
+					w.Header().Set("Content-Type", "application/proto")
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				s.localLoop.mark(reqID)
+				slog.Warn("Cursor 用本地循环发起了自定义模型的回合，cursor-inner 暂不支持", "request", reqID, "model", id)
+				w.Header().Set("Content-Type", "application/proto")
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 			slog.Error("自定义模型的对话没有留在本机，已拒绝交给官方", "path", r.URL.Path, "model", id)
 			http.Error(w, "local model was not answered locally", http.StatusBadGateway)
 			return
@@ -471,7 +507,7 @@ func (s *Server) runSSE(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("RunSSE 等不到 BidiAppend，转发官方", "request", id, "error", err)
 	}
 	if err != nil || session == nil {
-		if id := leakedModel(body, s.entries()); id != "" {
+		if id := leakedBidiModel(body, r.Header.Get("Content-Encoding"), s.entries()); id != "" {
 			slog.Error("自定义模型的对话没有留在本机，已拒绝交给官方", "path", r.URL.Path, "model", id)
 			http.Error(w, "local model was not answered locally", http.StatusBadGateway)
 			return
@@ -568,6 +604,30 @@ func leakedModel(body []byte, entries []catalog.Entry) string {
 	for _, entry := range entries {
 		if len(entry.ID) >= 8 && bytes.Contains(body, []byte(entry.ID)) {
 			return entry.ID
+		}
+	}
+	return ""
+}
+
+// leakedBidiModel 在要交给官方的 BidiAppend 里找自定义模型 id。请求体可能经过 gzip 或
+// Connect 帧压缩，data 字段又是十六进制编码的字节，只查原文会漏掉（官方随后只回“未知模型”）。
+// 所以原文、解压后、十六进制（大小写）都要查。
+func leakedBidiModel(body []byte, contentEncoding string, entries []catalog.Entry) string {
+	views := [][]byte{body}
+	if plain, err := protox.Plain(body, contentEncoding); err == nil && !bytes.Equal(plain, body) {
+		views = append(views, plain)
+	}
+	for _, entry := range entries {
+		if len(entry.ID) < 8 {
+			continue
+		}
+		id := []byte(entry.ID)
+		lower := []byte(hex.EncodeToString(id))
+		upper := bytes.ToUpper(lower)
+		for _, v := range views {
+			if bytes.Contains(v, id) || bytes.Contains(v, lower) || bytes.Contains(v, upper) {
+				return entry.ID
+			}
 		}
 	}
 	return ""

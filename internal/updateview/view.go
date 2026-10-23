@@ -119,7 +119,7 @@ func (v *View) Update(st selfupdate.Status) {
 			v.finish("")
 		}
 	case selfupdate.StateFailed:
-		reason := oneLine(st.Error)
+		reason := selfupdate.UserMessage(st.ErrorCode, true)
 		switch {
 		case applying(prev.State):
 			v.finish("✗ 更新失败：" + reason + "；当前版本继续运行")

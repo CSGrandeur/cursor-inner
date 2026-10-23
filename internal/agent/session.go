@@ -53,6 +53,9 @@ const turnBudgetNotice = "\n\n(Paused: this turn has been running for %d minutes
 // loopStopNotice 是同一个工具调用连续重复到上限时给用户看的说明。
 // 这里要正常收尾而不是报错：报错时客户端把整轮渲染成 Operation interrupted.，
 // 已经流出来的思考、文件改动和回答都会跟着看不见。
+// textLoopNotice 是正文复读被提前收尾时给用户看的说明（只发给界面，不进模型历史）。
+const textLoopNotice = "\n\n(Stopped early: the reply began repeating the same text, so I ended it here. Reply \"continue\" to pick up from this point, or tell me what to change.)"
+
 const loopStopNotice = "\n\n(Paused: the same tool call (%s) repeated %d times in a row, so I stopped before it looped further. The steps above are kept. Reply \"continue\" to keep going, or tell me what to change.)"
 
 // silentToolLimit 是连续多少次工具调用客户端完全没回应后就结束这一轮。
@@ -626,12 +629,14 @@ next:
 		s.loops.resetText()
 		stopQuiet, waitQuiet := startQuietThinking(ctx, send, &thought)
 		var reply provider.Message
+		repeated := false
 		messages, model, reply, err = s.chatOrCompactSession(ctx, model, dial, system, messages, catalog, func(text string) error {
 			stopQuiet()
 			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: text}}})); err != nil {
 				return err
 			}
 			if s.loops.feedText(text) {
+				repeated = true
 				slog.Debug("正文复读，提前收尾本次生成", "conversation", short)
 				return provider.ErrStopStream
 			}
@@ -652,6 +657,11 @@ next:
 		}
 		if err != nil {
 			return err
+		}
+		if repeated {
+			if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: textLoopNotice}}})); err != nil {
+				return err
+			}
 		}
 		s.promptTokens = reply.PromptTokens
 		s.completionTokens = reply.CompletionTokens

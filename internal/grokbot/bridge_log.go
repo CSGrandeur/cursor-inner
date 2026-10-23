@@ -92,6 +92,7 @@ func (b *Bridge) startReporter() {
 
 func (b *Bridge) reportStats() {
 	opened, closed, forced, fails, top, last := b.stats.snapshot()
+	defer b.reportDetail()
 	if !debugOn() {
 		return
 	}

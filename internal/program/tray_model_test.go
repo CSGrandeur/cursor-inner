@@ -145,7 +145,7 @@ func TestNotifierUpdateFailureOnlyAfterApplying(t *testing.T) {
 		{State: selfupdate.StateFailed, Error: "连不上"}, // 检查失败：不打扰
 		{State: selfupdate.StateAvailable, Latest: "v2"},
 		{State: selfupdate.StateDownloading, Latest: "v2"},
-		{State: selfupdate.StateFailed, Latest: "v2", Error: "sha256 不符\n已删除"},
+		{State: selfupdate.StateFailed, Latest: "v2", Error: "sha256 不符 https://x/a?sig=SECRET", ErrorCode: selfupdate.CodeChecksum},
 	}
 	var got []*balloon
 	for _, st := range seq {
@@ -153,7 +153,7 @@ func TestNotifierUpdateFailureOnlyAfterApplying(t *testing.T) {
 			got = append(got, b)
 		}
 	}
-	if len(got) != 1 || !got[0].Warn || got[0].Page != pageUpdate || got[0].Text != "没能更新到 v2：sha256 不符 已删除。当前版本继续运行。" {
+	if len(got) != 1 || !got[0].Warn || got[0].Page != pageUpdate || got[0].Text != "没能更新到 v2：下载的安装包校验不通过，已删除。稍后再试。当前版本继续运行。" {
 		t.Fatalf("%+v", got)
 	}
 	b := updatedBalloon(true, true, "v1", "v2")

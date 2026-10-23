@@ -25,6 +25,11 @@ func (a *App) codexProxy(cfg config.File) (proxyURL string, keep bool) {
 		a.codexBridge.Close()
 		return "", false
 	}
+	// 代理软件还没开始监听（例如开机时比代理软件先启动）：先不动，等它就绪后由 proxyWait 补做，
+	// 期间不探测、不报错，也绝不改成直连。
+	if !a.proxyReady() {
+		return "", true
+	}
 	// 不带协议时先探测是 socks5 还是 http，再决定 Grok/Codex 能否直接用。
 	spec = dialer.Resolve(spec)
 	if grokbot.NeedsBridge(spec) {

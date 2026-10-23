@@ -130,3 +130,18 @@ func TestPagePollsAndNeverPaintsPendingRed(t *testing.T) {
 		}
 	}
 }
+
+// 等代理期间，设置页“代理”那行也要说在等代理 / 让用户打开代理软件，不能还写“生效中”。
+func TestProxySettingRowShowsWaiting(t *testing.T) {
+	src := pageSource(t)
+	i := strings.Index(src, `const proxyMeta = document.querySelector("#proxy-meta");`)
+	if i < 0 {
+		t.Fatal("proxyMeta block missing")
+	}
+	block := src[i : i+strings.Index(src[i:], "proxyMeta.title")]
+	for _, want := range []string{`"waiting"`, `"down"`, "proxyWaitingTip", "proxyDownTip"} {
+		if !strings.Contains(block, want) {
+			t.Errorf("proxy setting row ignores wait state: missing %q", want)
+		}
+	}
+}

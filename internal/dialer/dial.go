@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cursor-inner/internal/i18n"
@@ -141,18 +142,35 @@ func FromProxy(p config.Proxy) (Func, error) {
 	base := &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second}
 	switch u.Scheme {
 	case "http", "https":
-		return httpProxy(u, base), nil
+		return reportFailures(httpProxy(u, base)), nil
 	}
 	d, err := proxy.FromURL(u, base)
 	if err != nil {
 		return nil, i18n.Wrap("代理不可用：", "Proxy unavailable: ", err)
 	}
 	if cd, ok := d.(proxy.ContextDialer); ok {
-		return cd.DialContext, nil
+		return reportFailures(cd.DialContext), nil
 	}
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return reportFailures(func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return d.Dial(network, addr)
-	}, nil
+	}), nil
+}
+
+var proxyFailHook atomic.Pointer[func()]
+
+// OnProxyDialError 注册经代理拨号失败时的回调（只是提示去复查代理是否还在监听，不改路由）。
+func OnProxyDialError(fn func()) { proxyFailHook.Store(&fn) }
+
+func reportFailures(d Func) Func {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		c, err := d(ctx, network, addr)
+		if err != nil && ctx.Err() == nil {
+			if fn := proxyFailHook.Load(); fn != nil {
+				(*fn)()
+			}
+		}
+		return c, err
+	}
 }
 
 func bareHost(address string) (string, error) {

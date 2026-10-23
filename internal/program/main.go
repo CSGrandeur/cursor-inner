@@ -390,6 +390,8 @@ func Main(version string) {
 	}
 	// 启动 / 交接流程走完：从这里起接管没生效才算“真的没生效”（见 takeover.Tracker）。
 	application.SetTakeoverPhase(takeover.PhaseSettled)
+	// 开机自启可能早于代理软件：等代理开始监听再接管 Grok/Codex、做自动检查更新（见 proxywait）。
+	application.WatchProxy()
 	if _, _, err := dialer.EffectiveAddress(cfg.Proxy); err != nil {
 		slog.Error(fmt.Sprintf("代理地址无效：%v", err))
 	}

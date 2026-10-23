@@ -1,7 +1,10 @@
 package app
 
 import (
+	"log/slog"
+
 	"context"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/takeover"
 	"errors"
 	"time"
@@ -62,6 +65,12 @@ func (a *App) WatchUpdate() (*selfupdate.Watch, error) {
 func (a *App) CheckUpdate(auto bool) (selfupdate.Status, error) {
 	if a.upd == nil {
 		return selfupdate.Status{}, errNoUpdater
+	}
+	if auto && !a.proxyReady() {
+		// 开机时代理软件还没起来：这次自动检查推迟到代理就绪后，不报“检查更新失败”。
+		a.updPending.Store(true)
+		slog.Info("代理还没就绪，自动检查更新推迟到代理就绪后", logx.FileOnly)
+		return a.upd.Status(), nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()

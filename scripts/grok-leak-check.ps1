@@ -41,7 +41,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com')
+$OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
   'x.ai', 'www.x.ai', 'api.x.ai', 'accounts.x.ai', 'auth.x.ai', 'console.x.ai', 'docs.x.ai', 'grok.x.ai', 'cdn.x.ai',
@@ -53,11 +54,13 @@ $OfficialHosts = @(
   'oaistatic.com', 'cdn.oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com'
 )
 foreach ($region in 'us', 'eu', 'ap') { foreach ($n in 1..30) { $OfficialHosts += "$region$n.cursorvm.com" } }
+$OfficialHosts += $OfficialExactHosts
 
 function Test-OfficialName([string]$name) {
   if (-not $name) { return $false }
   $name = $name.TrimEnd('.').ToLower()
   foreach ($s in $OfficialSuffixes) { if ($name -eq $s -or $name.EndsWith('.' + $s)) { return $true } }
+  if ($OfficialExactHosts -contains $name) { return $true }
   return $false
 }
 

@@ -285,10 +285,7 @@ func (n *trayNotifier) update(st selfupdate.Status) *balloon {
 	if st.State != selfupdate.StateFailed || !updateBusy(prev) {
 		return nil
 	}
-	reason := oneLineText(st.Error)
-	if reason == "" {
-		reason = pick(n.zh, "未知错误", "unknown error")
-	}
+	reason := selfupdate.UserMessage(st.ErrorCode, n.zh)
 	text := pick(n.zh, "没能更新到 "+st.Latest+"："+reason+"。当前版本继续运行。",
 		"Could not update to "+st.Latest+": "+reason+". Still running the current version.")
 	return &balloon{Title: n.title(), Text: text, Warn: true, Page: pageUpdate}

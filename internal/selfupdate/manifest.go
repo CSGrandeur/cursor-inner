@@ -169,5 +169,10 @@ func ErrorCode(err error) string {
 	case errors.Is(err, ErrNotProduct), errors.Is(err, errBadManifest):
 		return CodeBadManifest
 	}
+	// 连接、超时、重定向这类失败都是 *url.Error：下载中途断网也归到网络，界面给网络的说明，不露原始错误。
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return CodeNetwork
+	}
 	return ""
 }

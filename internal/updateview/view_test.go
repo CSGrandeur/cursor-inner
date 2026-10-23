@@ -175,12 +175,15 @@ func TestFailureLines(t *testing.T) {
 	v := New(sink)
 	v.Update(selfupdate.Status{State: selfupdate.StateAvailable, Latest: "v2", Seq: 1})
 	v.Update(selfupdate.Status{State: selfupdate.StateDownloading, Latest: "v2", Total: 100, Seq: 2})
-	v.Update(selfupdate.Status{State: selfupdate.StateFailed, Latest: "v2", Error: "github：断了\ngitee：404", Seq: 3})
+	v.Update(selfupdate.Status{State: selfupdate.StateFailed, Latest: "v2", Error: "github：Get \"https://release-assets.githubusercontent.com/a?sig=SECRET\": EOF", ErrorCode: selfupdate.CodeNetwork, Seq: 3})
 	v.Update(selfupdate.Status{State: selfupdate.StateAvailable, Latest: "v2", Error: "github：断了\ngitee：404", Seq: 4})
 	v.Update(selfupdate.Status{State: selfupdate.StateChecking, Seq: 5})
-	v.Update(selfupdate.Status{State: selfupdate.StateFailed, Error: "连不上", Seq: 6})
+	v.Update(selfupdate.Status{State: selfupdate.StateFailed, Error: "内部细节", Seq: 6})
 	got := strings.Join(sink.lines, "\n")
-	if !strings.Contains(got, "✗ 更新失败：github：断了；gitee：404；当前版本继续运行") || !strings.Contains(got, "✗ 检查更新失败：连不上") || sink.liveOn {
+	// 控制台只给分类后的说明和下一步，原始错误（地址、签名查询串）不出现。
+	if !strings.Contains(got, "✗ 更新失败：连不上更新源。检查网络或代理后再点“检查更新”；当前版本继续运行") ||
+		!strings.Contains(got, "✗ 检查更新失败：更新没有完成。稍后再试，或点“打开日志”看原因") ||
+		strings.Contains(got, "SECRET") || strings.Contains(got, "http") || strings.Contains(got, "内部细节") || sink.liveOn {
 		t.Fatalf("%s (live %v)", got, sink.liveOn)
 	}
 	// 过期快照被忽略。

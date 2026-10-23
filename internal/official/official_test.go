@@ -3,6 +3,7 @@ package official
 import (
 	"crypto/tls"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -143,5 +144,59 @@ func TestInspectHTTPAndOther(t *testing.T) {
 	copy(big, "GET / HTTP/1.1\r\nX: ")
 	if got, _, done := InspectFirst(big); !done || got != ByDial {
 		t.Fatalf("oversized header: %v %v", got, done)
+	}
+}
+
+// Cursor 3.26.13 的 product.json 新增独立后端 api.cursor.spacex.com / api.cursor-staging.spacex.com，
+// 必须走代理；但 spacex.com 其它子域不是 Cursor 的流量。
+func TestCursorSpacexBackendsMustProxy(t *testing.T) {
+	for _, h := range []string{"api.cursor.spacex.com", "cursor.spacex.com", "api.cursor-staging.spacex.com"} {
+		if !MustProxy(h) {
+			t.Errorf("%s should be official", h)
+		}
+	}
+	for _, h := range []string{"spacex.com", "www.spacex.com", "starlink.spacex.com"} {
+		if MustProxy(h) {
+			t.Errorf("%s should not be official", h)
+		}
+	}
+}
+
+// 精确主机名：只收这几个，同一云上的兄弟主机（别的 S3 桶、别的 Blob 账户）不算官方。
+func TestExactOfficialHostsDoNotBroaden(t *testing.T) {
+	for _, h := range []string{"agent-stores.s3.us-east-1.amazonaws.com", "AGENT-STORES.s3.us-east-1.amazonaws.com.", "workoscdn.com", "cursor.blob.core.windows.net"} {
+		if !MustProxy(h) || !Name(h) {
+			t.Errorf("%s should be official", h)
+		}
+	}
+	for _, h := range []string{"other-bucket.s3.us-east-1.amazonaws.com", "s3.us-east-1.amazonaws.com", "amazonaws.com", "x.agent-stores.s3.us-east-1.amazonaws.com", "evil.blob.core.windows.net", "blob.core.windows.net", "cdn.workoscdn.com", "workos.com"} {
+		if MustProxy(h) || Name(h) {
+			t.Errorf("%s should not be official", h)
+		}
+	}
+}
+
+// 每个官方名字（后缀名单、精确主机名单、DoH）在“仅官方”的每条判断上都必须走代理：
+// 拨号目标（ForHost）、首包里的 SNI/Host（sniffName）、MustProxy。
+// 回归：2026-10-21 精确主机 agent-stores S3 在 Grok Bot 桥上按首包被判成直连。
+func TestEveryOfficialNameProxiesOnEveryPath(t *testing.T) {
+	names := append(append(append([]string(nil), Suffixes...), Hosts...), alsoProxy...)
+	for _, n := range names {
+		for _, h := range []string{n, strings.ToUpper(n) + "."} {
+			if r := ForHost(h); r != Proxy {
+				t.Errorf("ForHost(%q) = %v, want proxy", h, r)
+			}
+			if r := sniffName(h); r != Proxy {
+				t.Errorf("sniffName(%q) = %v, want proxy", h, r)
+			}
+			if !MustProxy(h) {
+				t.Errorf("MustProxy(%q) = false", h)
+			}
+		}
+	}
+	for _, h := range Hosts {
+		if r := ForHost("x." + h); r == Proxy {
+			t.Errorf("ForHost(sub of exact %q) = proxy, exact hosts must not broaden", h)
+		}
 	}
 }

@@ -36,7 +36,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 
 ## Features
 
-- **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list.
+- **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list. From Cursor 3.26 onward, the newer chat path is also answered by your custom model, with tool parameters passed through as usual.
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
 - **Agent work.** A custom model can read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Edits show a diff and are written after you accept them.
 - **Your proxy.** Takes over only Cursor, Grok and Codex. One address, and they use it. You do not change the system proxy, or turn on a system-wide TUN that would carry other programs with it. You can also send only official hosts such as Grok, x.ai, Cursor and OpenAI through the proxy, and connect directly to everything else. Each custom model chooses whether to use the proxy. Codex is not started if it is not already running.
@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.20`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.21`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -115,8 +115,8 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 The settings page has four tabs: **Models**, **Network**, **General** and **Update**. A URL ending in `#models`, `#network`, `#general` or `#update` opens that tab.
 
 - **Models**: Cursor only. Add and test. A test records speed and probes tools, reasoning, images and cache; the strip under the list shows the stages, progress and live token count. The key in the list has a Key label and copies on click; Copy fills the add form below including the key, which stays masked until you reveal it. Context window, max output, Max images, Image total (MB), reasoning, Fast, cache key and fallback can be left empty. Images are shrunk when read (long edge 1568 px, about 256 KB); when a request carries more images than the limits (default 20 images, 24 MB), the oldest tool images are left out in batches and the newest few are always kept. For Fallback, enter the names of other added models, comma-separated (Names of other added models, comma-separated); one is used before any text has been shown, when authentication fails or the endpoint is rate-limited. A name that is not in the list is reported and not saved. The ? next to Context window and Max output opens a small help card that explains the number and what an empty value means. When an update is available, the Update tab shows its notes as headings and lists.
-- **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, TUN mode and Strict mode. An empty proxy means a direct connection. A bare `host:port` is detected as socks5 or http. Adds proxy launch args to Codex; never starts it. That process sends its traffic through the proxy above.
-- **Update**: the buttons are Check for updates and Update. Only signed releases are installed. Cursor and Grok keep running; a version that fails its check leaves the current one in place.
+- **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, TUN mode and Strict mode. An empty proxy means a direct connection. A bare `host:port` is detected as socks5 or http. If cursor-inner starts before your proxy software, the status bar shows "Waiting for proxy…" and connects automatically once it is up; official traffic never goes direct. The same wait applies if the proxy stops mid-run. Adds proxy launch args to Codex; never starts it. That process sends its traffic through the proxy above.
+- **Update**: the buttons are Check for updates and Update. Only signed releases are installed. Cursor and Grok keep running; a version that fails its check leaves the current one in place. On failure the page says what happened and what to do, without showing the download URL.
 - **General**: image generation and start at login. On Windows there is also **Run in background** (No console window at startup; notification-area icon only.) and **Notifications** (System notifications for update results and leak warnings.). To let Agent generate images, fill in an OpenAI-compatible endpoint under Images.
 
 <details>
@@ -189,7 +189,7 @@ No. After a crash or a forced quit, your previous proxy settings are written bac
 <details>
 <summary><b>Will it keep working after Cursor updates?</b></summary>
 
-Official models are not affected. If Cursor changes its internal protocol, custom models may wait for a cursor-inner update.
+Official models are not affected. From Cursor 3.26 onward, the newer chat path is also answered by your custom model. If a custom-model turn still hangs or fails to resume, update to this release and restart Cursor once.
 
 </details>
 
@@ -220,7 +220,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.20 ./build.sh linux
+VERSION=v0.5.21 ./build.sh linux
 ```
 
 ## Acknowledgements

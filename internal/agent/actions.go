@@ -175,7 +175,7 @@ func truncID(s string) string {
 
 func clip(s string, max int) string {
 	if len(s) > max {
-		return s[:max] + "\n…(truncated)"
+		return headUTF8(s, max) + "\n…(truncated)"
 	}
 	return s
 }

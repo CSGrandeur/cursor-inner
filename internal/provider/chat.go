@@ -34,8 +34,10 @@ type Message struct {
 	IsError            bool       `json:"is_error,omitempty"`
 	Reasoning          string     `json:"reasoning,omitempty"`
 	ReasoningSignature string     `json:"reasoning_signature,omitempty"`
-	Truncated          bool       `json:"truncated,omitempty"`
-	Images             []Image    `json:"images,omitempty"`
+	// ReasoningBy 记下产生这段推理（及其签名）的端点+模型，见 ReasoningIssuer。
+	ReasoningBy string  `json:"reasoning_by,omitempty"`
+	Truncated   bool    `json:"truncated,omitempty"`
+	Images      []Image `json:"images,omitempty"`
 	// Card 是这条工具结果在 Cursor 里的卡片。不发给模型接口。
 	Card *cursorpb.ToolCall `json:"-"`
 	// Shown 是用户原文。Content 里可能包了时间戳和 user_query，那只给模型看，不能写进对话记录。
@@ -74,6 +76,15 @@ type chatRequest struct {
 // Chat 流式调用模型。文本增量交给 onText，思考增量交给 onThinking（可以为 nil）。
 // 还没有向调用方输出任何文本时，限流、5xx、传输失败、空响应和流卡死会重试。
 func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
+	messages = StripForeignReasoning(m, messages)
+	msg, err := chatRetry(ctx, m, dial, system, messages, tools, onText, onThinking)
+	if err == nil && (msg.Reasoning != "" || msg.ReasoningSignature != "") {
+		msg.ReasoningBy = ReasoningIssuer(m)
+	}
+	return msg, err
+}
+
+func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
 	if len(messages) == 0 {
 		return Message{}, i18n.E("没有用户消息", "No user message")
 	}

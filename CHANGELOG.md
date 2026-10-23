@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.21] - 2026-10-23
+
+### Fixed
+
+- Sending a new instruction in a custom-model chat no longer makes the model reason about the previous user message. If you stop a turn before any assistant reply is written, cursor-inner now closes that turn in history instead of leaving a bare user message; the next instruction is no longer stacked directly on top of the old one. Resuming a finished local chat after a background task also adopts the new resume action, so the previous user message is not inserted again.
+- After a background tool finishes, resuming a custom-model chat no longer shows "Error resuming chat". When Cursor sent the resume stream slightly before the matching resume request, cursor-inner used to wait 30 seconds, time out, and hand the resume to Cursor's servers, which then failed for custom models. The resume is now attached to the finished local chat right away.
+- When cursor-inner starts before your proxy software (for example at Windows sign-in, before v2rayN), it no longer reports the proxy as unusable or the update check as failed. The status bar shows "Waiting for proxy…" while it keeps checking (every few seconds at first, then less often). As soon as the proxy is up, the Grok Bot and Codex takeover is applied and the update check runs, with no restart needed. If the proxy has still not started after about two minutes, cursor-inner shows "Proxy not running" and asks you to start your proxy software; it still connects automatically once you do. Official traffic never goes direct while waiting.
+- The same applies when your proxy software stops while cursor-inner is running (for example v2rayN restarting or exiting): within a few seconds the status bar goes back to "Waiting for proxy…" instead of showing errors, short interruptions of a second or two are ignored, and once the proxy is back the Grok Bot and Codex takeover is restored automatically. If the proxy stays away for about two minutes, cursor-inner shows "Proxy not running" and asks you to start your proxy software. Official traffic never goes direct in the meantime.
+- Custom models work again after the Cursor 3.26 update. cursor-inner prefers the usual chat path, and when Cursor still uses its newer request type (for example right after switching versions, before Cursor has restarted), that path is answered locally with your custom model. Text, thinking and tool calls stream as usual, and tools such as the terminal, file editing and web fetch receive their full parameter descriptions. A rejected API key, an invalid request, a chat that is too long for the model, or an exhausted quota each stop the turn with a clear explanation instead of "Reconnecting..." forever; temporary problems are still retried a few times. Stopping a reply also stops the request to the model right away. After switching to this version, restart Cursor once. Set the environment variable `CURSOR_INNER_LOCAL_LOOP=off` to end such newer-path turns with a message instead of answering them.
+- When a backup model takes over (or you switch models mid-chat), it no longer receives the previous model's signed reasoning (Anthropic thinking signatures, Responses encrypted reasoning). The other model rejects those blocks, and because they stay in the history every later turn would fail too. cursor-inner now records which endpoint and model produced each piece of signed reasoning, keeps it for that same model (also across checkpoints), and drops only the signature for any other model; the plain reasoning text is kept.
+- Grok Bot's agent store (`agent-stores.s3.us-east-1.amazonaws.com`), the sign-in assets host `workoscdn.com` and Cursor's remote-server download host `cursor.blob.core.windows.net` are now official endpoints and always use the proxy under "Official only", TUN, strict mode and the leak check. Only these exact hosts are added; other S3 buckets, other Azure Blob accounts and other subdomains are not.
+- Under "Official only", the exact official hosts above now also use the proxy when cursor-inner decides the route from the first bytes of a connection (Grok Bot's bridge and other proxied apps). Before, they were only matched by TUN, strict mode and the leak check, so Grok Bot's agent store still went direct.
+- Cursor 3.26 can talk to its own separate backends at `cursor.spacex.com` and `cursor-staging.spacex.com` (for example `api.cursor.spacex.com`). These are now official endpoints, so they always use the proxy under "Official only", strict mode and the leak check. Other `spacex.com` hosts are not treated as official.
+- A conversation that was compacted keeps its summary in Cursor's conversation state on later turns and after a restart; previously the next turn wrote a checkpoint without it.
+- When a reply starts repeating itself and is cut short, the chat now says why it stopped and that replying "continue" picks up from there, instead of ending abruptly.
+- Shortened tool output, clipped text and short error messages no longer cut a Chinese character or emoji in half, which used to send garbled text to the model.
+- A failed update no longer shows the full temporary download address from GitHub, including its signed query string, in the settings page, console, tray notification or log. The page, console and tray now say only what went wrong and what to do (for example, check the network or proxy and check for updates again); the log keeps the host and path, without the query, for diagnosis. Download failures caused by the network are now reported as network problems.
+
+### Internal
+
+- Diagnostics hooks used only by the developer build: more detailed proxy-bridge connection logging (time to first byte, how each connection ended, a per-minute summary of slow or failed hosts, and a proxy health probe) and a size cap for the log file while running. Normal builds log exactly as before. Header values, cookies, tokens and request or response contents are never logged.
+
 ## [0.5.20] - 2026-10-21
 
 ### Changed
@@ -462,6 +484,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...HEAD
+[0.5.21]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...v0.5.20
 [0.5.19]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...v0.5.19
 [0.5.18]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.17...v0.5.18

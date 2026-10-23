@@ -62,7 +62,7 @@ func Config(o Options) ([]byte, error) {
 
 	// 子域名用 domain_suffix(".grok.com")，顶点域名用 domain("grok.com") 精确匹配——
 	// 只有后缀会漏掉裸顶点域名（grok.com 本身不是 .grok.com 的子域），两者都要。
-	apex := append([]string(nil), OfficialSuffixes...)
+	apex := append(append([]string(nil), OfficialSuffixes...), official.Hosts...)
 	suffixes := make([]string, 0, len(OfficialSuffixes))
 	for _, s := range OfficialSuffixes {
 		suffixes = append(suffixes, "."+s)

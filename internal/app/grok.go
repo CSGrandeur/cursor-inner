@@ -31,6 +31,11 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 	if !on {
 		return "", false
 	}
+	// 代理软件还没开始监听（例如开机时比代理软件先启动）：先不动，等它就绪后由 proxyWait 补做，
+	// 期间不探测、不报错，也绝不改成直连。
+	if !a.proxyReady() {
+		return "", true
+	}
 	// 不带协议时先探测是 socks5 还是 http，再决定 Grok/Codex 能否直接用。
 	spec = dialer.Resolve(spec)
 	if cfg.Proxy.OfficialOnly() || grokbot.NeedsBridge(spec) {
@@ -120,6 +125,9 @@ func (a *App) OpenGrok() error {
 		return grokbot.Launch("")
 	}
 	proxyURL, keep := a.grokProxy(cfg)
+	if keep && !a.proxyReady() {
+		return i18n.E("代理软件还没启动，等它启动后再打开 Grok（不会以直连方式启动）", "Your proxy software is not running yet. Start it, then open Grok (it is never started without the proxy)")
+	}
 	if keep {
 		slog.Warn("没有启动 Grok Bot：拿不到可靠代理，不会改成直连")
 		return i18n.E("代理地址无效或代理桥起不来，没有启动 Grok（不会以直连方式启动）", "The proxy address is invalid or the proxy bridge could not start, so Grok was not started (it is never started without the proxy)")

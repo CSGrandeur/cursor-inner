@@ -47,6 +47,8 @@ type Bridge struct {
 
 	released string
 	stats    bridgeStats
+	hosts    hostStats
+	probing  atomic.Bool
 }
 
 // Ensure 让桥按 key（代理地址）和 dial 运行，返回给 Grok Bot 用的 http://127.0.0.1:端口。
@@ -160,6 +162,8 @@ type connRec struct {
 	start                                      time.Time
 	dial                                       time.Duration
 	toUp, toClient                             int64
+	tunnelAt, firstAt                          time.Time // 隧道建立、上游首字节（详细日志）
+	status                                     int       // 明文 HTTP 的响应状态（详细日志）
 }
 
 func (b *Bridge) handle(c net.Conn) {
@@ -225,7 +229,10 @@ func (b *Bridge) handle(c net.Conn) {
 			}
 			rec.toUp += int64(n)
 		}
-		r := b.pipe(c, up)
+		rec.tunnelAt = time.Now()
+		fb := &firstByteConn{Conn: up}
+		r := b.pipe(c, fb)
+		rec.firstAt = fb.firstAt()
 		rec.toUp += r.toUp
 		rec.toClient = r.toClient
 		rec.closedBy = r.first
@@ -243,7 +250,13 @@ func (b *Bridge) handle(c net.Conn) {
 		rec.closedBy, rec.reason = "upstream", sanitizeErr(err)
 		return
 	}
-	n, err := io.Copy(c, up)
+	rec.tunnelAt = time.Now()
+	ubr := bufio.NewReader(up)
+	if line, _ := ubr.Peek(12); len(line) > 0 {
+		rec.firstAt = time.Now()
+		rec.status = parseStatus(line)
+	}
+	n, err := io.Copy(c, ubr)
 	rec.toClient = n
 	rec.closedBy, rec.reason = "upstream", sanitizeErr(ioErr(err))
 }
@@ -265,6 +278,20 @@ func (b *Bridge) logConn(r *connRec) {
 		"up", r.toUp, "down", r.toClient, "closed_by", r.closedBy}
 	if r.reason != "" {
 		attrs = append(attrs, "reason", r.reason)
+	}
+	if detailOn() {
+		var ttfb time.Duration
+		if !r.firstAt.IsZero() && !r.tunnelAt.IsZero() {
+			ttfb = r.firstAt.Sub(r.tunnelAt)
+		}
+		class := closeClass(r.closedBy, r.reason)
+		attrs = append(attrs, "start", r.start.Format("15:04:05.000"), "ttfb_ms", ttfbMS(r, ttfb), "close", class)
+		if r.status > 0 {
+			attrs = append(attrs, "status", r.status)
+		}
+		if r.target != "" {
+			b.hosts.add(hostOf(r.target), r.dial, ttfb, class)
+		}
 	}
 	slog.Debug("bridge conn", attrs...)
 }
