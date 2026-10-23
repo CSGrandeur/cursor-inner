@@ -359,7 +359,11 @@ func TestCancelBeforeReplyThenNewUserDoesNotLeaveTrailingUser(t *testing.T) {
 	hold := make(chan struct{})
 	fm := &fakeModel{
 		responses: []string{
-			sse(`{"choices":[{"delta":{"content":"should not finish"}}]}`),
+			// No assistant content: after pause+cancel the handler may still flush this
+			// response (reply is taken before pause). Empty body keeps history on the
+			// trailing user so CloseDangling can close it. A non-empty first reply races
+			// on CI and leaves "should not finish" as the last assistant message.
+			sse(),
 			sse(`{"choices":[{"delta":{"content":"answered the new one"}}]}`),
 		},
 		pause: hold,
