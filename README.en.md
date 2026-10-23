@@ -38,6 +38,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 
 - **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list. From Cursor 3.26 onward, the newer chat path is also answered by your custom model, with tool parameters passed through as usual.
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
+- **Switching back stays reliable.** After a custom-model turn in the same chat, leftover custom model ids in earlier messages no longer make an official turn fail with a Server error.
 - **Agent work.** A custom model can read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Edits show a diff and are written after you accept them.
 - **Same Context Usage UI.** Custom models get the same segmented bar and View Report as built-in models, not only a used/max line.
 - **Gentle tool nudge.** If the same tool is called several times with the same arguments, or Computer Use is used several times in a row, a short reminder is attached to that tool result: prefer the terminal and file tools when they fit; Computer Use stays available for the GUI.
@@ -59,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.22`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.23`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -222,7 +223,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.22 ./build.sh linux
+VERSION=v0.5.23 ./build.sh linux
 ```
 
 ## Acknowledgements

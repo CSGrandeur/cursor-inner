@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.23] - 2026-10-23
+
+### Fixed
+
+- After you used a custom model in a chat, switching back to a Cursor built-in model no longer fails with a Server error. The leak guard used to treat a custom model id that still appeared in earlier messages as a custom-model turn and reject the official request; official models are forwarded as usual even when that leftover id is in the body.
+
 ## [0.5.22] - 2026-10-23
 
 ### Fixed
@@ -490,7 +496,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...HEAD
+[0.5.23]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...v0.5.20

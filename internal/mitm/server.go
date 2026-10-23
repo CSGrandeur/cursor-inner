@@ -461,6 +461,16 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || !route.Local {
 		if id := leakedBidiModel(body, r.Header.Get("Content-Encoding"), s.entries()); id != "" {
+			// 官方模型回合（route.ModelID 能解析且不在本机目录）正文里仍可能带自定义模型 id
+			// （同会话历史、可用模型列表等）。不能 502，否则 Cursor 显示 Server error / failed N times。
+			// 现场 2026-10-23 request 7a82072f…：model=claude-opus-5-5 where=官方，却因正文含
+			// DeepSeek-V4-Flash-Vision-Exp 的目录 id 被拒。
+			if err == nil && route.ModelID != "" && !s.isCustomModel(route.ModelID) {
+				slog.Debug("官方回合正文含自定义模型 id，仍转发官方", "request", route.RequestID, "model", route.ModelID, "custom", id)
+				withBody(r, body)
+				s.forward(w, r)
+				return
+			}
 			// 读不成 AgentClientMessage 却带着自定义模型：Cursor 3.26 的本地循环（RunInference）。
 			// 收下（回 200，免得客户端反复重发），由 RunInferenceSSE 在本机给出说明并结束。
 			if reqID, client, derr := protox.DecodeBidi(plain); err != nil && derr == nil {
@@ -700,6 +710,14 @@ func (s *Server) rememberModel(path, id string) {
 	s.mu.Lock()
 	s.selected = id
 	s.mu.Unlock()
+}
+
+func (s *Server) isCustomModel(id string) bool {
+	if s.lookup == nil || id == "" {
+		return false
+	}
+	_, ok := s.lookup(id)
+	return ok
 }
 
 func (s *Server) selectedModel() string {

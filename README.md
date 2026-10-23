@@ -38,6 +38,7 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 
 - **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。Cursor 3.26 起的新对话路径也会用你的自定义模型回答，工具参数照常传给模型。
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
+- **换回官方模型不误伤。** 同一对话里先前用过自定义模型时，正文里残留的自定义模型 id 不会再让官方回合被拦成 Server error。
 - **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
 - **用量一眼看清。** 自定义模型的 Context Usage 与官方模型同一套分段色条和 View Report，不再只有 used/max 文本。
 - **工具别钻牛角尖。** 同一工具连打几次、或连续点屏操作几次时，会在那次工具结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。
@@ -59,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.22`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.23`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -222,7 +223,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.22 ./build.sh linux
+VERSION=v0.5.23 ./build.sh linux
 ```
 
 ## 致谢
