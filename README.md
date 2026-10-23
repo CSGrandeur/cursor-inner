@@ -39,6 +39,8 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 - **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。Cursor 3.26 起的新对话路径也会用你的自定义模型回答，工具参数照常传给模型。
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
 - **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
+- **用量一眼看清。** 自定义模型的 Context Usage 与官方模型同一套分段色条和 View Report，不再只有 used/max 文本。
+- **工具别钻牛角尖。** 同一工具连打几次、或连续点屏操作几次时，会在那次工具结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。
 - **走你的代理。** 只接管 Cursor、Grok 和 Codex，填一个地址即可。不必为了这三个去改系统代理，也不必开系统 TUN 把其它程序一起带上。也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。没在运行的 Codex 不会被拉起。
 - **仍有直连时。** 接管之后，若这三个里还有个别官方连接不走代理，可在 cursor-inner 里打开 TUN 模式或严格模式，只覆盖官方地址，不动系统里其它程序。开不了就继续用接管。
 - **更新和退出。** 有新版本时一键更新，Cursor 和 Grok 不用重启。退出或意外结束都会把 Cursor 原来的代理设置写回去。
@@ -57,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.21`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.22`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -220,7 +222,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.21 ./build.sh linux
+VERSION=v0.5.22 ./build.sh linux
 ```
 
 ## 致谢

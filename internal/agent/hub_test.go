@@ -1039,7 +1039,7 @@ func TestStepLimitStillSendsCheckpoint(t *testing.T) {
 }
 
 func TestIdenticalToolLoopStops(t *testing.T) {
-	responses := make([]string, loopStopAt+1)
+	responses := make([]string, loopHardStopAt+1)
 	for i := range responses {
 		responses[i] = sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`)
 	}
@@ -1089,7 +1089,7 @@ func TestIdenticalToolLoopStops(t *testing.T) {
 			if err != nil {
 				t.Fatalf("重复工具调用应正常收尾，不该报错：%v", err)
 			}
-			if !strings.Contains(text, "repeated 5 times") {
+			if !strings.Contains(text, "repeated 8 times") {
 				t.Fatalf("缺少暂停说明：%q", text)
 			}
 			return
@@ -1853,7 +1853,7 @@ func TestRepeatedToolCallPausesInsteadOfErroring(t *testing.T) {
 	if !ended {
 		t.Fatal("这一轮没有正常结束")
 	}
-	if !strings.Contains(text, "repeated 5 times") {
+	if !strings.Contains(text, "repeated 8 times") {
 		t.Fatalf("缺少暂停说明：%q", text)
 	}
 }

@@ -17,7 +17,7 @@ func TestReadImageSurvivesTheCheckpoint(t *testing.T) {
 		{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}},
 		{Role: "tool", ToolCallID: "c1", Content: "Read image file: /w/a.png", Images: []provider.Image{{MIME: "image/png", Data: png}}},
 	}
-	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestCheckpointKeepsHarnessOffTheTranscript(t *testing.T) {
 		msg,
 		{Role: "assistant", Content: "在"},
 	}
-	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	built, err := writeCheckpoint("system", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestCheckpointKeepsHarnessOffTheTranscript(t *testing.T) {
 	if len(restored) < 1 || !strings.Contains(restored[0].Content, "<user_query>") {
 		t.Fatal("model history should keep the wrapper")
 	}
-	again, err := writeCheckpoint("system", "req", []provider.Message{{Role: "user", Content: msg.Content}, {Role: "assistant", Content: "在"}}, 0, 0, 0, "", 0, nil, nil, nil)
+	again, err := writeCheckpoint("system", "req", []provider.Message{{Role: "user", Content: msg.Content}, {Role: "assistant", Content: "在"}}, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestTurnBlobIsACursorTurn(t *testing.T) {
 		{Role: "user", Content: "第二句"},
 		{Role: "assistant", Content: "后面的"},
 	}
-	built, err := writeCheckpoint("system", "req", messages, 0, 200, 10, "", 0, nil, nil, nil)
+	built, err := writeCheckpoint("system", "req", messages, 0, 200, 10, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestShorterTurnsDropTheLaterUser(t *testing.T) {
 		{Role: "assistant", Content: "ok"},
 		{Role: "user", Content: "junk later"},
 	}
-	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestReadStepIsNotAShellCommand(t *testing.T) {
 		{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: "c1", Name: "Read", Arguments: `{"path":"hello.txt"}`}}},
 		{Role: "tool", ToolCallID: "c1", Content: "hello inline"},
 	}
-	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestOfficialRootRoundTripsTheTool(t *testing.T) {
 	if len(got) != 2 || len(got[0].ToolCalls) != 1 || got[0].ToolCalls[0].Name != "Read" || got[1].Content != "hello inline" {
 		t.Fatalf("%+v", got)
 	}
-	built, err := writeCheckpoint("", "req", got, 0, 0, 0, "", 0, nil, state, blobs)
+	built, err := writeCheckpoint("", "req", got, 0, 0, 0, "", 0, nil, state, blobs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestOfficialRootRoundTripsTheTool(t *testing.T) {
 func TestSecondCheckpointKeepsThePrefix(t *testing.T) {
 	first := []provider.Message{{Role: "user", Content: "one"}, {Role: "assistant", Content: "two", ReasoningSignature: "sig"}}
 	second := append(append([]provider.Message{}, first...), provider.Message{Role: "user", Content: "three"})
-	a, err := writeCheckpoint("system", "req", first, 0, 0, 0, "", 0, nil, nil, nil)
+	a, err := writeCheckpoint("system", "req", first, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestSecondCheckpointKeepsThePrefix(t *testing.T) {
 	for _, blob := range a.Blobs {
 		blobs[string(blob.ID)] = blob.Data
 	}
-	b, err := writeCheckpoint("system", "req", second, 0, 0, 0, "", 0, nil, a.State, blobs)
+	b, err := writeCheckpoint("system", "req", second, 0, 0, 0, "", 0, nil, a.State, blobs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestSecondCheckpointKeepsThePrefix(t *testing.T) {
 
 func TestChangedSystemKeepsMessageRoots(t *testing.T) {
 	messages := []provider.Message{{Role: "user", Content: "one"}}
-	a, err := writeCheckpoint("alpha", "req", messages, 0, 0, 0, "", 0, nil, nil, nil)
+	a, err := writeCheckpoint("alpha", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestChangedSystemKeepsMessageRoots(t *testing.T) {
 	for _, blob := range a.Blobs {
 		blobs[string(blob.ID)] = blob.Data
 	}
-	b, err := writeCheckpoint("beta", "req", messages, 0, 0, 0, "", 0, nil, a.State, blobs)
+	b, err := writeCheckpoint("beta", "req", messages, 0, 0, 0, "", 0, nil, a.State, blobs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -11,6 +11,7 @@ import (
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/provider"
+	"cursor-inner/internal/tools"
 )
 
 // errBreak 表示用户用一条新的用户消息打断正在执行的工具。当前工具中止，同一轮用新消息继续。
@@ -341,7 +342,17 @@ func (s *Session) checkpoint(send Emit, conversation, system string, messages []
 	if s.history != nil {
 		prevBlobs = s.history.Blobs()
 	}
-	built, err := writeCheckpoint(system, s.RequestID, messages, mode, window, estimateTokens(messages), summary, s.summaries, s.seenBlobs, s.baseState, prevBlobs)
+	catalog := s.catalogFor(mode)
+	mcpNames := mcpNameSet(s.mcp)
+	for _, tool := range catalog {
+		if _, ok := tools.MatchMCP(provider.ToolCall{Name: tool.Name}, s.mcp); ok {
+			if mcpNames == nil {
+				mcpNames = map[string]struct{}{}
+			}
+			mcpNames[tool.Name] = struct{}{}
+		}
+	}
+	built, err := writeCheckpoint(system, s.RequestID, messages, mode, window, estimateTokens(messages), summary, s.summaries, s.seenBlobs, s.baseState, prevBlobs, catalog, mcpNames)
 	if err != nil {
 		return err
 	}

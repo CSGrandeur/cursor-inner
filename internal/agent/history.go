@@ -143,7 +143,7 @@ func (h *History) Save(conversation string, messages []provider.Message) error {
 		return nil
 	}
 	prev := h.LoadState(conversation)
-	built, err := writeCheckpoint("", "", messages, 0, 0, 0, "", 0, nil, prev, h.Blobs())
+	built, err := writeCheckpoint("", "", messages, 0, 0, 0, "", 0, nil, prev, h.Blobs(), nil, nil)
 	if err != nil {
 		return err
 	}

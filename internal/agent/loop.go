@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	loopWarnAt     = 3 // 连续相同调用到第 3 次给出警告
-	loopStopAt     = 5 // 连续相同调用到第 5 次停止；压在 DashScope 服务端“重复调用”判定之下，避免整段对话被 400（见 qwen-code #5019）
-	loopHardStopAt = 8 // 同一调用累计到第 8 次停止，兜底 A/B 交替这类非连续死循环
+	loopWarnAt     = 3 // 连续相同调用到第 3 次：结果侧 reminder（对齐 qwen loopProtection 默认 warn）
+	loopHardStopAt = 8 // 连续相同或同一指纹累计到第 8 次才暂停；软停（旧 loopStopAt=5）改为只提醒不中断
+
+	computerStreakWarnAt = 3 // 连续 computer_* 到第 3 次提醒改用 Shell/读写
 
 	contentChunk    = 50   // 正文复读检测的窗口大小（字符）
 	contentLoopAt   = 12   // 同一 50 字窗口重复到这个次数判定为复读
@@ -20,14 +21,21 @@ const (
 	contentMinAlnum = 10   // 窗口里字母数字太少（表格线、分隔符）不计，降低误判
 )
 
-// loopTracker 识别两类卡死：工具调用复读与正文复读。
-// 工具调用用指纹计数：连续相同到 loopStopAt 停，或同一指纹累计到 loopHardStopAt 停（兜底交替循环）。
-// 正文复读在流式回调里累积文本，命中后让本次生成提前收尾。借鉴 qwen-code 的 loopDetectionService。
+// loopTracker 识别工具调用复读、连续 Computer Use，以及正文复读。
+// 默认行为对齐 qwen-code model.loopProtection=warn：到提醒点时把简短 reminder
+// 挂进工具结果，不暂停本轮；硬停仍用 loopHardStopAt 兜底（类似预算）。
+// 正文复读在流式回调里累积文本，命中后让本次生成提前收尾。
 type loopTracker struct {
 	counts map[string]int
 	consec int
 	lastFP string
-	warn   string
+
+	computerStreak   int
+	remindedIdent    bool
+	remindedComputer bool
+
+	pending   string
+	pendingID string
 
 	text     strings.Builder
 	lastScan int
@@ -42,8 +50,74 @@ func toolFingerprint(call provider.ToolCall) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// observe 在执行一批工具前调用。stop 为真时应中止本轮；warn 非空时应写入提示。
-func (t *loopTracker) observe(calls []provider.ToolCall) (warn string, stop bool) {
+// isComputerTool 识别 Cursor Computer Use MCP 工具名（computer_screenshot 等）。
+func isComputerTool(name string) bool {
+	n := strings.ToLower(strings.ReplaceAll(name, "-", "_"))
+	if strings.HasPrefix(n, "computer_") {
+		return true
+	}
+	return strings.Contains(n, "computer_use") || strings.Contains(n, "_computer_")
+}
+
+func identicalReminder(name string, count int) string {
+	return fmt.Sprintf("System: `%s` has been called %d times in a row with identical arguments, so its result will not change. Use the result you already have, or change the approach.", name, count)
+}
+
+func computerStreakReminder() string {
+	return "System: Several Computer Use actions ran in a row. For terminal commands and file edits, prefer Shell, Read, Write, or StrReplace when those tools are available; keep Computer Use for GUI work."
+}
+
+func (t *loopTracker) queueReminder(callID, text string) {
+	if text == "" {
+		return
+	}
+	if t.pending == "" {
+		t.pending = text
+		t.pendingID = callID
+		return
+	}
+	if strings.Contains(t.pending, text) {
+		return
+	}
+	t.pending = t.pending + "\n" + text
+	if t.pendingID == "" {
+		t.pendingID = callID
+	}
+}
+
+// takeReminder 取出并清空待挂到工具结果上的 reminder（不校验 call id）。
+func (t *loopTracker) takeReminder() string {
+	s := t.pending
+	t.pending = ""
+	t.pendingID = ""
+	return s
+}
+
+// takeReminderFor 仅当 pending 针对该 call（或尚未绑定 id）时取出。
+func (t *loopTracker) takeReminderFor(callID string) string {
+	if t.pending == "" {
+		return ""
+	}
+	if t.pendingID != "" && callID != "" && t.pendingID != callID {
+		return ""
+	}
+	return t.takeReminder()
+}
+
+// appendLoopReminder 把 loop 提醒附在工具结果末尾，供模型在下一轮看到。
+func appendLoopReminder(text, reminder string) string {
+	if reminder == "" {
+		return text
+	}
+	if text == "" {
+		return reminder
+	}
+	return text + "\n\n" + reminder
+}
+
+// observe 在执行一批工具前调用。stop 为真时应中止本轮。
+// 提醒通过 takeReminder / takeReminderFor 取出，挂进对应工具结果，不再伪造 user 消息。
+func (t *loopTracker) observe(calls []provider.ToolCall) (stop bool) {
 	for _, call := range calls {
 		fp := toolFingerprint(call)
 		t.counts[fp]++
@@ -52,16 +126,29 @@ func (t *loopTracker) observe(calls []provider.ToolCall) (warn string, stop bool
 		} else {
 			t.consec = 1
 			t.lastFP = fp
+			t.remindedIdent = false
 		}
-		if t.consec >= loopStopAt || t.counts[fp] >= loopHardStopAt {
-			return "", true
+
+		if isComputerTool(call.Name) {
+			t.computerStreak++
+		} else {
+			t.computerStreak = 0
+			t.remindedComputer = false
 		}
-		if t.consec == loopWarnAt {
-			t.warn = fmt.Sprintf("Warning: tool %s with the same arguments was called %d times in a row. Do not repeat it; change approach or stop.", call.Name, t.consec)
-			return t.warn, false
+
+		if t.consec >= loopHardStopAt || t.counts[fp] >= loopHardStopAt {
+			return true
+		}
+		if t.consec == loopWarnAt && !t.remindedIdent {
+			t.remindedIdent = true
+			t.queueReminder(call.ID, identicalReminder(call.Name, t.consec))
+		}
+		if t.computerStreak == computerStreakWarnAt && !t.remindedComputer {
+			t.remindedComputer = true
+			t.queueReminder(call.ID, computerStreakReminder())
 		}
 	}
-	return "", false
+	return false
 }
 
 // resetText 在每次向模型请求前清空正文累积。

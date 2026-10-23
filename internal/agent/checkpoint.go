@@ -50,7 +50,7 @@ type wireDoc struct {
 	ID      string     `json:"id"`
 }
 
-func writeCheckpoint(system, requestID string, messages []provider.Message, mode cursorpb.AgentMode, window, used int, summary string, summaries uint32, known map[string]struct{}, prev *cursorpb.ConversationStateStructure, prevBlobs map[string][]byte) (checkpointBuild, error) {
+func writeCheckpoint(system, requestID string, messages []provider.Message, mode cursorpb.AgentMode, window, used int, summary string, summaries uint32, known map[string]struct{}, prev *cursorpb.ConversationStateStructure, prevBlobs map[string][]byte, tools []provider.Tool, mcpNames map[string]struct{}) (checkpointBuild, error) {
 	if known == nil {
 		known = map[string]struct{}{}
 	}
@@ -93,6 +93,15 @@ func writeCheckpoint(system, requestID string, messages []provider.Message, mode
 		TokenDetails: &cursorpb.ConversationTokenDetails{
 			UsedTokens: uint32(min(used, int(^uint32(0)))),
 			MaxTokens:  uint32(min(window, int(^uint32(0)))),
+			Breakdown: tokenBreakdown(
+				uint32(min(used, int(^uint32(0)))),
+				uint32(min(window, int(^uint32(0)))),
+				prevBreakdown(prev),
+				system,
+				tools,
+				mcpNames,
+				messages,
+			),
 		},
 	}
 	if summary != "" {

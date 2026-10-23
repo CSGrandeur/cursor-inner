@@ -42,7 +42,7 @@ func TestCheckpointCarriesPreviousSummary(t *testing.T) {
 	raw, _ := proto.Marshal(&cursorpb.ConversationSummary{Summary: "earlier work"})
 	prev := &cursorpb.ConversationStateStructure{Summary: raw, SelfSummaryCount: 2}
 	msgs := []provider.Message{{Role: "user", Content: "<summary>\nearlier work\n</summary>"}, {Role: "user", Content: "next"}, {Role: "assistant", Content: "ok"}}
-	built, err := writeCheckpoint("sys", "r", msgs, 0, 0, 0, "", 0, nil, prev, nil)
+	built, err := writeCheckpoint("sys", "r", msgs, 0, 0, 0, "", 0, nil, prev, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

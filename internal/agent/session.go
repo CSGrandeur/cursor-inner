@@ -670,20 +670,18 @@ next:
 			reply.ToolCalls[i] = tools.Canonical(reply.ToolCalls[i])
 		}
 		messages = append(messages, reply)
-		if warn, stop := s.loops.observe(reply.ToolCalls); stop {
+		if stop := s.loops.observe(reply.ToolCalls); stop {
 			// 像步数到上限那样正常收尾，不要用错误结束这一轮。
 			name := ""
 			if len(reply.ToolCalls) > 0 {
 				name = reply.ToolCalls[0].Name
 			}
-			slog.Debug("相同工具调用重复，暂停这一轮", "conversation", short, "tool", name, "limit", loopStopAt)
-			if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(loopStopNotice, name, loopStopAt)); err != nil {
+			slog.Debug("相同工具调用重复，暂停这一轮", "conversation", short, "tool", name, "limit", loopHardStopAt)
+			if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(loopStopNotice, name, loopHardStopAt)); err != nil {
 				return err
 			}
 			sentCheckpoint = true
 			return nil
-		} else if warn != "" {
-			messages = append(messages, provider.Message{Role: "user", Content: warn})
 		}
 		for i := 0; i < len(reply.ToolCalls); {
 			end := i + 1
@@ -716,6 +714,9 @@ next:
 			for _, outcome := range results {
 				if outcome.call.ID == "" {
 					continue
+				}
+				if rem := s.loops.takeReminderFor(outcome.call.ID); rem != "" {
+					outcome.text = appendLoopReminder(outcome.text, rem)
 				}
 				messages = append(messages, toolResult(outcome))
 				if outcome.mode != "" {

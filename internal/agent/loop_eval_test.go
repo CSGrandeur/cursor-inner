@@ -46,7 +46,7 @@ func loopCorpus() []loopCase {
 		return out
 	}
 	return []loopCase{
-		{"true-loop", same(6), true},
+		{"true-loop", same(9), true},
 		{"interleaved-productive", inter, false},
 		{"distinct-reads", distinct, false},
 		{"ab-oscillation", osc, true},
@@ -58,7 +58,7 @@ func runLoopCase(c loopCase) bool {
 	tr := newLoopTracker()
 	stopped := false
 	for _, call := range c.seq {
-		if _, stop := tr.observe([]provider.ToolCall{call}); stop {
+		if stop := tr.observe([]provider.ToolCall{call}); stop {
 			stopped = true
 			break
 		}

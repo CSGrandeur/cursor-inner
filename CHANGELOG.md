@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.22] - 2026-10-23
+
+### Fixed
+
+- Custom models now show the same Context Usage panel as Cursor's built-in models: a segmented color bar and View Report, instead of a plain used/max line. Categories (system prompt, tools, rules, skills, MCP, subagents, summarized conversation, conversation) are estimated from the current turn and fitted to the reported token total.
+- When a custom model repeats the same tool call with the same arguments, or keeps using Computer Use several times in a row, a short reminder is attached to that tool's result asking it to prefer the terminal and file tools when they fit, and to use Computer Use for the GUI. The turn is only paused after many repeats in a row. Computer Use stays available; nothing is stripped from the tool list, and no extra system-prompt rule is added.
+
 ## [0.5.21] - 2026-10-23
 
 ### Fixed
@@ -483,7 +490,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...HEAD
+[0.5.22]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.19...v0.5.20
 [0.5.19]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.18...v0.5.19
