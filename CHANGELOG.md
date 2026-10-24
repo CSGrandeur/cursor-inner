@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.24] - 2026-10-24
+
+### Fixed
+
+- Subagent chat bubbles no longer show raw `system_reminder` tags. When Cursor puts a subagent reminder in a separate field, the bubble keeps the user's own words; the reminder still reaches the custom model.
+
 ## [0.5.23] - 2026-10-23
 
 ### Fixed
@@ -497,6 +503,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...HEAD
+[0.5.24]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.20...v0.5.21

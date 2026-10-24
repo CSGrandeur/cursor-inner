@@ -248,6 +248,9 @@ func toolNames(messages []provider.Message) map[string]string {
 
 func putTurn(put func([]byte) ([]byte, error), turn []provider.Message, requestID string) ([]byte, error) {
 	user := &cursorpb.UserMessage{Text: visibleUserText(turn[0])}
+	if reminder := reminderBodyFromContent(turn[0].Content); reminder != "" {
+		user.SubagentSystemReminder = &reminder
+	}
 	userRaw, err := proto.Marshal(user)
 	if err != nil {
 		return nil, err
@@ -568,6 +571,9 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 			}
 		}
 		message.Content = text.String()
+		// Root prompt JSON keeps model-facing Content (may include <system_reminder>).
+		// Shown is what putTurn writes back into UserMessage.text for the transcript UI.
+		message.Shown = visibleUserText(provider.Message{Role: "user", Content: message.Content})
 	}
 	return message, rootMessage, nil
 }

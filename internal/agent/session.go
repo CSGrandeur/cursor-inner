@@ -266,10 +266,23 @@ func (s *Session) fetchBlob(ctx context.Context, send Emit, id []byte) ([]byte, 
 // 历史消息就变成带标签的新消息，写进 checkpoint 后客户端重建时显示一堆标签。
 func prependUsers(messages []provider.Message, preps []*cursorpb.UserMessage) []provider.Message {
 	for _, pre := range preps {
-		if strings.TrimSpace(pre.GetText()) == "" {
+		if strings.TrimSpace(pre.GetText()) == "" && strings.TrimSpace(pre.GetSubagentSystemReminder()) == "" {
 			continue
 		}
-		messages = append(messages, provider.Message{Role: "user", Content: pre.GetText(), Shown: pre.GetText()})
+		// History already happened: keep model-facing reminders in Content, never in Shown.
+		shown := stripSystemReminders(pre.GetText())
+		content := pre.GetText()
+		if block := modelSystemReminder(pre.GetSubagentSystemReminder()); block != "" && !strings.Contains(content, block) {
+			if content != "" {
+				content = block + "\n\n" + content
+			} else {
+				content = block
+			}
+		}
+		if strings.TrimSpace(shown) == "" && strings.TrimSpace(content) == "" {
+			continue
+		}
+		messages = append(messages, provider.Message{Role: "user", Content: content, Shown: shown})
 	}
 	return messages
 }

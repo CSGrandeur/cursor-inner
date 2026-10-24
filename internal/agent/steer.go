@@ -228,7 +228,7 @@ func appendedUser(user *cursorpb.UserMessage) *cursorpb.AgentServerMessage {
 		user = &cursorpb.UserMessage{}
 	}
 	return interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_UserMessageAppended{UserMessageAppended: &cursorpb.UserMessageAppendedUpdate{
-		UserMessage: user,
+		UserMessage: transcriptUserMessage(user),
 	}}})
 }
 

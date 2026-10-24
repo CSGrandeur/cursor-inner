@@ -2,31 +2,52 @@ package agent
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/provider"
+
+	"google.golang.org/protobuf/proto"
 )
 
+// systemReminderPattern matches Cursor harness blocks that must reach the model
+// but must never be written into the human bubble / turn UserMessage.text.
+// Cursor puts the body in UserMessage.subagent_system_reminder; the local agent
+// runtime wraps it as <system_reminder>...</system_reminder> only for the model.
+// If that wrapped form (or a side-chat reminder that already includes the tags)
+// lands in Content without Shown, unwrapHarness used to return it as-is and the
+// checkpoint would show the raw tags in the subagent chat.
+var systemReminderPattern = regexp.MustCompile(`(?is)<\s*system_reminder\s*>.*?<\s*/\s*system_reminder\s*>`)
+
 func userTurn(user *cursorpb.UserMessage, ctx *cursorpb.RequestContext) provider.Message {
+	raw := user.GetText()
+	shown, fromText := splitSystemReminders(raw)
+	reminder := strings.TrimSpace(user.GetSubagentSystemReminder())
 	text := "<timestamp>" + time.Now().Format(time.RFC3339) + "</timestamp>\n"
 	if git := gitStatus(ctx); git != "" {
 		text += git + "\n"
 	}
-	text += "<user_query>\n" + user.GetText() + "\n</user_query>"
+	for _, block := range fromText {
+		text += block + "\n"
+	}
+	if block := modelSystemReminder(reminder); block != "" {
+		text += block + "\n"
+	}
+	text += "<user_query>\n" + shown + "\n</user_query>"
 	if extra := selectedContext(user.GetSelectedContext()); extra != "" {
 		text += "\n\n" + extra
 	}
-	return provider.Message{Role: "user", Content: text, Shown: user.GetText(), Images: selectedImages(user.GetSelectedContext())}
+	return provider.Message{Role: "user", Content: text, Shown: shown, Images: selectedImages(user.GetSelectedContext())}
 }
 
 // visibleUserText 是对话记录里该显示的原文。包装只留在给模型的 Content 里。
 func visibleUserText(message provider.Message) string {
 	if message.Shown != "" {
-		return message.Shown
+		return stripSystemReminders(message.Shown)
 	}
-	return unwrapHarness(message.Content)
+	return stripSystemReminders(unwrapHarness(message.Content))
 }
 
 func unwrapHarness(content string) string {
@@ -47,7 +68,82 @@ func unwrapHarness(content string) string {
 	return rest[:end]
 }
 
+// modelSystemReminder wraps Cursor's subagent_system_reminder for the model only.
+// The field body is plain text; if a caller already wrapped it (side-chat), keep one copy.
+func modelSystemReminder(reminder string) string {
+	reminder = strings.TrimSpace(reminder)
+	if reminder == "" {
+		return ""
+	}
+	if systemReminderPattern.MatchString(reminder) {
+		return strings.TrimSpace(reminder)
+	}
+	return "<system_reminder>\n" + reminder + "\n</system_reminder>"
+}
+
+// transcriptUserMessage is the UserMessage Cursor should render in the chat bubble.
+// Model-only wrappers stay out of Text; subagent_system_reminder stays in its field.
+func transcriptUserMessage(user *cursorpb.UserMessage) *cursorpb.UserMessage {
+	if user == nil {
+		return &cursorpb.UserMessage{}
+	}
+	out := proto.Clone(user).(*cursorpb.UserMessage)
+	shown, fromText := splitSystemReminders(out.GetText())
+	out.Text = shown
+	reminder := strings.TrimSpace(out.GetSubagentSystemReminder())
+	if reminder == "" && len(fromText) > 0 {
+		reminder = reminderBodyFromContent(fromText[0])
+	}
+	if reminder != "" {
+		out.SubagentSystemReminder = &reminder
+	} else {
+		out.SubagentSystemReminder = nil
+	}
+	return out
+}
+
+func stripSystemReminders(text string) string {
+	cleaned, _ := splitSystemReminders(text)
+	return cleaned
+}
+
+func splitSystemReminders(text string) (clean string, blocks []string) {
+	if text == "" || !strings.Contains(strings.ToLower(text), "system_reminder") {
+		return text, nil
+	}
+	matches := systemReminderPattern.FindAllString(text, -1)
+	clean = strings.TrimSpace(systemReminderPattern.ReplaceAllString(text, ""))
+	for strings.Contains(clean, "\n\n\n") {
+		clean = strings.ReplaceAll(clean, "\n\n\n", "\n\n")
+	}
+	for _, m := range matches {
+		blocks = append(blocks, strings.TrimSpace(m))
+	}
+	return clean, blocks
+}
+
+// reminderBodyFromContent recovers the subagent_system_reminder field body from model Content
+// so checkpoint turns keep the protobuf field Cursor expects, without putting tags in Text.
+func reminderBodyFromContent(content string) string {
+	_, blocks := splitSystemReminders(content)
+	if len(blocks) == 0 {
+		return ""
+	}
+	block := blocks[0]
+	const open = "<system_reminder>"
+	const close = "</system_reminder>"
+	lower := strings.ToLower(block)
+	start := strings.Index(lower, open)
+	end := strings.LastIndex(lower, close)
+	if start < 0 || end < 0 || end <= start {
+		return strings.TrimSpace(block)
+	}
+	inner := block[start+len(open) : end]
+	return strings.TrimSpace(inner)
+}
+
 func selectedContext(selected *cursorpb.SelectedContext) string {
+
 	if selected == nil {
 		return ""
 	}
