@@ -451,6 +451,53 @@
   .secret button:hover { color: var(--text); background: transparent; }
   .secret svg { display: block; }
   .secret svg[hidden] { display: none !important; }
+  .discover { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+  .discover > input { min-width: 0; }
+  .discover > #discover-models {
+    height: 32px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px;
+    background: var(--field); color: var(--text); cursor: pointer; white-space: nowrap; font-size: 12px;
+  }
+  .discover > #discover-models:hover { background: var(--raise); }
+  .discover > #discover-models:disabled { opacity: 0.5; cursor: default; }
+  /* Absolute popover so the form grid does not stretch. Visual language matches quit-list / pills. */
+  .discover-pop {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    display: flex; flex-direction: column; max-height: 196px;
+    border: 1px solid var(--line-strong); border-radius: 8px;
+    background: var(--panel); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .discover-pop[hidden] { display: none !important; }
+  .discover-pop-head {
+    display: flex; align-items: center; gap: 8px; flex: none;
+    padding: 6px 8px; border-bottom: 1px solid var(--line);
+    font-size: 11px; color: var(--muted); line-height: 1.3;
+  }
+  .discover-pop-head .discover-pop-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .discover-pop-head .discover-pop-close {
+    margin-left: auto; flex: none; width: 22px; height: 22px; padding: 0;
+    border: 0; border-radius: 6px; background: transparent; color: var(--faint);
+    display: grid; place-items: center; font-size: 14px; line-height: 1; cursor: pointer;
+  }
+  .discover-pop-head .discover-pop-close:hover { color: var(--text); background: var(--line); }
+  .discover-pop-body {
+    display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start;
+    padding: 8px; overflow: auto; max-height: 156px;
+  }
+  .discover-pop-body .chip {
+    height: 26px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 999px;
+    background: var(--field); color: var(--text);
+    font-family: var(--mono); font-size: 11px; font-weight: 400; cursor: pointer;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .discover-pop-body .chip:hover { border-color: var(--faint); background: var(--raise); color: var(--text); }
+  .discover-pop-body .chip:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+  .discover-pop-body .chip[aria-pressed="true"] {
+    color: var(--signal); background: var(--signal-soft); border-color: transparent;
+  }
+  .discover-pop-body .discover-msg {
+    width: 100%; margin: 0; padding: 4px 2px; font-size: 12px; line-height: 1.45; color: var(--muted);
+  }
+  .discover-pop-body .discover-msg.bad { color: var(--bad); }
   /* 浏览器自带的密码眼睛（Edge 的 ::-ms-reveal）和自动填充钥匙会和页面上的眼睛叠在一起，
      只留页面自己的那一颗。 */
   input[type="password"]::-ms-reveal,
@@ -684,7 +731,20 @@
               <option value="anthropic">Anthropic</option>
             </select>
           </label>
-          <label class="field"><span data-i18n="modelName">模型名</span><input name="model" type="text" required spellcheck="false" class="mono"></label>
+          <label class="field"><span data-i18n="modelName">模型名</span>
+            <span class="discover">
+              <input name="model" type="text" required spellcheck="false" class="mono" list="discovered-models" autocomplete="off">
+              <button id="discover-models" type="button" data-i18n="discoverModels" data-i18n-title="discoverHint">探测模型</button>
+              <div id="discovered-pick" class="discover-pop" hidden role="listbox" aria-label="上游模型">
+                <div class="discover-pop-head">
+                  <span class="discover-pop-title" id="discovered-pick-title"></span>
+                  <button type="button" class="discover-pop-close" id="discovered-pick-close" aria-label="关闭" title="关闭">×</button>
+                </div>
+                <div class="discover-pop-body" id="discovered-pick-body"></div>
+              </div>
+            </span>
+            <datalist id="discovered-models"></datalist>
+          </label>
           <label class="field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
           <label class="field"><span data-i18n="apiKey">密钥</span>
             <span class="secret">
@@ -906,6 +966,7 @@ const MESSAGES = {
     tipFast: "打开后，Cursor 里可以使用 Fast，请求带 service_tier。只有 OpenAI Chat 能开。",
     tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
+    discoverModels: "探测模型", discovering: "探测中…", discoverNeed: "请先填写接口地址和密钥", discoverOk: "找到 {n} 个模型", discoverNone: "上游没有返回模型", discoverHint: "按接口地址向上游拉取模型列表，点选填入模型名", discoverTitle: "上游模型 · {n}", discoverPick: "点选填入模型名", discoverClose: "关闭",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥", keyLabel: "密钥",
     useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", maxImages: "图片张数上限", imageBudget: "图片总量上限（MB）", defaultImages: "默认 20", defaultBudget: "默认 24", optional: "可选", test: "测试", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
     keepKey: "留空不改", copyUrl: "点击复制接口地址", copyKey: "点击复制密钥", copied: "已复制", copiedKey: "密钥已复制", copiedToForm: "已填入添加表单，含密钥（默认隐藏）。", copiedToFormNoKey: "已填入添加表单，但没能读到密钥，请重新填写。",
@@ -965,6 +1026,7 @@ const MESSAGES = {
     tipFast: "Allows Fast in Cursor and sends service_tier. OpenAI Chat only.",
     tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
+    discoverModels: "Discover models", discovering: "Discovering…", discoverNeed: "Enter endpoint URL and API key first", discoverOk: "Found {n} models", discoverNone: "Upstream returned no models", discoverHint: "Fetch the provider model list from the endpoint URL and pick one", discoverTitle: "Upstream models · {n}", discoverPick: "Click to fill model name", discoverClose: "Close",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key", keyLabel: "Key",
     useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", maxImages: "Max images", imageBudget: "Image total (MB)", defaultImages: "default 20", defaultBudget: "default 24", optional: "optional", test: "Test", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
     keepKey: "Leave blank to keep", copyUrl: "Click to copy the endpoint URL", copyKey: "Click to copy the API key", copied: "Copied", copiedKey: "API key copied", copiedToForm: "Filled into the add form, including the API key (hidden by default).", copiedToFormNoKey: "Filled into the add form, but the API key could not be read; enter it again.",
@@ -1204,6 +1266,124 @@ async function send(url, options) {
   return data;
 }
 
+let discoveredModels = [];
+
+function hideDiscoveredPick() {
+  const pick = document.querySelector("#discovered-pick");
+  if (!pick) return;
+  pick.hidden = true;
+}
+
+function showDiscoverState(kind, message) {
+  const pick = document.querySelector("#discovered-pick");
+  const title = document.querySelector("#discovered-pick-title");
+  const body = document.querySelector("#discovered-pick-body");
+  const close = document.querySelector("#discovered-pick-close");
+  if (!pick || !title || !body) return;
+  title.textContent = kind === "loading" ? t("discovering") : (kind === "error" ? t("discoverModels") : t("discoverPick"));
+  if (close) close.setAttribute("aria-label", t("discoverClose"));
+  body.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "discover-msg" + (kind === "error" ? " bad" : "");
+  p.textContent = message;
+  body.append(p);
+  pick.hidden = false;
+}
+
+function setDiscoveredModels(models) {
+  discoveredModels = Array.isArray(models) ? models.slice() : [];
+  const list = document.querySelector("#discovered-models");
+  const pick = document.querySelector("#discovered-pick");
+  const title = document.querySelector("#discovered-pick-title");
+  const body = document.querySelector("#discovered-pick-body");
+  const close = document.querySelector("#discovered-pick-close");
+  if (list) {
+    list.innerHTML = "";
+    for (const id of discoveredModels) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      list.append(opt);
+    }
+  }
+  if (!pick || !title || !body) return;
+  body.innerHTML = "";
+  if (!discoveredModels.length) {
+    pick.hidden = true;
+    return;
+  }
+  title.textContent = t("discoverTitle", {n: discoveredModels.length});
+  if (close) close.setAttribute("aria-label", t("discoverClose"));
+  const current = String(form.model.value || "").trim();
+  for (const id of discoveredModels) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = id;
+    btn.title = id;
+    btn.setAttribute("role", "option");
+    btn.setAttribute("aria-pressed", id === current ? "true" : "false");
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      form.model.value = id;
+      if (!String(form.display_name.value || "").trim()) form.display_name.value = id;
+      for (const chip of body.querySelectorAll(".chip")) {
+        chip.setAttribute("aria-pressed", chip === btn ? "true" : "false");
+      }
+    });
+    body.append(btn);
+  }
+  pick.hidden = false;
+}
+
+async function discoverUpstreamModels() {
+  const base = String(form.base_url.value || "").trim();
+  const key = String(form.api_key.value || "").trim();
+  const btn = document.querySelector("#discover-models");
+  if (!base || (!key && !editingId)) {
+    showError(t("discoverNeed"));
+    showDiscoverState("error", t("discoverNeed"));
+    return;
+  }
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = t("discovering");
+  showDiscoverState("loading", t("discovering"));
+  try {
+    const body = {
+      type: form.type.value,
+      base_url: base,
+      api_key: key,
+      use_proxy: form.use_proxy.checked
+    };
+    if (editingId) body.id = editingId;
+    const data = await send("/api/models/discover", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body)
+    });
+    const models = Array.isArray(data.models) ? data.models : [];
+    setDiscoveredModels(models);
+    if (!models.length) {
+      showDiscoverState("empty", t("discoverNone"));
+      toast(t("discoverNone"), "warn");
+      return;
+    }
+    toast(t("discoverOk", {n: models.length}), "ok");
+    if (!String(form.model.value || "").trim()) {
+      form.model.value = models[0];
+      if (!String(form.display_name.value || "").trim()) form.display_name.value = models[0];
+      setDiscoveredModels(models);
+    }
+  } catch (err) {
+    showDiscoverState("error", err.message || t("requestFailed", {status: "?"}));
+    showError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev || t("discoverModels");
+  }
+}
+
 function formModel() {
   const fd = new FormData(form);
   const fallback = resolveFallback(fd.get("fallback"), lastState ? lastState.models : [], editingId);
@@ -1240,6 +1420,7 @@ function syncFormMode() {
 function clearForm() {
   editingId = "";
   form.reset();
+  setDiscoveredModels([]);
   setKeyRevealed(false);
   syncFormMode();
 }
@@ -1260,6 +1441,7 @@ function fillForm(model, mode, apiKey) {
   form.prompt_cache_key.value = model.prompt_cache_key || "";
   form.fallback.value = fallbackText(model.fallback, lastState ? lastState.models : []);
   editingId = mode === "edit" ? model.id : "";
+  setDiscoveredModels([]);
   setKeyRevealed(false);
   syncFormMode();
   if (lastState) render(lastState);
@@ -1752,6 +1934,22 @@ form.addEventListener("submit", (event) => {
 document.querySelector("#form-clear").addEventListener("click", () => {
   clearForm();
   if (lastState) render(lastState);
+});
+document.querySelector("#discover-models").addEventListener("click", () => void discoverUpstreamModels());
+document.querySelector("#discovered-pick-close").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  ev.stopPropagation();
+  hideDiscoveredPick();
+});
+document.addEventListener("click", (ev) => {
+  const pick = document.querySelector("#discovered-pick");
+  const wrap = document.querySelector(".discover");
+  if (!pick || pick.hidden || !wrap) return;
+  if (wrap.contains(ev.target)) return;
+  hideDiscoveredPick();
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") hideDiscoveredPick();
 });
 const draftTest = document.querySelector("#draft-test");
 draftTest.addEventListener("click", () => {

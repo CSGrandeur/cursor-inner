@@ -346,6 +346,10 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.bootstrapStatsig(w, r)
 	case "/aiserver.v1.CmdKService/StreamCmdK", "/aiserver.v1.CmdKService/StreamTerminalCmdK", "/aiserver.v1.AiService/SlashEdit":
 		s.inline(w, r)
+	case nameTabPath:
+		s.nameTab(w, r)
+	case updateConversationMetadataPath:
+		s.updateConversationMetadata(w, r)
 	default:
 		s.forward(w, r)
 	}

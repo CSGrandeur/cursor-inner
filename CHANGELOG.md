@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.25] - 2026-10-26
+
+### Changed
+
+- Model discovery results on the Models tab are no longer a raw stacked list that stretches the add-model form. After **Discover models / 探测模型**, matches open as a compact absolute popover of pill chips (max-height scroll, hover and selected states, close / Esc / click-outside). Loading, empty, and error states reuse the same popover. Clicking a chip still fills the model name (and display name when empty).
+
+### Added
+
+- Upstream model discovery on the Models tab (same idea as cursor-byok): `POST /api/models/discover` takes `{type,base_url,api_key,use_proxy,id?}`, calls the provider's `/v1/models` (with OpenAI-compatible path variants and Anthropic pagination), and returns `{models:[id…]}`. The settings form has a **Discover models / 探测模型** control next to the model name field to fill a pickable list. When editing, an empty key reuses the saved key only if the host is unchanged. API keys are never echoed. The earlier mistaken public `GET /v1/models` (listing already-configured local models) was removed.
+
+
+### Fixed
+
+- Long polling with the same Read (or other tool) interleaved with Shell/sleep is no longer paused as a loop. Hard-stop now only triggers on **8 consecutive identical** tool calls (same name and arguments), or on a strict A-B-A-B oscillation of the same tool name with different arguments (3 full cycles; Read+Shell polling is not treated as oscillation). The previous whole-turn cumulative count of the same fingerprint was removed because it false-paused legitimate wait-and-recheck turns. Soft warn on the 3rd consecutive identical call (reminder attached to the tool result) is unchanged. Oscillation pauses use a separate notice that says the turn was alternating, not repeating in a row.
+- Custom-model chats can be renamed and auto-titled again. Manual rename for conversations answered locally returns an empty success for `UpdateConversationMetadata` (same idea as cursor-byok) instead of forwarding an id Cursor servers do not know. Auto-title (`NameTab`) with a leaked custom model id is derived locally from the first user message instead of scrubbing the id and forwarding it.
+
 ## [0.5.24] - 2026-10-24
 
 ### Fixed
@@ -502,7 +518,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...HEAD
+[0.5.25]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.21...v0.5.22

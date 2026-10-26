@@ -37,11 +37,13 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 ## Features
 
 - **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list. From Cursor 3.26 onward, the newer chat path is also answered by your custom model, with tool parameters passed through as usual.
+- **Discover upstream models.** On Models, after you fill the endpoint URL and API key, click **Discover models** next to the model name to fetch the provider's `/v1/models` list and pick one. When editing, leave the key blank to reuse the saved key if the host is unchanged.
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
 - **Switching back stays reliable.** After a custom-model turn in the same chat, leftover custom model ids in earlier messages no longer make an official turn fail with a Server error.
 - **Agent work.** A custom model can read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Edits show a diff and are written after you accept them.
 - **Same Context Usage UI.** Custom models get the same segmented bar and View Report as built-in models, not only a used/max line.
-- **Gentle tool nudge.** If the same tool is called several times with the same arguments, or Computer Use is used several times in a row, a short reminder is attached to that tool result: prefer the terminal and file tools when they fit; Computer Use stays available for the GUI.
+- **Gentle tool nudge.** If the same tool is called several times in a row with the same arguments, or Computer Use is used several times in a row, a short reminder is attached to that tool result: prefer the terminal and file tools when they fit; Computer Use stays available for the GUI. A turn is only paused after 8 consecutive identical calls, or a same-name A-B oscillation; long polling that interleaves sleep or other tools is not treated as a loop.
+- **Local chats can be renamed.** Rename and auto-title for custom-model chats stay on this computer; the local conversation id is not sent to Cursor's servers.
 - **Your proxy.** Takes over only Cursor, Grok and Codex. One address, and they use it. You do not change the system proxy, or turn on a system-wide TUN that would carry other programs with it. You can also send only official hosts such as Grok, x.ai, Cursor and OpenAI through the proxy, and connect directly to everything else. Each custom model chooses whether to use the proxy. Codex is not started if it is not already running.
 - **If a connection still bypasses.** After takeover, if one of the three still dials an official host directly, TUN mode or Strict mode inside cursor-inner covers those official hosts only. Other programs on the system are left alone. If either mode cannot start, takeover continues.
 - **Update and quit.** Update in one click; Cursor and Grok keep running. Quitting, or an unexpected exit, writes Cursor's previous proxy settings back.
@@ -60,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.24`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.25`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -106,7 +108,7 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 ## Usage
 
 1. Run cursor-inner. It closes any running Cursor and opens the settings page. Open Cursor, Open Grok and Open Codex in the top bar start those apps and do not quit cursor-inner.
-2. On Models, fill in the display name, type, model name, endpoint URL and API key, then click Test. While it runs, the area under the list shows the probe stages, a progress bar and the live output token count. When editing, leave the key blank to keep it.
+2. On Models, fill in the display name, type, model name, endpoint URL and API key; if you are unsure of the model name, click **Discover models** to pick from the upstream list, then click Test. While it runs, the area under the list shows the probe stages, a progress bar and the live output token count. When editing, leave the key blank to keep it.
 3. Open Cursor again, start a new chat, and pick the model you added. If Cursor is already open, it only fetches its model list about every 5 minutes while focused; to see the model right away, click Refresh model list in Cursor Settings → Models, or run Reload Window.
 4. Click Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon menu. Cursor's settings are restored.
 
@@ -117,7 +119,7 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 
 The settings page has four tabs: **Models**, **Network**, **General** and **Update**. A URL ending in `#models`, `#network`, `#general` or `#update` opens that tab.
 
-- **Models**: Cursor only. Add and test. A test records speed and probes tools, reasoning, images and cache; the strip under the list shows the stages, progress and live token count. The key in the list has a Key label and copies on click; Copy fills the add form below including the key, which stays masked until you reveal it. Context window, max output, Max images, Image total (MB), reasoning, Fast, cache key and fallback can be left empty. Images are shrunk when read (long edge 1568 px, about 256 KB); when a request carries more images than the limits (default 20 images, 24 MB), the oldest tool images are left out in batches and the newest few are always kept. For Fallback, enter the names of other added models, comma-separated (Names of other added models, comma-separated); one is used before any text has been shown, when authentication fails or the endpoint is rate-limited. A name that is not in the list is reported and not saved. The ? next to Context window and Max output opens a small help card that explains the number and what an empty value means. When an update is available, the Update tab shows its notes as headings and lists.
+- **Models**: Cursor only. Add, Discover models, and test. A test records speed and probes tools, reasoning, images and cache; the strip under the list shows the stages, progress and live token count. The key in the list has a Key label and copies on click; Copy fills the add form below including the key, which stays masked until you reveal it. Context window, max output, Max images, Image total (MB), reasoning, Fast, cache key and fallback can be left empty. Images are shrunk when read (long edge 1568 px, about 256 KB); when a request carries more images than the limits (default 20 images, 24 MB), the oldest tool images are left out in batches and the newest few are always kept. For Fallback, enter the names of other added models, comma-separated (Names of other added models, comma-separated); one is used before any text has been shown, when authentication fails or the endpoint is rate-limited. A name that is not in the list is reported and not saved. The ? next to Context window and Max output opens a small help card that explains the number and what an empty value means. When an update is available, the Update tab shows its notes as headings and lists.
 - **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, TUN mode and Strict mode. An empty proxy means a direct connection. A bare `host:port` is detected as socks5 or http. If cursor-inner starts before your proxy software, the status bar shows "Waiting for proxy…" and connects automatically once it is up; official traffic never goes direct. The same wait applies if the proxy stops mid-run. Adds proxy launch args to Codex; never starts it. That process sends its traffic through the proxy above.
 - **Update**: the buttons are Check for updates and Update. Only signed releases are installed. Cursor and Grok keep running; a version that fails its check leaves the current one in place. On failure the page says what happened and what to do, without showing the download URL.
 - **General**: image generation and start at login. On Windows there is also **Run in background** (No console window at startup; notification-area icon only.) and **Notifications** (System notifications for update results and leak warnings.). To let Agent generate images, fill in an OpenAI-compatible endpoint under Images.
@@ -223,7 +225,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.24 ./build.sh linux
+VERSION=v0.5.25 ./build.sh linux
 ```
 
 ## Acknowledgements

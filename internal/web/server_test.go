@@ -15,16 +15,23 @@ import (
 )
 
 type fake struct {
-	strict      *bool
-	scope       string
-	tunnel      *bool
-	view        View
-	autostart   bool
-	takeover    bool
-	quit        bool
-	opened      bool
-	openedGrok  bool
-	openedCodex bool
+	strict        *bool
+	scope         string
+	tunnel        *bool
+	view          View
+	autostart     bool
+	takeover      bool
+	quit          bool
+	opened        bool
+	openedGrok    bool
+	openedCodex   bool
+	discover      []string
+	discoverErr   error
+	discoverType  string
+	discoverURL   string
+	discoverKey   string
+	discoverID    string
+	discoverProxy bool
 }
 
 func (f *fake) State() (View, error) {
@@ -78,6 +85,21 @@ func (f *fake) ModelKey(id string) (string, error) {
 		return "", i18n.E("没有这个模型", "No such model")
 	}
 	return "sk-test", nil
+}
+
+func (f *fake) DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID string) ([]string, error) {
+	f.discoverType = modelType
+	f.discoverURL = baseURL
+	f.discoverKey = apiKey
+	f.discoverProxy = useProxy
+	f.discoverID = reuseID
+	if f.discoverErr != nil {
+		return nil, f.discoverErr
+	}
+	if f.discover == nil {
+		return []string{}, nil
+	}
+	return append([]string(nil), f.discover...), nil
 }
 func (f *fake) SetModelProxy(string, bool) error     { return nil }
 func (f *fake) SetModelReasoning(string, bool) error { return nil }

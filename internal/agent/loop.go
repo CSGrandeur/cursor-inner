@@ -11,7 +11,11 @@ import (
 
 const (
 	loopWarnAt     = 3 // 连续相同调用到第 3 次：结果侧 reminder（对齐 qwen loopProtection 默认 warn）
-	loopHardStopAt = 8 // 连续相同或同一指纹累计到第 8 次才暂停；软停（旧 loopStopAt=5）改为只提醒不中断
+	loopHardStopAt = 8 // 仅连续相同指纹到第 8 次才暂停；夹了其它工具的轮询不再靠累计硬停
+
+	// oscillationCycles：完整 A-B 周期数。3 周期 = 6 次调用（A B A B A B）硬停。
+	// 去掉累计 counts 硬停后，用这条兜住真交替死循环。
+	oscillationCycles = 3
 
 	computerStreakWarnAt = 3 // 连续 computer_* 到第 3 次提醒改用 Shell/读写
 
@@ -21,14 +25,27 @@ const (
 	contentMinAlnum = 10   // 窗口里字母数字太少（表格线、分隔符）不计，降低误判
 )
 
+// loopHaltKind 区分硬停原因，供暂停文案使用。
+type loopHaltKind int
+
+const (
+	loopHaltNone loopHaltKind = iota
+	loopHaltIdentical
+	loopHaltOscillation
+)
+
 // loopTracker 识别工具调用复读、连续 Computer Use，以及正文复读。
 // 默认行为对齐 qwen-code model.loopProtection=warn：到提醒点时把简短 reminder
-// 挂进工具结果，不暂停本轮；硬停仍用 loopHardStopAt 兜底（类似预算）。
+// 挂进工具结果，不暂停本轮；硬停只认「连续相同指纹」与「A-B 振荡」，
+// 不再用整轮累计同一指纹触发硬停（合法 Read+sleep 轮询会误伤）。
 // 正文复读在流式回调里累积文本，命中后让本次生成提前收尾。
 type loopTracker struct {
-	counts map[string]int
 	consec int
 	lastFP string
+
+	// recentFP / recentName：最近工具指纹与名称，用于 A-B 振荡检测。
+	recentFP   []string
+	recentName []string
 
 	computerStreak   int
 	remindedIdent    bool
@@ -37,12 +54,16 @@ type loopTracker struct {
 	pending   string
 	pendingID string
 
+	halt      loopHaltKind
+	haltName  string
+	haltNameB string
+
 	text     strings.Builder
 	lastScan int
 }
 
 func newLoopTracker() *loopTracker {
-	return &loopTracker{counts: map[string]int{}}
+	return &loopTracker{}
 }
 
 func toolFingerprint(call provider.ToolCall) string {
@@ -115,12 +136,52 @@ func appendLoopReminder(text, reminder string) string {
 	return text + "\n\n" + reminder
 }
 
+func (t *loopTracker) pushRecent(fp, name string) {
+	t.recentFP = append(t.recentFP, fp)
+	t.recentName = append(t.recentName, name)
+	// 只保留振荡检测所需窗口的两倍，避免无界增长。
+	max := oscillationCycles * 4
+	if len(t.recentFP) > max {
+		t.recentFP = append([]string(nil), t.recentFP[len(t.recentFP)-max:]...)
+		t.recentName = append([]string(nil), t.recentName[len(t.recentName)-max:]...)
+	}
+}
+
+// oscillating 检测最近 2*cycles 次调用是否严格交替为 A B A B …（指纹 A≠B）。
+// 只在「同一工具名、不同参数」时硬停（典型：Read a / Read b 空转）。
+// Read + Shell/sleep 轮询工具名不同，不算振荡，避免误伤合法长等待。
+func (t *loopTracker) oscillating() (ok bool, nameA, nameB string) {
+	n := oscillationCycles * 2
+	if len(t.recentFP) < n {
+		return false, "", ""
+	}
+	hist := t.recentFP[len(t.recentFP)-n:]
+	names := t.recentName[len(t.recentName)-n:]
+	a, b := hist[0], hist[1]
+	if a == "" || b == "" || a == b {
+		return false, "", ""
+	}
+	tool := names[0]
+	if tool == "" {
+		return false, "", ""
+	}
+	for i := 0; i < n; i++ {
+		want := a
+		if i%2 == 1 {
+			want = b
+		}
+		if hist[i] != want || names[i] != tool {
+			return false, "", ""
+		}
+	}
+	return true, names[0], names[1]
+}
+
 // observe 在执行一批工具前调用。stop 为真时应中止本轮。
 // 提醒通过 takeReminder / takeReminderFor 取出，挂进对应工具结果，不再伪造 user 消息。
 func (t *loopTracker) observe(calls []provider.ToolCall) (stop bool) {
 	for _, call := range calls {
 		fp := toolFingerprint(call)
-		t.counts[fp]++
 		if fp == t.lastFP {
 			t.consec++
 		} else {
@@ -128,6 +189,7 @@ func (t *loopTracker) observe(calls []provider.ToolCall) (stop bool) {
 			t.lastFP = fp
 			t.remindedIdent = false
 		}
+		t.pushRecent(fp, call.Name)
 
 		if isComputerTool(call.Name) {
 			t.computerStreak++
@@ -136,7 +198,16 @@ func (t *loopTracker) observe(calls []provider.ToolCall) (stop bool) {
 			t.remindedComputer = false
 		}
 
-		if t.consec >= loopHardStopAt || t.counts[fp] >= loopHardStopAt {
+		if t.consec >= loopHardStopAt {
+			t.halt = loopHaltIdentical
+			t.haltName = call.Name
+			t.haltNameB = ""
+			return true
+		}
+		if ok, a, b := t.oscillating(); ok {
+			t.halt = loopHaltOscillation
+			t.haltName = a
+			t.haltNameB = b
 			return true
 		}
 		if t.consec == loopWarnAt && !t.remindedIdent {
@@ -150,6 +221,12 @@ func (t *loopTracker) observe(calls []provider.ToolCall) (stop bool) {
 	}
 	return false
 }
+
+// haltKind 返回最近一次 observe 触发的硬停类型。
+func (t *loopTracker) haltKind() loopHaltKind { return t.halt }
+
+// haltNames 返回硬停相关工具名（振荡时为 A/B，否则 B 为空）。
+func (t *loopTracker) haltNames() (a, b string) { return t.haltName, t.haltNameB }
 
 // resetText 在每次向模型请求前清空正文累积。
 func (t *loopTracker) resetText() {

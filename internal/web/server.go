@@ -45,6 +45,7 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": version})
 	})
+	registerDiscover(mux, backend)
 	push := newStreams()
 	if up, ok := backend.(UpdateBackend); ok {
 		registerUpdate(mux, up, push)

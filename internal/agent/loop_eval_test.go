@@ -28,11 +28,8 @@ func loopCorpus() []loopCase {
 		osc = append(osc, call("Read", "/w/a.go"), call("Read", "/w/b.go"))
 	}
 	var inter []provider.ToolCall
-	for i := 0; i < 4; i++ {
-		inter = append(inter, call("Read", "/w/a.go"))
-		if i < 3 {
-			inter = append(inter, shell("go build"))
-		}
+	for i := 0; i < 10; i++ {
+		inter = append(inter, call("Read", "/w/a.go"), shell("sleep 300"))
 	}
 	var distinct []provider.ToolCall
 	for _, f := range []string{"a", "b", "c", "d", "e", "f"} {
@@ -47,7 +44,7 @@ func loopCorpus() []loopCase {
 	}
 	return []loopCase{
 		{"true-loop", same(9), true},
-		{"interleaved-productive", inter, false},
+		{"interleaved-poll", inter, false},
 		{"distinct-reads", distinct, false},
 		{"ab-oscillation", osc, true},
 		{"short-repeat", same(2), false},

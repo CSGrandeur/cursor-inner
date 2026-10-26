@@ -8,12 +8,12 @@
 <p align="center"><sub>自己的模型用 Cursor 的 Agent · Cursor、Grok、Codex 走你的代理</sub></p>
 
 <p align="center">
-  <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
-  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total?style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
-  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner?style=flat-square&color=151514&label=stars" alt="Stars"></a>
-  <a href="#安装"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514?style=flat-square" alt="Platform"></a>
-  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514?style=flat-square&logo=go&logoColor=white" alt="Go"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner?style=flat-square&color=151514" alt="License"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner“style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total“style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner“style=flat-square&color=151514&label=stars" alt="Stars"></a>
+  <a href="#安装"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514“style=flat-square" alt="Platform"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514“style=flat-square&logo=go&logoColor=white" alt="Go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner“style=flat-square&color=151514" alt="License"></a>
 </p>
 
 <p align="center">
@@ -37,11 +37,13 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 ## 功能
 
 - **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。Cursor 3.26 起的新对话路径也会用你的自定义模型回答，工具参数照常传给模型。
+- **上游探测模型。** 在「模型」页填好接口地址和密钥后，点模型名旁的「探测模型」，从上游 `/v1/models` 拉列表，点选填入模型名；编辑时密钥留空仍可用已保存的密钥（主机未改时）。
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
 - **换回官方模型不误伤。** 同一对话里先前用过自定义模型时，正文里残留的自定义模型 id 不会再让官方回合被拦成 Server error。
 - **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
 - **用量一眼看清。** 自定义模型的 Context Usage 与官方模型同一套分段色条和 View Report，不再只有 used/max 文本。
-- **工具别钻牛角尖。** 同一工具连打几次、或连续点屏操作几次时，会在那次工具结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。
+- **工具别钻牛角尖。** 同一工具带相同参数连续调用几次时，会在结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。只有连续 8 次完全相同、或同名工具 A-B 振荡时才会暂停回合，中间夹了 sleep 或其它工具的长轮询不会被误停。
+- **本机会话可改名。** 自定义模型对话的侧栏改名和自动标题在本地完成，不再把本机会话 id 交给官方。
 - **走你的代理。** 只接管 Cursor、Grok 和 Codex，填一个地址即可。不必为了这三个去改系统代理，也不必开系统 TUN 把其它程序一起带上。也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。没在运行的 Codex 不会被拉起。
 - **仍有直连时。** 接管之后，若这三个里还有个别官方连接不走代理，可在 cursor-inner 里打开 TUN 模式或严格模式，只覆盖官方地址，不动系统里其它程序。开不了就继续用接管。
 - **更新和退出。** 有新版本时一键更新，Cursor 和 Grok 不用重启。退出或意外结束都会把 Cursor 原来的代理设置写回去。
@@ -60,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.24`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.25`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -106,7 +108,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 ## 使用
 
 1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的“启动 Cursor”“启动 Grok”“启动 Codex”再打开它们，不退出 cursor-inner。
-2. 在“模型”里填写显示名、类型、模型名、接口地址和密钥，点“测试”。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
+2. 在“模型”里填写显示名、类型、模型名、接口地址和密钥；不确定模型名时可先点「探测模型」从上游列表里选，再点“测试”。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点“刷新模型列表”（Refresh model list），或执行 Reload Window。
 4. 用完点“退出”。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选“退出”才结束。Cursor 的设置会还原。
 
@@ -117,7 +119,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
 
-- **模型**：仅支持 Cursor。添加和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带“密钥”标签，点击即可复制；“复制”会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型填写其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流；填了列表里没有的名称会提示，不会保存。上下文窗口和最大输出旁的“?”会打开一张小帮助卡，说明数值含义、留空时怎么算。有新版本时，更新页按标题和列表显示更新说明。
+- **模型**：仅支持 Cursor。添加、探测模型和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带“密钥”标签，点击即可复制；“复制”会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型填写其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流；填了列表里没有的名称会提示，不会保存。上下文窗口和最大输出旁的““”会打开一张小帮助卡，说明数值含义、留空时怎么算。有新版本时，更新页按标题和列表显示更新说明。
 - **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。若开机时 cursor-inner 比代理软件先起来，状态栏会显示“等待代理…”，就绪后自动接上，官方流量不会直连；代理中途关掉也会同样等待。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
 - **更新**：按钮是“检查更新”和“更新”。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。失败时只说明发生了什么、该怎么做，不会露出下载地址。
 - **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在“出图”里填 OpenAI 兼容接口。
@@ -223,7 +225,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.24 ./build.sh linux
+VERSION=v0.5.25 ./build.sh linux
 ```
 
 ## 致谢

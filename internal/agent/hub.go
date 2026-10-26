@@ -258,6 +258,34 @@ func (h *Hub) Owns(requestID string) bool {
 	return s != nil && s.session != nil
 }
 
+// KnowsConversation 报告这个 conversation id 是不是本机答过或正在答的自定义模型会话。
+// 用于改名同步（UpdateConversationMetadata）：本机会话回空成功，官方会话照常转发。
+func (h *Hub) KnowsConversation(conversationID string) bool {
+	if conversationID == "" || h == nil {
+		return false
+	}
+	h.mu.Lock()
+	if h.byConv[conversationID] != nil {
+		h.mu.Unlock()
+		return true
+	}
+	for _, s := range h.slots {
+		if s != nil && s.session != nil && s.session.ConversationID() == conversationID {
+			h.mu.Unlock()
+			return true
+		}
+	}
+	for _, f := range h.finished {
+		if f != nil && f.session != nil && f.session.ConversationID() == conversationID {
+			h.mu.Unlock()
+			return true
+		}
+	}
+	hist := h.history
+	h.mu.Unlock()
+	return hist != nil && hist.LoadState(conversationID) != nil
+}
+
 // NoteResume 把一条带 X-Original-Request-Id 的 resume 接到 oldID 已经答完的会话上。
 // 返回 false 表示这条 original 不是本机答完的 run，调用方按原流程处理。
 func (h *Hub) NoteResume(oldID, newID string) bool {

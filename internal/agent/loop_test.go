@@ -37,6 +37,55 @@ func TestLoopTrackerWarnThenHardStop(t *testing.T) {
 	if stop := tr.observe([]provider.ToolCall{call}); !stop {
 		t.Fatal("want hard stop on 8th consecutive identical call")
 	}
+	if tr.haltKind() != loopHaltIdentical {
+		t.Fatalf("want identical halt, got %v", tr.haltKind())
+	}
+}
+
+func TestLoopTrackerInterleavedPollDoesNotHardStop(t *testing.T) {
+	// 合法长轮询：同一 Read 夹 sleep，累计再多也不该硬停（只认连续相同）。
+	tr := newLoopTracker()
+	read := provider.ToolCall{Name: "Read", Arguments: `{"path":"/tmp/now.txt"}`}
+	sleep := provider.ToolCall{Name: "Shell", Arguments: `{"command":"sleep 300"}`}
+	for i := 0; i < 10; i++ {
+		if stop := tr.observe([]provider.ToolCall{read}); stop {
+			t.Fatalf("interleaved Read must not hard-stop at poll %d", i+1)
+		}
+		_ = tr.takeReminder() // 第 3 次连续不会出现，因为 sleep 打断 consec；清掉以防万一
+		if stop := tr.observe([]provider.ToolCall{sleep}); stop {
+			t.Fatalf("sleep must not hard-stop at poll %d", i+1)
+		}
+	}
+}
+
+func TestLoopTrackerOscillationHardStop(t *testing.T) {
+	tr := newLoopTracker()
+	a := provider.ToolCall{Name: "Read", Arguments: `{"path":"/w/a.go"}`}
+	b := provider.ToolCall{Name: "Read", Arguments: `{"path":"/w/b.go"}`}
+	// 2 个完整周期（4 次）还不停
+	for i := 0; i < 2; i++ {
+		if stop := tr.observe([]provider.ToolCall{a}); stop {
+			t.Fatalf("stop too early on A cycle %d", i+1)
+		}
+		if stop := tr.observe([]provider.ToolCall{b}); stop {
+			t.Fatalf("stop too early on B cycle %d", i+1)
+		}
+	}
+	// 第 3 个周期的 A
+	if stop := tr.observe([]provider.ToolCall{a}); stop {
+		t.Fatal("stop too early on 5th call of AB pattern")
+	}
+	// 第 3 个周期的 B → 满 3 周期，硬停
+	if stop := tr.observe([]provider.ToolCall{b}); !stop {
+		t.Fatal("want hard stop after 3 full A-B cycles")
+	}
+	if tr.haltKind() != loopHaltOscillation {
+		t.Fatalf("want oscillation halt, got %v", tr.haltKind())
+	}
+	na, nb := tr.haltNames()
+	if na != "Read" || nb != "Read" {
+		t.Fatalf("want Read/Read halt names, got %q/%q", na, nb)
+	}
 }
 
 func TestLoopTrackerComputerStreakReminder(t *testing.T) {

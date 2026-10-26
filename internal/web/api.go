@@ -98,6 +98,8 @@ type Backend interface {
 	SetModelReasoning(id string, on bool) error
 	SetModelFast(id string, on bool) error
 	SetModelLimits(id string, contextWindow, maxOutput *int) error
+	// DiscoverModels probes upstream provider model ids; never log or return the raw API key.
+	DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID string) ([]string, error)
 	TestDraft(model config.Model, progress func(provider.Progress)) provider.Result
 	TestSaved(id string, progress func(provider.Progress)) provider.Result
 	Quit() error

@@ -58,6 +58,9 @@ const textLoopNotice = "\n\n(Stopped early: the reply began repeating the same t
 
 const loopStopNotice = "\n\n(Paused: the same tool call (%s) repeated %d times in a row, so I stopped before it looped further. The steps above are kept. Reply \"continue\" to keep going, or tell me what to change.)"
 
+// loopOscillationNotice 是 A-B 交替死循环硬停时给用户看的说明（不是“连续相同”）。
+const loopOscillationNotice = "\n\n(Paused: the turn kept alternating between the same two tool calls (%s / %s), so I stopped before it looped further. The steps above are kept. Reply \"continue\" to keep going, or tell me what to change.)"
+
 // silentToolLimit 是连续多少次工具调用客户端完全没回应后就结束这一轮。
 // 客户端已放弃这次请求（例如它自己报了认证错误）时，继续发工具只会每次白等一个超时。
 const silentToolLimit = 2
@@ -685,12 +688,20 @@ next:
 		messages = append(messages, reply)
 		if stop := s.loops.observe(reply.ToolCalls); stop {
 			// 像步数到上限那样正常收尾，不要用错误结束这一轮。
-			name := ""
-			if len(reply.ToolCalls) > 0 {
-				name = reply.ToolCalls[0].Name
+			nameA, nameB := s.loops.haltNames()
+			if nameA == "" && len(reply.ToolCalls) > 0 {
+				nameA = reply.ToolCalls[0].Name
 			}
-			slog.Debug("相同工具调用重复，暂停这一轮", "conversation", short, "tool", name, "limit", loopHardStopAt)
-			if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(loopStopNotice, name, loopHardStopAt)); err != nil {
+			var notice string
+			switch s.loops.haltKind() {
+			case loopHaltOscillation:
+				slog.Debug("工具调用 A-B 振荡，暂停这一轮", "conversation", short, "a", nameA, "b", nameB)
+				notice = fmt.Sprintf(loopOscillationNotice, nameA, nameB)
+			default:
+				slog.Debug("相同工具调用连续重复，暂停这一轮", "conversation", short, "tool", nameA, "limit", loopHardStopAt)
+				notice = fmt.Sprintf(loopStopNotice, nameA, loopHardStopAt)
+			}
+			if err := s.pauseTurn(send, conversation, system, messages, mode, notice); err != nil {
 				return err
 			}
 			sentCheckpoint = true
