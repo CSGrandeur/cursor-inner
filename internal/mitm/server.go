@@ -61,6 +61,7 @@ type Server struct {
 	leakName   string
 	wsTLS      *tls.Config
 	conns      connCounter
+	drain      drainState
 	released   string
 	localLoop  localLoopSet
 	// runs 是本机原生接下的本地循环会话；nativeLoop=false 时退回“给出说明并结束”。
@@ -293,6 +294,8 @@ func (s *Server) hijack(req *http.Request, client net.Conn, ctx *goproxy.ProxyCt
 		TLSNextProto:      map[string]func(*http.Server, *tls.Conn, http.Handler){},
 		ReadHeaderTimeout: 20 * time.Second,
 	}
+	s.drain.addTunnel(srv)
+	defer s.drain.dropTunnel(srv)
 	_ = srv.Serve(ln)
 }
 

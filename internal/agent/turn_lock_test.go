@@ -139,6 +139,30 @@ func TestWakeWaitsForTheTurnStillEnding(t *testing.T) {
 	}
 }
 
+// 参数连续出错要像循环保护一样暂停：以错误结束时客户端把整轮显示成 Operation interrupted.，
+// 前面已经流出来的内容都看不见。
+func TestRepeatedBadArgumentsPauseInsteadOfFailing(t *testing.T) {
+	bad := sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"Shell","arguments":"{}"}}]}}]}`)
+	fm := &fakeModel{responses: []string{bad, bad, bad}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	if _, err := hub.Bidi(bidi(t, "run-bad", runRequest("mine", "conv-bad", "run it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	msgs := drive(t, hub, "run-bad", model, func(*cursorpb.ExecServerMessage) *cursorpb.ExecClientMessage { return &cursorpb.ExecClientMessage{} })
+	var text string
+	checkpoint, ended := false, false
+	for _, m := range msgs {
+		text += m.GetInteractionUpdate().GetTextDelta().GetText()
+		checkpoint = checkpoint || m.GetConversationCheckpointUpdate() != nil
+		ended = ended || m.GetInteractionUpdate().GetTurnEnded() != nil
+	}
+	if !strings.Contains(text, "invalid arguments for Shell 3 times") || !checkpoint || !ended {
+		t.Fatalf("text=%q checkpoint=%v ended=%v", text, checkpoint, ended)
+	}
+}
+
 func TestLockTurnGivesUpAfterTheWait(t *testing.T) {
 	h := NewHistory(t.TempDir())
 	release, ok := h.LockTurn(context.Background(), "c", time.Second)

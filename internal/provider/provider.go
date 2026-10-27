@@ -254,6 +254,30 @@ func parseSSE(line, kind string) sseEvent {
 		}
 		return out
 	}
+	if kind == "openai-responses" {
+		var event struct {
+			Type     string `json:"type"`
+			Delta    string `json:"delta"`
+			Response struct {
+				Usage struct {
+					OutputTokens uint64 `json:"output_tokens"`
+				} `json:"usage"`
+			} `json:"response"`
+		}
+		if json.Unmarshal([]byte(data), &event) != nil {
+			return sseEvent{}
+		}
+		out := sseEvent{}
+		switch event.Type {
+		case "response.output_text.delta", "response.text.delta":
+			out.text, out.textOK = event.Delta, event.Delta != ""
+		case "response.completed":
+			if tokens := event.Response.Usage.OutputTokens; tokens > 0 {
+				out.usage, out.usageOK = tokens, true
+			}
+		}
+		return out
+	}
 	var event struct {
 		Choices []struct {
 			Delta struct {
@@ -305,6 +329,38 @@ func staticText(raw []byte, kind string) (string, error) {
 		var b strings.Builder
 		for _, part := range body.Content {
 			b.WriteString(part.Text)
+		}
+		return b.String(), nil
+	}
+	if kind == "openai-responses" {
+		var body struct {
+			Output []struct {
+				Type    string `json:"type"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"output"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return "", err
+		}
+		if body.Error != nil && body.Error.Message != "" {
+			return "", errors.New(body.Error.Message)
+		}
+		var b strings.Builder
+		for _, item := range body.Output {
+			if item.Type != "message" {
+				continue
+			}
+			for _, part := range item.Content {
+				if part.Type == "output_text" {
+					b.WriteString(part.Text)
+				}
+			}
 		}
 		return b.String(), nil
 	}

@@ -177,7 +177,8 @@ func probeImages(ctx context.Context, m config.Model, dial dialer.Func) bool {
 }
 
 func probeCache(ctx context.Context, m config.Model, dial dialer.Func) bool {
-	sys := strings.Repeat("Cache prefix probe. ", 40)
+	// 约 2000 token。有的服务商前缀不到一两千 token 不缓存（实测一个 Responses 接口 222 token 命中 0、2062 token 命中 2048）。
+	sys := strings.Repeat("Cache prefix probe. ", 500)
 	messages := []Message{{Role: "user", Content: "Reply with exactly OK."}}
 	if _, err := Chat(ctx, m, dial, sys, messages, nil, nil, nil); err != nil {
 		return false

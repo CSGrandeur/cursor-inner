@@ -59,6 +59,9 @@ const turnBudgetNotice = "\n\n(Paused: this turn has been running for %d minutes
 // textLoopNotice 是正文复读被提前收尾时给用户看的说明（只发给界面，不进模型历史）。
 const textLoopNotice = "\n\n(Stopped early: the reply began repeating the same text, so I ended it here. Reply \"continue\" to pick up from this point, or tell me what to change.)"
 
+// argFailNotice 是同一个工具连续几次参数不合法时给用户看的说明。
+const argFailNotice = "\n\n(Paused: the model sent invalid arguments for %s %d times in a row. The steps above are kept. Reply \"continue\" to try again, or switch to another model if it keeps happening.)"
+
 const loopStopNotice = "\n\n(Paused: the same tool call (%s) repeated %d times in a row, so I stopped before it looped further. The steps above are kept. Reply \"continue\" to keep going, or tell me what to change.)"
 
 // loopOscillationNotice 是 A-B 交替死循环硬停时给用户看的说明（不是“连续相同”）。
@@ -765,7 +768,12 @@ next:
 			}
 			for _, outcome := range results {
 				if outcome.stop {
-					return fmt.Errorf("工具 %s 连续 %d 次参数错误，已停止", outcome.call.Name, argFailLimit)
+					slog.Warn(fmt.Sprintf("会话 %s 的工具 %s 连续 %d 次参数错误，暂停这一轮", s.RequestID, outcome.call.Name, argFailLimit))
+					if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(argFailNotice, outcome.call.Name, argFailLimit)); err != nil {
+						return err
+					}
+					sentCheckpoint = true
+					return nil
 				}
 			}
 			if s.silentTools >= silentToolLimit {

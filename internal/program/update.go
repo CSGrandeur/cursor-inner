@@ -275,6 +275,7 @@ func (g *updateGlue) drainAndExit() {
 	concealForExit()
 	deadline := time.Now().Add(10 * time.Minute)
 	for g.proxy.ActiveConns() > 0 && time.Now().Before(deadline) {
+		g.proxy.DrainIdle()
 		time.Sleep(time.Second)
 	}
 	g.term.Close()

@@ -37,6 +37,7 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 ## 功能
 
 - **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。Cursor 3.26 起的新对话路径也会用你的自定义模型回答，工具参数照常传给模型。
+- **OpenAI Responses 完整支持。** 自定义模型选「OpenAI Responses」时，工具并行调用、思考显示、流式正文和配置页测速/缓存探测都正常，正文不会再重复一遍。
 - **上游探测模型。** 在「模型」页填好接口地址和密钥后，点模型名旁的「探测模型」，从上游 `/v1/models` 拉列表，点选填入模型名；编辑时密钥留空仍可用已保存的密钥（主机未改时）。
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
 - **换回官方模型不误伤。** 同一对话里先前用过自定义模型时，正文里残留的自定义模型 id 不会再让官方回合被拦成 Server error。
@@ -47,6 +48,7 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 - **本机会话可改名。** 自定义模型对话的侧栏改名和自动标题在本地完成，不再把本机会话 id 交给官方。
 - **走你的代理。** 只接管 Cursor、Grok 和 Codex，填一个地址即可。不必为了这三个去改系统代理，也不必开系统 TUN 把其它程序一起带上。也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。没在运行的 Codex 不会被拉起。
 - **仍有直连时。** 接管之后，若这三个里还有个别官方连接不走代理，可在 cursor-inner 里打开 TUN 模式或严格模式，只覆盖官方地址，不动系统里其它程序。开不了就继续用接管。
+- **更新即用。** 一键更新后，下一次对话就用新版本回答；旧的进程不再占着 Cursor 复用的连接最长 10 分钟，正在进行的回合在原进程跑完。
 - **更新和退出。** 有新版本时一键更新，Cursor 和 Grok 不用重启。退出或意外结束都会把 Cursor 原来的代理设置写回去。
 
 ## 安装
@@ -63,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.26`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.27`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -226,7 +228,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.26 ./build.sh linux
+VERSION=v0.5.27 ./build.sh linux
 ```
 
 ## 致谢

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -209,6 +210,18 @@ func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requ
 	if err := writeUp(buffered); err != nil {
 		return
 	}
+	// 这条连接回合之间会留在 Cursor 的池里接下一轮。交接后只在没有回合在跑时让排空关掉它。
+	var last lastFrame
+	last.touch()
+	var official runSet
+	for _, ids := range startedRuns(buffered) {
+		official.start(append(ids, runID, requestID)...)
+	}
+	var localBusy atomic.Int32
+	s.drain.watch(client, func(now time.Time) bool {
+		return !official.busy() && localBusy.Load() == 0 && last.quiet(now)
+	})
+	defer s.drain.unwatch(client)
 	go func() {
 		for {
 			op, payload, raw, err := readWSFrame(up)
@@ -222,6 +235,10 @@ func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requ
 			}
 			if op == 0x8 {
 				return
+			}
+			last.touch()
+			if id, ok := turnEnded(payload); ok {
+				official.end(id)
 			}
 			if err := writeClient(raw); err != nil {
 				return
@@ -257,6 +274,7 @@ func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requ
 			_ = writeUp(raw)
 			continue
 		}
+		last.touch()
 		frame := protox.ClassifyAgentPayload(payload)
 		switch frame.Kind {
 		case "meta":
@@ -293,13 +311,17 @@ func (s *Server) watchOfficial(client, up net.Conn, buffered []byte, runID, requ
 				ackRun, ackReq := ackIDs(id, frame, metaReq)
 				markRun(localRun, id, ackRun, ackReq)
 				dropHeld(held, frame)
-				cancelLocal = append(cancelLocal, s.serveLocalBeside(writeClient, session, id, ackRun, ackReq))
+				localBusy.Add(1)
+				cancelLocal = append(cancelLocal, s.serveLocalBeside(writeClient, session, id, ackRun, ackReq, func() { localBusy.Add(-1) }))
 				continue
 			}
 			if session != nil || route.Local {
 				markRun(localRun, id, frame.RunID, frame.RequestID)
 				dropHeld(held, frame)
 				continue
+			}
+			if msg.GetRunRequest() != nil {
+				official.start(id, frame.RunID, frame.RequestID, metaReq[frame.RunID])
 			}
 			markRun(officialRun, id, frame.RunID, frame.RequestID)
 			for _, earlier := range dropHeld(held, frame) {
@@ -397,7 +419,7 @@ func runMarked(set map[string]struct{}, frame protox.AgentPayload) bool {
 }
 
 // serveLocalBeside 在还连着官方的那条连接上回答后到的自定义模型。hello 已经完成，不再发第二次。
-func (s *Server) serveLocalBeside(writeClient func([]byte) error, session *agent.Session, id, runID, requestID string) context.CancelFunc {
+func (s *Server) serveLocalBeside(writeClient func([]byte) error, session *agent.Session, id, runID, requestID string, done func()) context.CancelFunc {
 	s.countLocal()
 	if runID == "" {
 		runID = id
@@ -421,6 +443,7 @@ func (s *Server) serveLocalBeside(writeClient func([]byte) error, session *agent
 	_ = writeClient(wsFrameBytes(0x2, protox.EncodeAgentRunAccepted(runID, requestID)))
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
+		defer done()
 		defer s.hub.Done(id)
 		d, err := dialer.ForModel(s.proxy(), session.Model.UseProxy)
 		session.Proxy = s.proxy()
@@ -440,11 +463,16 @@ func (s *Server) serveLocalBeside(writeClient func([]byte) error, session *agent
 func (s *Server) readAgentDecision(client, up net.Conn) (buffered []byte, session *agent.Session, id, runID, requestID string, helloRelayed, start bool) {
 	deadline := func() { _ = client.SetReadDeadline(time.Now().Add(3 * time.Second)) }
 	deadline()
+	var last lastFrame
+	last.touch()
+	s.drain.watch(client, last.quiet)
+	defer s.drain.unwatch(client)
 	for {
 		op, payload, raw, err := readWSFrame(client)
 		if err != nil {
 			return buffered, nil, "", runID, requestID, helloRelayed, false
 		}
+		last.touch()
 		if op == 0x9 {
 			_ = writeWSFrame(client, 0xA, payload)
 			if !helloRelayed {

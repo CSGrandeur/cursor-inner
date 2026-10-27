@@ -667,13 +667,15 @@ type accumulator struct {
 	cacheTokens      int
 	calls            map[int]*ToolCall
 	args             map[int]*strings.Builder
-	seenID           map[int]string // 每个槽位已见过的调用 id，用于识别 Ollama 不带 index 的多调用
+	seenID           map[int]string  // 每个槽位已见过的调用 id，用于识别 Ollama 不带 index 的多调用
+	itemSlot         map[string]int  // Responses 输出项 id 到槽位
+	streamedText     map[string]bool // Responses 已经按增量收到正文的输出项
 	maxIndex         int
 	thinker          *inlineThink // 非空时剥离 content 里的 <think> 推理标签
 }
 
 func newAccumulator(kind string, splitThink bool) *accumulator {
-	a := &accumulator{kind: kind, calls: map[int]*ToolCall{}, args: map[int]*strings.Builder{}, seenID: map[int]string{}, maxIndex: -1}
+	a := &accumulator{kind: kind, calls: map[int]*ToolCall{}, args: map[int]*strings.Builder{}, seenID: map[int]string{}, itemSlot: map[string]int{}, streamedText: map[string]bool{}, maxIndex: -1}
 	if splitThink {
 		a.thinker = &inlineThink{}
 	}

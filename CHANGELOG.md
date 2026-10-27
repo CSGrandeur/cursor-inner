@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.27] - 2026-10-27
+
+### Fixed
+
+- The upstream model list ("探测模型") is no longer clipped by the settings card. Its popover is anchored to the model field and opens within the viewport, flipping upward when there is no room below, so it stays fully visible. The card's entry animation used to keep a transform after it finished, which made the popover position against the card and get cut off.
+- The model name field in the add form is wider. In English the Discover models button left room for only one or two characters.
+- Custom models of the Responses type no longer break parallel tool calls. Argument chunks were all written into the first call, and each call was registered twice: two parallel calls became four, one with two JSON objects glued together and one with no arguments, and a single call ran twice. Chunks are now matched to their call by output index and item id.
+- Thinking from Responses endpoints that stream `reasoning_text` (not only reasoning summaries) is shown again.
+- The speed test on the Models tab works for Responses endpoints. It read the stream as Chat Completions and always reported 0 tokens and 0.0 tok/s.
+- The cache check sends a prefix of about 2,000 tokens. Some providers do not cache shorter prompts, so the old short prefix reported "not hit" even when caching worked in real chats.
+- Replies from Responses endpoints no longer appear twice. The full text in the final output item was appended again after it had already streamed.
+- After an update hands over to the new version, the next chat turn now runs on the new version right away. The old process used to keep serving connections Cursor reuses (kept-alive tunnels and pooled agent connections) for up to ten minutes. It now closes them as soon as no turn is running on them; turns already in progress finish where they started.
+- When a tool keeps receiving invalid arguments, the turn now pauses with a note instead of ending in an error. An error made Cursor show the whole turn as "Operation interrupted." and hid what had already streamed.
+
 ## [0.5.26] - 2026-10-27
 
 ### Added
@@ -531,6 +545,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...HEAD
+[0.5.27]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...v0.5.24

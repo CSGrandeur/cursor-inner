@@ -160,7 +160,9 @@
     box-shadow: var(--shadow);
     margin-top: 12px;
     overflow: hidden;
-    animation: panel-in .4s cubic-bezier(.2, .8, .2, 1) both;
+    /* backwards，不能用 both：动画结束后仍保留 transform 时，.panel 会成为 position: fixed 的定位基准，
+       探测模型弹层随之相对卡片定位，被 overflow: hidden 裁掉看不见。 */
+    animation: panel-in .4s cubic-bezier(.2, .8, .2, 1) backwards;
   }
   @keyframes panel-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -438,7 +440,8 @@
 
   .add { border-top: 1px solid var(--line); padding: 10px 14px 12px; background: var(--raise); }
   .add h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
-  .grid { display: grid; grid-template-columns: 1.1fr 132px 1fr 1.4fr 1.2fr; gap: 8px; align-items: end; }
+  /* 模型名一列还放着「探测模型」按钮，英文按钮约 110px，这一列窄了输入框只剩一两个字符。 */
+  .grid { display: grid; grid-template-columns: 1.1fr 132px 1.6fr 1.3fr 1.1fr; gap: 8px; align-items: end; }
   label.field { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
   label.field.wide { grid-column: span 2; }
   .secret { position: relative; display: block; }
@@ -459,9 +462,10 @@
   }
   .discover > #discover-models:hover { background: var(--raise); }
   .discover > #discover-models:disabled { opacity: 0.5; cursor: default; }
-  /* Absolute popover so the form grid does not stretch. Visual language matches quit-list / pills. */
+  /* Fixed popover so it is not clipped by the card's overflow:hidden when it
+     extends past the form; position and size are set in placeDiscoverPop(). */
   .discover-pop {
-    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    position: fixed; z-index: 30;
     display: flex; flex-direction: column; max-height: 196px;
     border: 1px solid var(--line-strong); border-radius: 8px;
     background: var(--panel); box-shadow: var(--shadow); overflow: hidden;
@@ -1274,6 +1278,29 @@ function hideDiscoveredPick() {
   pick.hidden = true;
 }
 
+// 把探测结果弹层固定在锚点（.discover）下方。用 fixed 是为了不被 .panel 的
+// overflow:hidden 裁掉——弹层常会伸出表单和卡片底部。位置随锚点、并夹在视口内，
+// 下方空间不足时改为在锚点上方展开。
+function placeDiscoverPop() {
+  const pick = document.querySelector("#discovered-pick");
+  const anchor = document.querySelector(".discover");
+  if (!pick || !anchor || pick.hidden) return;
+  const r = anchor.getBoundingClientRect();
+  const gap = 4;
+  const top = r.bottom + gap;
+  const vh = window.innerHeight;
+  const openUp = top + 196 > vh - 8;
+  const maxH = Math.max(96, Math.min(196, (openUp ? r.top - gap : vh - top) - 8));
+  let left = r.left, width = r.width;
+  if (left + width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - width - 8);
+  pick.style.top = openUp ? "" : top + "px";
+  pick.style.bottom = openUp ? (vh - r.top + gap) + "px" : "";
+  pick.style.left = left + "px";
+  pick.style.right = "";
+  pick.style.width = width + "px";
+  pick.style.maxHeight = maxH + "px";
+}
+
 function showDiscoverState(kind, message) {
   const pick = document.querySelector("#discovered-pick");
   const title = document.querySelector("#discovered-pick-title");
@@ -1288,6 +1315,7 @@ function showDiscoverState(kind, message) {
   p.textContent = message;
   body.append(p);
   pick.hidden = false;
+  placeDiscoverPop();
 }
 
 function setDiscoveredModels(models) {
@@ -1334,6 +1362,7 @@ function setDiscoveredModels(models) {
     body.append(btn);
   }
   pick.hidden = false;
+  placeDiscoverPop();
 }
 
 async function discoverUpstreamModels() {
@@ -1936,6 +1965,9 @@ document.querySelector("#form-clear").addEventListener("click", () => {
   if (lastState) render(lastState);
 });
 document.querySelector("#discover-models").addEventListener("click", () => void discoverUpstreamModels());
+// fixed 定位的弹层不随页面滚动，滚动/缩放时重新对齐锚点（弹层隐藏时 no-op）。
+document.addEventListener("scroll", () => placeDiscoverPop(), true);
+window.addEventListener("resize", () => placeDiscoverPop());
 document.querySelector("#discovered-pick-close").addEventListener("click", (ev) => {
   ev.preventDefault();
   ev.stopPropagation();

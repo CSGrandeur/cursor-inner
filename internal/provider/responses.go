@@ -101,11 +101,38 @@ func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
 	return json.Marshal(body)
 }
 
+// responseSlot 找到事件所属的输出项。并行调用的参数增量交错到达，只能靠 output_index / item_id 归位；
+// fresh 为真表示这是一个新输出项的开始，两样都没有时另开一个槽位。
+func (a *accumulator) responseSlot(index *int, itemID string, fresh bool) int {
+	if i, ok := a.itemSlot[itemID]; ok && itemID != "" {
+		return i
+	}
+	var i int
+	switch {
+	case index != nil:
+		i = *index
+	case fresh || a.maxIndex < 0:
+		i = a.maxIndex + 1
+	default:
+		i = a.maxIndex
+	}
+	if itemID != "" {
+		a.itemSlot[itemID] = i
+	}
+	if i > a.maxIndex {
+		a.maxIndex = i
+	}
+	return i
+}
+
 func (a *accumulator) feedResponses(data []byte) (piece, error) {
 	var event struct {
-		Type  string `json:"type"`
-		Delta string `json:"delta"`
-		Item  struct {
+		Type        string `json:"type"`
+		Delta       string `json:"delta"`
+		Arguments   string `json:"arguments"`
+		OutputIndex *int   `json:"output_index"`
+		ItemID      string `json:"item_id"`
+		Item        struct {
 			Type             string `json:"type"`
 			ID               string `json:"id"`
 			CallID           string `json:"call_id"`
@@ -154,21 +181,29 @@ func (a *accumulator) feedResponses(data []byte) (piece, error) {
 	}
 	switch event.Type {
 	case "response.output_text.delta", "response.text.delta":
+		a.streamedText[event.ItemID] = true
 		a.text.WriteString(event.Delta)
 		return piece{text: event.Delta}, nil
-	case "response.reasoning_summary_text.delta":
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 		a.reasoning.WriteString(event.Delta)
 		return piece{thinking: event.Delta}, nil
 	case "response.function_call_arguments.delta":
-		_, args := a.call(0)
+		_, args := a.call(a.responseSlot(event.OutputIndex, event.ItemID, false))
 		args.WriteString(event.Delta)
+	case "response.function_call_arguments.done":
+		if event.Arguments != "" {
+			_, args := a.call(a.responseSlot(event.OutputIndex, event.ItemID, false))
+			args.Reset()
+			args.WriteString(event.Arguments)
+		}
 	case "response.output_item.added", "response.output_item.done":
 		switch event.Item.Type {
 		case "function_call":
-			c, args := a.call(len(a.calls))
+			// added 和 done 是同一个输出项，必须落在同一个槽位，否则每个调用都会执行两次。
+			c, args := a.call(a.responseSlot(event.OutputIndex, event.Item.ID, event.Type == "response.output_item.added"))
 			if event.Item.CallID != "" {
 				c.ID = event.Item.CallID
-			} else if event.Item.ID != "" {
+			} else if c.ID == "" && event.Item.ID != "" {
 				c.ID = event.Item.ID
 			}
 			if event.Item.Name != "" {
@@ -180,9 +215,14 @@ func (a *accumulator) feedResponses(data []byte) (piece, error) {
 			}
 		case "reasoning":
 			if event.Item.EncryptedContent != "" {
+				a.signature.Reset()
 				a.signature.WriteString(event.Item.EncryptedContent)
 			}
 		case "message":
+			// done 里带着整段正文；已经按增量流出来的再写一遍，界面上同一段话就出现两次。
+			if a.streamedText[event.Item.ID] || a.streamedText[""] {
+				break
+			}
 			for _, p := range event.Item.Content {
 				if p.Type == "output_text" && p.Text != "" {
 					a.text.WriteString(p.Text)

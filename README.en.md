@@ -37,6 +37,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 ## Features
 
 - **Your own models.** Add, test, edit and remove them on the settings page. They show up at the end of Cursor's model list. From Cursor 3.26 onward, the newer chat path is also answered by your custom model, with tool parameters passed through as usual.
+- **OpenAI Responses fully supported.** When a custom model uses "OpenAI Responses", parallel tool calls, thinking, streaming output and the settings-page speed/cache checks work, and the reply text is no longer duplicated.
 - **Discover upstream models.** On Models, after you fill the endpoint URL and API key, click **Discover models** next to the model name to fetch the provider's `/v1/models` list and pick one. When editing, leave the key blank to reuse the saved key if the host is unchanged.
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
 - **Switching back stays reliable.** After a custom-model turn in the same chat, leftover custom model ids in earlier messages no longer make an official turn fail with a Server error.
@@ -47,6 +48,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 - **Local chats can be renamed.** Rename and auto-title for custom-model chats stay on this computer; the local conversation id is not sent to Cursor's servers.
 - **Your proxy.** Takes over only Cursor, Grok and Codex. One address, and they use it. You do not change the system proxy, or turn on a system-wide TUN that would carry other programs with it. You can also send only official hosts such as Grok, x.ai, Cursor and OpenAI through the proxy, and connect directly to everything else. Each custom model chooses whether to use the proxy. Codex is not started if it is not already running.
 - **If a connection still bypasses.** After takeover, if one of the three still dials an official host directly, TUN mode or Strict mode inside cursor-inner covers those official hosts only. Other programs on the system are left alone. If either mode cannot start, takeover continues.
+- **Update takes effect immediately.** After a one-click update, the next chat turn is served by the new version; the old process no longer holds reused Cursor connections for up to ten minutes, and a turn already in progress finishes where it started.
 - **Update and quit.** Update in one click; Cursor and Grok keep running. Quitting, or an unexpected exit, writes Cursor's previous proxy settings back.
 
 ## Installation
@@ -63,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.26`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.27`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -226,7 +228,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.26 ./build.sh linux
+VERSION=v0.5.27 ./build.sh linux
 ```
 
 ## Acknowledgements
