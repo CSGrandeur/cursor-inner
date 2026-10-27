@@ -41,6 +41,7 @@ cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列�
 - **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
 - **换回官方模型不误伤。** 同一对话里先前用过自定义模型时，正文里残留的自定义模型 id 不会再让官方回合被拦成 Server error。
 - **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
+- **长任务能叫醒你。** 自定义模型可以自己在本机留一条后台命令（用 `block_until_ms: 0` 起的 `sleep`，或一条轮询远端进程、做完就退出的循环），命令结束就自动接着回答；也可以让它用 `notify_on_output` 在匹配到某行输出时被叫醒，命令继续跑。远端 nohup、tmux、脱离的进程不算，它不会空口答应「到节点报你」。
 - **用量一眼看清。** 自定义模型的 Context Usage 与官方模型同一套分段色条和 View Report，不再只有 used/max 文本。
 - **工具别钻牛角尖。** 同一工具带相同参数连续调用几次时，会在结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。只有连续 8 次完全相同、或同名工具 A-B 振荡时才会暂停回合，中间夹了 sleep 或其它工具的长轮询不会被误停。
 - **本机会话可改名。** 自定义模型对话的侧栏改名和自动标题在本地完成，不再把本机会话 id 交给官方。
@@ -62,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.25`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.26`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -225,7 +226,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.25 ./build.sh linux
+VERSION=v0.5.26 ./build.sh linux
 ```
 
 ## 致谢

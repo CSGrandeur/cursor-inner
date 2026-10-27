@@ -41,6 +41,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 - **Official models unchanged.** The list is only appended to. Requests for official models go to Cursor as they are.
 - **Switching back stays reliable.** After a custom-model turn in the same chat, leftover custom model ids in earlier messages no longer make an official turn fail with a Server error.
 - **Agent work.** A custom model can read and edit files, run commands, search, and call MCP tools and subagents from the current chat. Edits show a diff and are written after you accept them.
+- **Long tasks can wake it up.** A custom model can leave a local background command (a `sleep` started with `block_until_ms: 0`, or a loop that polls a remote job and exits when it is done) and is woken to continue when that command ends; it can also be woken by `notify_on_output` when a line matches, while the command keeps running. Jobs on remote machines (nohup, tmux) and detached processes do not count, so it will not promise a later report unless such a command is running.
 - **Same Context Usage UI.** Custom models get the same segmented bar and View Report as built-in models, not only a used/max line.
 - **Gentle tool nudge.** If the same tool is called several times in a row with the same arguments, or Computer Use is used several times in a row, a short reminder is attached to that tool result: prefer the terminal and file tools when they fit; Computer Use stays available for the GUI. A turn is only paused after 8 consecutive identical calls, or a same-name A-B oscillation; long polling that interleaves sleep or other tools is not treated as a loop.
 - **Local chats can be renamed.** Rename and auto-title for custom-model chats stay on this computer; the local conversation id is not sent to Cursor's servers.
@@ -62,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.25`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.26`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -225,7 +226,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.25 ./build.sh linux
+VERSION=v0.5.26 ./build.sh linux
 ```
 
 ## Acknowledgements

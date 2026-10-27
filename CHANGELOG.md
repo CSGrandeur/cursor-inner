@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.26] - 2026-10-27
+
+### Added
+
+- Custom models can now arrange to pick a chat up later, like Cursor's own models. The system prompt explains that a background Shell command wakes the chat when it finishes, that remote or detached jobs do not, and how to wait for them (a local `sleep`, or a loop that polls the remote job, started with `block_until_ms: 0`). The model is told not to promise a later report unless such a command is running.
+- The Shell tool offers `notify_on_output`, and a matching line wakes the custom model while the command keeps running, as it does for Cursor's models.
+
+### Fixed
+
+- `notify_on_output.debounce_ms` is converted to the seconds Cursor expects (minimum 5). It was passed through as-is, so 5000 ms became 5000 seconds.
+- A background task that finished right after you stopped a turn no longer starts a new turn with an empty history. The new turn now waits until the stopped turn has saved the conversation.
+
 ## [0.5.25] - 2026-10-26
 
 ### Changed
@@ -519,6 +531,7 @@ First public release.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
 [Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...HEAD
+[0.5.26]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.22...v0.5.23

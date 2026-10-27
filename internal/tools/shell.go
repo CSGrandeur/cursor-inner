@@ -128,8 +128,10 @@ func shellNotification(a args) *cursorpb.ShellOutputNotificationConfig {
 		return nil
 	}
 	note := &cursorpb.ShellOutputNotificationConfig{Pattern: pattern, Reason: reason}
-	if ms, ok := obj["debounce_ms"].(float64); ok {
-		note.Debounce = &ms
+	// 协议里的 debounce 以秒计，客户端自己换算时同样取 max(ms/1000, 5)。
+	if ms, ok := obj["debounce_ms"].(float64); ok && ms > 0 {
+		seconds := max(ms/1000, 5)
+		note.Debounce = &seconds
 	}
 	return note
 }

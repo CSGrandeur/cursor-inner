@@ -44,6 +44,9 @@ var maxSteps = 1000
 // 按时间兜底比按步数更贴近长任务：干活的一轮可以跑很久，跑飞的一轮有时间上限。
 var turnBudget = 45 * time.Minute
 
+// turnLockWait 是新一轮等同一会话上一轮存完历史的上限。取消后的一轮通常几秒内退出。
+var turnLockWait = 2 * time.Minute
+
 // stepLimitNotice 是到步数上限时给用户看的说明。
 const stepLimitNotice = "\n\n(Paused after %d tool steps in this turn. The steps above are kept. Reply \"continue\" to keep going.)"
 
@@ -507,6 +510,14 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		}
 	}
 	conversation := s.run.GetConversationId()
+	release, locked := s.history.LockTurn(ctx, conversation, turnLockWait)
+	defer release()
+	if !locked {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		slog.Warn(fmt.Sprintf("会话 %s 的上一轮 %s 内没有结束，按已保存的历史开始", s.RequestID, turnLockWait))
+	}
 	messages := s.history.Load(conversation)
 	if restored, err := s.restoreFromRequest(ctx, send, conversation); err != nil {
 		return err

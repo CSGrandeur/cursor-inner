@@ -93,10 +93,17 @@ func completion(reason cursorpb.BackgroundTaskCompletionReason) *cursorpb.Backgr
 	}
 }
 
+func subagentProgress() *cursorpb.BackgroundTaskCompletion {
+	c := completion(cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS)
+	c.Kind = cursorpb.BackgroundTaskKind_BACKGROUND_TASK_KIND_SUBAGENT
+	c.TaskId = "sub-1"
+	return c
+}
+
 func TestBackgroundCompletionBecomesInput(t *testing.T) {
 	buf := captureSlog(t)
 	p := planTurn(act(&cursorpb.BackgroundTaskCompletionAction{Completions: []*cursorpb.BackgroundTaskCompletion{
-		completion(cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS),
+		subagentProgress(),
 		completion(cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED),
 	}}))
 	out, skip := p.apply(append([]provider.Message{}, finishedHistory...), nil)
@@ -109,8 +116,8 @@ func TestBackgroundCompletionBecomesInput(t *testing.T) {
 			t.Fatalf("missing %q in %s", want, text)
 		}
 	}
-	if strings.Count(text, "task_id:") != 1 {
-		t.Fatalf("progress note should be left out: %s", text)
+	if strings.Contains(text, "sub-1") {
+		t.Fatalf("subagent progress should be left out: %s", text)
 	}
 	logs := buf.String()
 	if strings.Count(logs, "background_completion") != 2 || !strings.Contains(logs, "reason=task_progress") || !strings.Contains(logs, "task_id=task-1") {
@@ -118,11 +125,33 @@ func TestBackgroundCompletionBecomesInput(t *testing.T) {
 	}
 }
 
-func TestBackgroundProgressOnlyEnds(t *testing.T) {
-	p := planTurn(act(&cursorpb.BackgroundTaskCompletionAction{Completions: []*cursorpb.BackgroundTaskCompletion{
-		completion(cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS)}}))
+func TestSubagentProgressOnlyEnds(t *testing.T) {
+	p := planTurn(act(&cursorpb.BackgroundTaskCompletionAction{Completions: []*cursorpb.BackgroundTaskCompletion{subagentProgress()}}))
 	if p.skip == "" || p.needsModel() {
 		t.Fatalf("%+v", p)
+	}
+}
+
+// notify_on_output 匹配到输出时，客户端发的是 Shell 的 task_progress。官方模型会被它唤醒。
+func TestShellOutputMatchWakesTheModel(t *testing.T) {
+	match := completion(cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS)
+	match.TaskId = "7:task_progress:1"
+	match.Title = "download finished"
+	detail := "Shell output has pattern /DONE/. This is occurrence number 1."
+	match.Detail = &detail
+	p := planTurn(act(&cursorpb.BackgroundTaskCompletionAction{Completions: []*cursorpb.BackgroundTaskCompletion{match}}))
+	out, skip := p.apply(append([]provider.Message{}, finishedHistory...), nil)
+	if skip != "" || !p.needsModel() || len(out) != 3 {
+		t.Fatalf("%q %+v", skip, out)
+	}
+	text := out[2].Content
+	for _, want := range []string{"output matched", "still running", "title: download finished", "Shell output has pattern /DONE/", "output_path: /tmp/out.txt"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in %s", want, text)
+		}
+	}
+	if strings.Contains(text, "status:") {
+		t.Fatalf("a progress note must not look like a finished task: %s", text)
 	}
 }
 

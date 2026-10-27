@@ -59,6 +59,16 @@ func TestRequestContextSectionsReachTheSystemPrompt(t *testing.T) {
 	}
 }
 
+// 自定义模型不知道后台命令结束会唤醒它，就会在远端 nohup 完直接结束回合，嘴上答应「到时候汇报」。
+func TestSystemPromptExplainsHowToBeWokenLater(t *testing.T) {
+	text := systemPrompt("Mine", &cursorpb.RequestContext{})
+	for _, want := range []string{"<background_work>", "block_until_ms: 0", "notify_on_output", "Nothing else wakes you", "sleep <seconds>", "message you again"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("system prompt is missing %q", want)
+		}
+	}
+}
+
 func TestGitStatusStaysOnTheCurrentUserMessage(t *testing.T) {
 	ctx := &cursorpb.RequestContext{GitRepos: []*cursorpb.GitRepoInfo{{Path: "/w", Status: "## main"}}}
 	first := userTurn(&cursorpb.UserMessage{Text: "one"}, ctx)

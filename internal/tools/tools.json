@@ -179,7 +179,7 @@
   },
   {
     "name": "Shell",
-    "description": "Executes a given command in a shell session with optional foreground timeout. Use this for terminal operations. Do not use it for reading, writing, editing, or searching files. block_until_ms is how long to wait before moving the command to the background; it defaults to 30000. Set it to 0 to run in the background immediately. A wait longer than 10 minutes is capped there. The command keeps running after that and is not killed. required_permissions may be \"full_network\" or \"all\".",
+    "description": "Executes a given command in a shell session with optional foreground timeout. Use this for terminal operations. Do not use it for reading, writing, editing, or searching files. block_until_ms is how long to wait before moving the command to the background; it defaults to 30000. Set it to 0 to run in the background immediately. A wait longer than 10 minutes is capped there. The command keeps running after that and is not killed. When a background command finishes you are woken with its result, even after your response has ended. required_permissions may be \"full_network\" or \"all\".",
     "parameters": {
       "type": "object",
       "properties": {
@@ -198,6 +198,25 @@
         "working_directory": {
           "description": "The absolute path to the working directory to execute the command in",
           "type": "string"
+        },
+        "notify_on_output": {
+          "description": "Optional output notification config. Each output line that matches the pattern wakes you, also after your response has ended. Use it for long-running commands when the user wants to be told about specific output.",
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "description": "Regex pattern matched against stdout/stderr output.",
+              "type": "string"
+            },
+            "reason": {
+              "description": "5 or fewer words describing why you are watching for this output. Shown to the user.",
+              "type": "string"
+            },
+            "debounce_ms": {
+              "description": "Milliseconds that must elapse between notifications. The minimum is 5000.",
+              "type": "number"
+            }
+          },
+          "required": ["pattern", "reason"]
         },
         "required_permissions": {
           "description": "Optional permissions. Use \"full_network\" for unrestricted network access, or \"all\" to disable the sandbox.",

@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"image"
 	"image/png"
@@ -464,6 +465,50 @@ func TestTaskWaitIsBounded(t *testing.T) {
 	if pending.Wait != 10*time.Minute {
 		t.Fatal(pending.Wait)
 	}
+}
+
+// Cursor 的 debounce 以秒计，最少 5 秒；模型给的是毫秒。原样填进去 5000 毫秒会变成 5000 秒。
+func TestShellOutputNotificationUsesSeconds(t *testing.T) {
+	cases := []struct {
+		args string
+		want float64
+	}{
+		{`"debounce_ms":30000`, 30},
+		{`"debounce_ms":1000`, 5},
+	}
+	for _, c := range cases {
+		exec, _, _, err := Request(1, provider.ToolCall{ID: "s", Name: "Shell", Arguments: `{"command":"make","block_until_ms":0,"notify_on_output":{"pattern":"DONE","reason":"build done",` + c.args + `}}`})
+		if err != nil {
+			t.Fatal(err)
+		}
+		note := exec.GetShellStreamArgs().GetOutputNotification()
+		if note.GetPattern() != "DONE" || note.GetReason() != "build done" || note.GetDebounce() != c.want {
+			t.Fatalf("%s: %+v", c.args, note)
+		}
+	}
+	exec, _, _, err := Request(1, provider.ToolCall{ID: "s", Name: "Shell", Arguments: `{"command":"make","notify_on_output":{"pattern":"DONE","reason":"build done"}}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exec.GetShellStreamArgs().GetOutputNotification().Debounce != nil {
+		t.Fatal("no debounce_ms should leave the client default")
+	}
+}
+
+func TestShellSchemaOffersOutputNotification(t *testing.T) {
+	for _, tool := range Catalog() {
+		if tool.Name != "Shell" {
+			continue
+		}
+		raw, _ := json.Marshal(tool)
+		for _, want := range []string{"notify_on_output", "debounce_ms", "woken"} {
+			if !strings.Contains(string(raw), want) {
+				t.Fatalf("Shell schema is missing %q", want)
+			}
+		}
+		return
+	}
+	t.Fatal("no Shell tool")
 }
 
 func TestLongShellIsBackgroundedNotKilled(t *testing.T) {

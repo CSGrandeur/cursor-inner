@@ -59,7 +59,7 @@ func planTurn(action *cursorpb.ConversationAction) turnPlan {
 		if text := completionText(action.GetBackgroundTaskCompletionAction().GetCompletions(), true); text != "" {
 			p.inputs = append(p.inputs, text)
 		} else {
-			p.skip = "后台任务只有进度通知，没有完成的结果"
+			p.skip = "后台任务只有子代理的进度通知，没有完成的结果"
 		}
 	case action.GetSubscriptionNotificationAction() != nil:
 		a := action.GetSubscriptionNotificationAction()
@@ -132,7 +132,19 @@ func taskEnum(name string, prefix string) string {
 	return strings.ToLower(strings.TrimPrefix(name, prefix))
 }
 
-// completionText 把已完成的后台任务整理成一段结构化输入，只收 TASK_FINISHED，进度通知跳过。
+// wakes 判断这条通知要不要交给模型。Shell 的进度通知只来自模型自己设的 notify_on_output，
+// 官方模型会被它唤醒；子代理的进度只是过程，等它结束再处理。
+func wakes(c *cursorpb.BackgroundTaskCompletion) bool {
+	switch c.GetReason() {
+	case cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED:
+		return true
+	case cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS:
+		return c.GetKind() == cursorpb.BackgroundTaskKind_BACKGROUND_TASK_KIND_SHELL
+	}
+	return false
+}
+
+// completionText 把需要模型处理的后台任务通知整理成一段结构化输入。
 func completionText(items []*cursorpb.BackgroundTaskCompletion, logIt bool) string {
 	var b strings.Builder
 	n := 0
@@ -143,11 +155,15 @@ func completionText(items []*cursorpb.BackgroundTaskCompletion, logIt bool) stri
 		if logIt {
 			slog.Info("background_completion 后台任务通知", "kind", kind, "reason", reason, "status", status, "task_id", truncID(c.GetTaskId()))
 		}
-		if c.GetReason() != cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED {
+		if !wakes(c) {
 			continue
 		}
 		n++
-		fmt.Fprintf(&b, "- kind: %s\n  status: %s\n  task_id: %s\n", kind, status, c.GetTaskId())
+		if c.GetReason() == cursorpb.BackgroundTaskCompletionReason_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS {
+			fmt.Fprintf(&b, "- kind: %s\n  event: output matched (the command is still running)\n  task_id: %s\n", kind, c.GetTaskId())
+		} else {
+			fmt.Fprintf(&b, "- kind: %s\n  status: %s\n  task_id: %s\n", kind, status, c.GetTaskId())
+		}
 		if t := strings.TrimSpace(c.GetTitle()); t != "" {
 			fmt.Fprintf(&b, "  title: %s\n", t)
 		}
@@ -163,7 +179,7 @@ func completionText(items []*cursorpb.BackgroundTaskCompletion, logIt bool) stri
 	if n == 0 {
 		return ""
 	}
-	return "<background_task_completions>\nThese background tasks have finished. Review the results and continue if anything needs follow-up.\n" + b.String() + "</background_task_completions>"
+	return "<background_task_completions>\nThese background tasks have finished or printed output you asked to be notified about. Review the results and continue if anything needs follow-up.\n" + b.String() + "</background_task_completions>"
 }
 
 func truncID(s string) string {

@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"context"
 	"encoding/hex"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/provider"
@@ -19,6 +21,51 @@ import (
 type History struct {
 	dir string
 	mu  sync.Mutex
+
+	turnMu sync.Mutex
+	turns  map[string]chan struct{}
+}
+
+// LockTurn 让同一会话的回合依次读写历史。历史只在一轮退出时保存；用户取消一轮的同时
+// 后台任务完成，新的一轮会在旧一轮存盘前开始，读到空历史（2026-10-26 22:26，空历史跑了 11 分钟）。
+// 等不到时照常开始并返回 false，免得一轮卡住的会话再也起不来。
+func (h *History) LockTurn(ctx context.Context, conversation string, wait time.Duration) (release func(), ok bool) {
+	if h == nil || conversation == "" {
+		return func() {}, true
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		h.turnMu.Lock()
+		busy, held := h.turns[conversation]
+		if !held {
+			if h.turns == nil {
+				h.turns = map[string]chan struct{}{}
+			}
+			mine := make(chan struct{})
+			h.turns[conversation] = mine
+			h.turnMu.Unlock()
+			var once sync.Once
+			return func() {
+				once.Do(func() {
+					h.turnMu.Lock()
+					if h.turns[conversation] == mine {
+						delete(h.turns, conversation)
+					}
+					h.turnMu.Unlock()
+					close(mine)
+				})
+			}, true
+		}
+		h.turnMu.Unlock()
+		select {
+		case <-busy:
+		case <-timer.C:
+			return func() {}, false
+		case <-ctx.Done():
+			return func() {}, false
+		}
+	}
 }
 
 func NewHistory(dir string) *History {
