@@ -392,6 +392,11 @@ func (s *Session) Running() bool { return s.running.Load() > 0 }
 // 只回 turn_ended 的话客户端会报 Error resuming chat 并反复重试。
 func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
 	state := s.baseState
+	if state == nil && s.history != nil {
+		// 热交接后从磁盘接回的会话可能只有 history、没有内存 baseState。
+		state = s.history.LoadState(s.ConversationID())
+		s.baseState = state
+	}
 	if state == nil {
 		return nil, nil
 	}
@@ -598,7 +603,8 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		for _, id := range s.inflight {
 			_ = send(abortExec(id))
 		}
-		messages = provider.CloseDangling(messages)
+		// Cancel -> 已停止; upstream error -> Explain; success may still use default interrupt for dangling tools.
+		messages = provider.CloseDanglingWith(messages, provider.CloseReason(runErr))
 		if !sentCheckpoint && hasModelWork(messages) {
 			if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
 				slog.Error(fmt.Sprintf("会话 %s 的检查点没有发出：%v", s.RequestID, err))
@@ -625,7 +631,9 @@ next:
 		if turnBudget > 0 {
 			if elapsed := time.Since(turnStarted); elapsed >= turnBudget {
 				slog.Debug("一轮跑满时间预算，暂停", "conversation", short, "elapsed_s", int(elapsed.Seconds()), "budget_s", int(turnBudget.Seconds()))
-				if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(turnBudgetNotice, int(elapsed.Minutes()), int(turnBudget.Minutes()))); err != nil {
+				closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(turnBudgetNotice, int(elapsed.Minutes()), int(turnBudget.Minutes())))
+				messages = closed
+				if err != nil {
 					return err
 				}
 				sentCheckpoint = true
@@ -715,7 +723,9 @@ next:
 				slog.Debug("相同工具调用连续重复，暂停这一轮", "conversation", short, "tool", nameA, "limit", loopHardStopAt)
 				notice = fmt.Sprintf(loopStopNotice, nameA, loopHardStopAt)
 			}
-			if err := s.pauseTurn(send, conversation, system, messages, mode, notice); err != nil {
+			closed, err := s.pauseTurn(send, conversation, system, messages, mode, notice)
+			messages = closed
+			if err != nil {
 				return err
 			}
 			sentCheckpoint = true
@@ -769,7 +779,9 @@ next:
 			for _, outcome := range results {
 				if outcome.stop {
 					slog.Warn(fmt.Sprintf("会话 %s 的工具 %s 连续 %d 次参数错误，暂停这一轮", s.RequestID, outcome.call.Name, argFailLimit))
-					if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(argFailNotice, outcome.call.Name, argFailLimit)); err != nil {
+					closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(argFailNotice, outcome.call.Name, argFailLimit))
+					messages = closed
+					if err != nil {
 						return err
 					}
 					sentCheckpoint = true
@@ -824,24 +836,28 @@ next:
 		}
 	}
 	slog.Debug("一轮工具步数到上限，暂停", "conversation", short, "steps", maxSteps)
-	if err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(stepLimitNotice, maxSteps)); err != nil {
+	closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(stepLimitNotice, maxSteps))
+	messages = closed
+	if err != nil {
 		return err
 	}
 	sentCheckpoint = true
 	return nil
 }
 
-// pauseTurn 正常结束这一轮并留下检查点。步数上限、时间预算和重复工具调用都走这里：
+// pauseTurn 正常结束这一轮并留下检查点。步数上限、时间预算、重复工具调用和参数连续出错都走这里：
 // 用错误结束的话，客户端会把整轮渲染成 Operation interrupted.，已经流出来的思考和改动都看不见。
-func (s *Session) pauseTurn(send Emit, conversation, system string, messages []provider.Message, mode cursorpb.AgentMode, notice string) error {
-	messages = provider.CloseDangling(messages)
+// 收尾用暂停说明，不用 CloseDangling 的 Operation interrupted.：客户端按检查点重绘，最后一条助手消息就是界面上的结尾
+// （2026-10-28：45 分钟预算到点正常暂停，界面仍显示 Operation interrupted.）。返回收尾后的历史，调用方要赋回去再存盘。
+func (s *Session) pauseTurn(send Emit, conversation, system string, messages []provider.Message, mode cursorpb.AgentMode, notice string) ([]provider.Message, error) {
+	messages = provider.CloseDanglingWith(messages, strings.TrimSpace(notice))
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: notice}}})); err != nil {
-		return err
+		return messages, err
 	}
 	if err := s.checkpoint(send, conversation, system, messages, s.summaryText, mode); err != nil {
-		return err
+		return messages, err
 	}
-	return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
+	return messages, send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 }
 
 func hasModelWork(messages []provider.Message) bool {

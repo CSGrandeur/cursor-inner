@@ -146,7 +146,8 @@ func TestRepeatedBadArgumentsPauseInsteadOfFailing(t *testing.T) {
 	fm := &fakeModel{responses: []string{bad, bad, bad}}
 	srv := fm.server(t)
 	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
-	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	history := NewHistory(t.TempDir())
+	hub := New(func(string) (config.Model, bool) { return model, true }, history)
 	if _, err := hub.Bidi(bidi(t, "run-bad", runRequest("mine", "conv-bad", "run it", &cursorpb.RequestContextEnv{}))); err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +162,7 @@ func TestRepeatedBadArgumentsPauseInsteadOfFailing(t *testing.T) {
 	if !strings.Contains(text, "invalid arguments for Shell 3 times") || !checkpoint || !ended {
 		t.Fatalf("text=%q checkpoint=%v ended=%v", text, checkpoint, ended)
 	}
+	assertPausedEnding(t, history.Load("conv-bad"), "invalid arguments for Shell")
 }
 
 func TestLockTurnGivesUpAfterTheWait(t *testing.T) {

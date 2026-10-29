@@ -12,6 +12,10 @@ var (
 	// streamDataIdle：连续这么久只收到 keepalive 注释行、没有任何 data 帧就判超时。
 	// 推理模型的思考过程也以 data 帧流式下发，150 秒足够覆盖排队和慢首字节。
 	streamDataIdle = 150 * time.Second
+	// responseHeaderTimeout：发出请求后这么久还没有响应头，就当上游卡住，按超时重试。
+	// 正常的流式接口几秒内回响应头（24 万 token 的请求也是 3～5 秒）；上游卡住时网关要等满自己的 600 秒才回 504，
+	// 而重试几秒就成功（2026-10-28 一天三次）。留 4 分钟给先预填充再回响应头的中转。
+	responseHeaderTimeout = 4 * time.Minute
 	// maxTimeoutAttempts：空闲类超时最多尝试这么多次（含首次），最坏约 2×150 秒就向 Cursor 报错。
 	maxTimeoutAttempts = 2
 	// maxEmptyAttempts：上游正常结束却没有任何内容时最多尝试这么多次（含首次）。

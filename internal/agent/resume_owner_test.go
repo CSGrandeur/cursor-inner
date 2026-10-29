@@ -403,7 +403,7 @@ func TestCancelBeforeReplyThenNewUserDoesNotLeaveTrailingUser(t *testing.T) {
 	hub.Done("run-old")
 
 	history := NewHistory(dir).Load("conv-trail")
-	if len(history) < 2 || history[len(history)-1].Role != "assistant" || history[len(history)-1].Content != "Operation interrupted." {
+	if len(history) < 2 || history[len(history)-1].Role != "assistant" || history[len(history)-1].Content != "已停止" {
 		t.Fatalf("cancelled turn must close trailing user: %+v", history)
 	}
 	if history[len(history)-2].Role != "user" || !strings.Contains(history[len(history)-2].Content, "previous instruction") {
@@ -432,8 +432,8 @@ func TestCancelBeforeReplyThenNewUserDoesNotLeaveTrailingUser(t *testing.T) {
 	if !strings.Contains(body, "brand new instruction") {
 		t.Fatalf("new instruction missing from model body: %s", body)
 	}
-	if !strings.Contains(body, "Operation interrupted.") {
-		t.Fatalf("interrupt marker missing between turns: %s", body)
+	if !strings.Contains(body, "已停止") {
+		t.Fatalf("stopped marker missing between turns: %s", body)
 	}
 	// The latest user turn must be the new instruction, not a bare re-ask of the previous one.
 	prevIdx := strings.LastIndex(body, "previous instruction")

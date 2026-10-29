@@ -69,6 +69,17 @@ func TestSystemPromptExplainsHowToBeWokenLater(t *testing.T) {
 	}
 }
 
+// aly-class models tend to roll back real DBs or delete business conditions then patch them back;
+// keep a short production_safety guard in the system prompt.
+func TestSystemPromptMentionsProductionSafety(t *testing.T) {
+	text := systemPrompt("Mine", &cursorpb.RequestContext{})
+	for _, want := range []string{"<production_safety>", "real databases", "production data", "wait for confirmation", "DROP"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("system prompt is missing %q", want)
+		}
+	}
+}
+
 func TestGitStatusStaysOnTheCurrentUserMessage(t *testing.T) {
 	ctx := &cursorpb.RequestContext{GitRepos: []*cursorpb.GitRepoInfo{{Path: "/w", Status: "## main"}}}
 	first := userTurn(&cursorpb.UserMessage{Text: "one"}, ctx)

@@ -441,10 +441,11 @@ func doSized(ctx context.Context, m config.Model, dial dialer.Func, req chatRequ
 		httpReq.Header.Set("Authorization", "Bearer "+m.APIKey)
 	}
 	client := &http.Client{Transport: &http.Transport{
-		DialContext:       dial,
-		Proxy:             nil,
-		ForceAttemptHTTP2: false,
-		TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
+		DialContext:           dial,
+		Proxy:                 nil,
+		ForceAttemptHTTP2:     false,
+		TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
+		ResponseHeaderTimeout: responseHeaderTimeout,
 	}}
 	resp, err := client.Do(httpReq)
 	if err != nil {

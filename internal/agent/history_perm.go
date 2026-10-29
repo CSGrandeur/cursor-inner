@@ -1,3 +1,5 @@
+//go:build !windows
+
 package agent
 
 import (
@@ -7,7 +9,6 @@ import (
 )
 
 // tightenPerms 把旧版本留下的对话历史改成只有本人可读写（文件 0600、目录 0700）。
-// Windows 上 chmod 只影响只读位，没有副作用。
 func tightenPerms(dir string) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

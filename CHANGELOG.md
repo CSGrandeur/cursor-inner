@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.28] - 2026-10-29
+
+### Added
+
+- The custom-model system prompt now has a short <production_safety> note: do not change real databases or run destructive rollbacks without clear authorization; irreversible steps wait for confirmation.
+
+### Fixed
+
+- Cancelled turns and upstream model errors no longer end the checkpoint with "Operation interrupted.". Cancel closes with "已停止"; upstream failures keep the Explain text (for example a 503 RESOURCE_EXHAUSTED), so Cursor's redraw shows why the turn stopped. Intentional pauses still end with the pause note.
+- After a hot swap or process restart, resuming a finished custom-model chat no longer shows "Error resuming chat: A background task finished, but the chat couldn't resume." The finished-run table used to live only in memory, so Cursor's post-turn resume (and background-task wake) hit an empty Hub and either forwarded to the official servers or replayed an empty state. Finished request ids are now saved under conversations/runs/ and rebuilt from the on-disk checkpoint on resume.
+- A turn that pauses on purpose (the 45-minute turn budget, the step limit, repeated tool calls, or repeated invalid arguments) no longer shows up as "Operation interrupted.". The saved conversation ended with that phrase, and Cursor redraws the turn from it; it now ends with the pause note, so you can see why it stopped and reply "continue".
+- A model request whose endpoint sends no response headers for four minutes is retried instead of waiting for the endpoint's own timeout. A stuck request used to cost ten minutes before the gateway answered 504, while the retry succeeded in seconds.
+- On Windows, startup no longer walks the whole conversations folder to tighten permissions the OS ignores. With a large history that walk made the console stay blank longer and longer; it is now a no-op on Windows.
+
 ## [0.5.27] - 2026-10-27
 
 ### Fixed
@@ -544,7 +558,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.28...HEAD
+[0.5.28]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.27...v0.5.28
 [0.5.27]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.24...v0.5.25

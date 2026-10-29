@@ -48,6 +48,8 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 - **Local chats can be renamed.** Rename and auto-title for custom-model chats stay on this computer; the local conversation id is not sent to Cursor's servers.
 - **Your proxy.** Takes over only Cursor, Grok and Codex. One address, and they use it. You do not change the system proxy, or turn on a system-wide TUN that would carry other programs with it. You can also send only official hosts such as Grok, x.ai, Cursor and OpenAI through the proxy, and connect directly to everything else. Each custom model chooses whether to use the proxy. Codex is not started if it is not already running.
 - **If a connection still bypasses.** After takeover, if one of the three still dials an official host directly, TUN mode or Strict mode inside cursor-inner covers those official hosts only. Other programs on the system are left alone. If either mode cannot start, takeover continues.
+- **Stops that make sense.** An intentional pause (turn budget, step limit, tool loops) keeps the pause note; Stop shows "已停止"; upstream failures keep the Explain text instead of always ending as Operation interrupted. After a hot swap or restart, a finished local chat can Resume normally.
+- **Production safety nudge.** The custom-model system prompt includes a short production_safety note: do not change real databases or run destructive rollbacks without clear authorization; irreversible steps wait for confirmation.
 - **Update takes effect immediately.** After a one-click update, the next chat turn is served by the new version; the old process no longer holds reused Cursor connections for up to ten minutes, and a turn already in progress finishes where it started.
 - **Update and quit.** Update in one click; Cursor and Grok keep running. Quitting, or an unexpected exit, writes Cursor's previous proxy settings back.
 
@@ -65,7 +67,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.27`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.5.28`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -228,7 +230,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.27 ./build.sh linux
+VERSION=v0.5.28 ./build.sh linux
 ```
 
 ## Acknowledgements

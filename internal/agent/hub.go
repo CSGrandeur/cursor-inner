@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"google.golang.org/protobuf/proto"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,9 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				// resume 可能带着新的动作（继续运行、后台任务完成）。沿用旧动作会把上一轮的
 				// 用户消息再插一遍，接着跑的那一轮就多了一条重复的输入。
 				s.session.adopt(m.RunRequest)
+			} else if disk := h.sessionFromDiskLocked(requestID); disk != nil {
+				s.session = disk
+				s.session.adopt(m.RunRequest)
 			}
 		}
 		if s.session == nil && resumeOnly(m.RunRequest.GetAction()) {
@@ -159,6 +163,8 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 			// 或在本地丢掉，客户端都会报 Error resuming chat。留到下一次 resume 时接着处理。
 			if f := h.finished[requestID]; f != nil {
 				session = f.session
+			} else {
+				session = h.sessionFromDiskLocked(requestID)
 			}
 		}
 		if session != nil {
@@ -225,6 +231,12 @@ func (h *Hub) Done(requestID string) {
 		h.finished[requestID] = f
 		if conv := s.session.ConversationID(); conv != "" {
 			h.byConv[conv] = f
+			// 热交接会丢掉内存 finished；把 request→会话 落到磁盘，resume 才能回放。
+			if h.history != nil {
+				if err := h.history.SaveRun(requestID, conv); err != nil {
+					slog.Debug("SaveRun failed", "request", requestID, "error", err)
+				}
+			}
 		}
 	}
 }
@@ -255,7 +267,11 @@ func (h *Hub) Owns(requestID string) bool {
 		return true
 	}
 	s := h.slots[requestID]
-	return s != nil && s.session != nil
+	if s != nil && s.session != nil {
+		return true
+	}
+	// 热交接后心跳仍会带旧 request id；磁盘有 run 记录就认本机，避免转官方 401。
+	return h.history != nil && h.history.LoadRun(requestID) != ""
 }
 
 // KnowsConversation 报告这个 conversation id 是不是本机答过或正在答的自定义模型会话。
@@ -286,6 +302,30 @@ func (h *Hub) KnowsConversation(conversationID string) bool {
 	return hist != nil && hist.LoadState(conversationID) != nil
 }
 
+// sessionFromDiskLocked 用磁盘上的 request→会话 索引和 checkpoint 重建一条已答完的会话。
+// 调用方必须已持有 h.mu。
+func (h *Hub) sessionFromDiskLocked(requestID string) *Session {
+	if h.history == nil || requestID == "" {
+		return nil
+	}
+	conv := h.history.LoadRun(requestID)
+	if conv == "" {
+		return nil
+	}
+	state := h.history.LoadState(conv)
+	if state == nil {
+		return nil
+	}
+	run := &cursorpb.AgentRunRequest{ConversationId: &conv}
+	sess := newSession(requestID, config.Model{}, run, h.history)
+	sess.baseState = state
+	sess.finished.Store(true)
+	f := &finished{session: sess, at: time.Now()}
+	h.finished[requestID] = f
+	h.byConv[conv] = f
+	return sess
+}
+
 // NoteResume 把一条带 X-Original-Request-Id 的 resume 接到 oldID 已经答完的会话上。
 // 返回 false 表示这条 original 不是本机答完的 run，调用方按原流程处理。
 func (h *Hub) NoteResume(oldID, newID string) bool {
@@ -297,6 +337,8 @@ func (h *Hub) NoteResume(oldID, newID string) bool {
 	} else if s := h.slots[oldID]; s != nil && s.session != nil && s.session.Finished() {
 		// WS 连接还开在池里时 serveLocalAgent 还没走到 Done，会话留在 slots 里。
 		sess = s.session
+	} else if sess = h.sessionFromDiskLocked(oldID); sess != nil {
+		// 热交接/重启后内存 finished 已空：按磁盘 run 索引重建，避免 Error resuming chat。
 	}
 	if sess == nil {
 		return false

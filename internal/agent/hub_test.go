@@ -471,12 +471,72 @@ func TestCancelAbortsInflightAndClosesHistory(t *testing.T) {
 		if message.Role == "tool" && message.IsError && message.ToolCallID == "call_1" {
 			tool = true
 		}
-		if message.Role == "assistant" && message.Content == "Operation interrupted." {
+		if message.Role == "assistant" && message.Content == "已停止" {
 			assistant = true
+		}
+		if message.Role == "assistant" && strings.Contains(message.Content, "Operation interrupted") {
+			t.Fatalf("cancel must not end as Operation interrupted: %+v", history)
 		}
 	}
 	if !tool || !assistant {
 		t.Fatalf("history not repaired: %+v", history)
+	}
+}
+
+// Upstream error closing must use Explain, not Operation interrupted.
+func TestUpstreamErrorClosesHistoryWithExplain(t *testing.T) {
+	var n int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n++
+		if n == 1 {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"Read","arguments":"{\"path\":\"/w/a.go\"}"}}]}}]}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(w, `{"error":{"message":"Master scheduling failed (RESOURCE_EXHAUSTED); do not retry or route locally","type":"server_error"}}`)
+	}))
+	t.Cleanup(srv.Close)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL, APIKey: "k", Model: "m"}
+	dir := t.TempDir()
+	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(dir))
+	if _, err := hub.Bidi(bidi(t, "up-err", runRequest("mine", "conv-up-err", "read it", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, err := hub.Wait(ctx, "up-err")
+	if err != nil || session == nil {
+		t.Fatal(err)
+	}
+	runErr := session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+		if exec := m.GetExecServerMessage(); exec != nil && exec.GetReadArgs() != nil {
+			_, err := hub.Bidi(bidi(t, "up-err", execResult(exec.GetId(), &cursorpb.ExecClientMessage{
+				Message: &cursorpb.ExecClientMessage_ReadResult{ReadResult: &cursorpb.ReadResult{
+					Result: &cursorpb.ReadResult_Success{Success: &cursorpb.ReadSuccess{Path: "/w/a.go", Output: &cursorpb.ReadSuccess_Content{Content: "package a"}}},
+				}},
+			})))
+			return err
+		}
+		return nil
+	})
+	if runErr == nil {
+		t.Fatal("expected upstream error")
+	}
+	history := NewHistory(dir).Load("conv-up-err")
+	if len(history) == 0 {
+		t.Fatal("history empty")
+	}
+	last := history[len(history)-1]
+	if last.Role != "assistant" {
+		t.Fatalf("last role %s content %q", last.Role, last.Content)
+	}
+	if strings.Contains(last.Content, "Operation interrupted") {
+		t.Fatalf("upstream error must not end as Operation interrupted: %q", last.Content)
+	}
+	if !strings.Contains(last.Content, "RESOURCE_EXHAUSTED") && !strings.Contains(last.Content, "503") && !strings.Contains(last.Content, "服务端") {
+		t.Fatalf("checkpoint ending should carry upstream explain: %q", last.Content)
 	}
 }
 
@@ -1867,7 +1927,8 @@ func TestTurnBudgetPausesTurn(t *testing.T) {
 	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
 	srv := fm.server(t)
 	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
-	hub := New(func(string) (config.Model, bool) { return model, true }, NewHistory(t.TempDir()))
+	history := NewHistory(t.TempDir())
+	hub := New(func(string) (config.Model, bool) { return model, true }, history)
 	if _, err := hub.Bidi(bidi(t, "budget", runRequest("mine", "conv-budget", "hi", &cursorpb.RequestContextEnv{}))); err != nil {
 		t.Fatal(err)
 	}
@@ -1895,5 +1956,19 @@ func TestTurnBudgetPausesTurn(t *testing.T) {
 	}
 	if !notice || !ended || !checkpoint {
 		t.Fatalf("notice=%v ended=%v checkpoint=%v", notice, ended, checkpoint)
+	}
+	assertPausedEnding(t, history.Load("conv-budget"), "budget")
+}
+
+// assertPausedEnding 检查暂停后保存（也就是写进检查点）的结尾。客户端按检查点重绘，
+// 结尾是 Operation interrupted. 时，正常暂停在界面上也像被中断（2026-10-28）。
+func assertPausedEnding(t *testing.T, saved []provider.Message, want string) {
+	t.Helper()
+	if len(saved) == 0 {
+		t.Fatal("history was not saved")
+	}
+	last := saved[len(saved)-1]
+	if last.Role != "assistant" || !strings.Contains(last.Content, want) || strings.Contains(last.Content, "Operation interrupted") {
+		t.Fatalf("paused turn ends with %s %q", last.Role, last.Content)
 	}
 }

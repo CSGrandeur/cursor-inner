@@ -79,6 +79,39 @@ func (h *History) path(id string) string {
 	return filepath.Join(h.dir, unsafeID.ReplaceAllString(id, "_")+".state")
 }
 
+func (h *History) runPath(requestID string) string {
+	return filepath.Join(h.dir, "runs", unsafeID.ReplaceAllString(requestID, "_")+".run")
+}
+
+// SaveRun 记下答完的 request id 属于哪个会话。热交接后内存 finished 表会空，
+// resume 靠这个文件从磁盘接回会话并回放 checkpoint。
+func (h *History) SaveRun(requestID, conversation string) error {
+	if h == nil || requestID == "" || conversation == "" {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	dir := filepath.Join(h.dir, "runs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(h.runPath(requestID), []byte(conversation), 0o600)
+}
+
+// LoadRun 返回答完的 request id 对应的会话 id；没有记录时返回空串。
+func (h *History) LoadRun(requestID string) string {
+	if h == nil || requestID == "" {
+		return ""
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	raw, err := os.ReadFile(h.runPath(requestID))
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
 func (h *History) PutBlob(id, data []byte) error {
 	if h == nil || len(id) == 0 {
 		return nil
