@@ -36,6 +36,10 @@ func TestPageTabsGroupSettings(t *testing.T) {
 	if !strings.Contains(codexBtn, `class="app-icon"`) {
 		t.Fatal("Open Codex needs the app icon")
 	}
+	agBtn := src[strings.Index(src, `id="open-antigravity"`):strings.Index(src, `id="open-logs"`)]
+	if !strings.Contains(agBtn, `class="app-icon"`) || !strings.Contains(agBtn, `data:image/png;base64,`) {
+		t.Fatal("Open Antigravity needs the official app icon")
+	}
 	panes := regexp.MustCompile(`<div class="pane" role="tabpanel" id="pane-([a-z]+)"`).FindAllStringSubmatchIndex(src, -1)
 	if len(panes) != 4 {
 		t.Fatalf("want 4 panes, got %d", len(panes))
@@ -58,7 +62,7 @@ func TestPageTabsGroupSettings(t *testing.T) {
 	}
 	want := map[string][]string{
 		"models":  {"model-table", "model-form", "draft-test"},
-		"network": {"takeover-cursor", "takeover-grok", "takeover-codex", "tun-on", "strict-on", "proxy-address", "scope"},
+		"network": {"takeover-cursor", "takeover-grok", "takeover-codex", "takeover-antigravity", "tun-on", "strict-on", "proxy-address", "scope"},
 		"update":  {"update-row", "update-check", "up-steps", "up-fill"},
 		"general": {"image-url", "autostart", "background", "notify"},
 	}

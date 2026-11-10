@@ -37,6 +37,7 @@ type Hub struct {
 	mu       sync.Mutex
 	slots    map[string]*slot
 	finished map[string]*finished
+	aliases  map[string]*finished // transport aliases; never replace a slot binding
 	// byConv 按会话记最近一条答完的 run。客户端 resume 时经常换一个新的 request id
 	// （不带 X-Original-Request-Id），只按 id 找会把这条当成新的一轮，客户端拿不到 checkpoint。
 	byConv  map[string]*finished
@@ -45,11 +46,17 @@ type Hub struct {
 }
 
 func New(lookup func(id string) (config.Model, bool), history *History) *Hub {
-	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, byConv: map[string]*finished{}, lookup: lookup, history: history}
+	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, aliases: map[string]*finished{}, byConv: map[string]*finished{}, lookup: lookup, history: history}
 }
 
 // Bidi 处理一条已解压的 BidiAppend 请求体。
 func (h *Hub) Bidi(body []byte) (Route, error) {
+	return h.BidiWithOriginal(body, "")
+}
+
+// BidiWithOriginal resolves transport aliases and delivers the message under one lock.
+// An original request header is not permission to restore a Session for tool I/O.
+func (h *Hub) BidiWithOriginal(body []byte, original string) (Route, error) {
 	requestID, raw, err := protox.DecodeBidi(body)
 	if err != nil {
 		return Route{}, err
@@ -63,7 +70,7 @@ func (h *Hub) Bidi(body []byte) (Route, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.sweepLocked()
-	route, _, _ := h.applyLocked(requestID, &msg)
+	route, _, _ := h.applyOriginalLocked(requestID, original, &msg)
 	return route, nil
 }
 
@@ -87,6 +94,24 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 	switch m := msg.GetMessage().(type) {
 	case *cursorpb.AgentClientMessage_RunRequest:
 		route.ModelID = modelID(m.RunRequest)
+		// An explicitly official run is never a local checkpoint replay, even
+		// when its conversation or original-request header names a local turn.
+		if s.session == nil && route.ModelID != "" {
+			local := false
+			if h.lookup != nil {
+				_, local = h.lookup(route.ModelID)
+			}
+			if f := h.finished[requestID]; f != nil && f.session.Model.ID == route.ModelID {
+				local = true
+			}
+			if !local {
+				if !s.decided {
+					s.decided = true
+					close(s.ready)
+				}
+				break
+			}
+		}
 		// 同一条 run 的 resume（回合结束后约 90 秒客户端会重发）：接到已经答完的会话上，
 		// 不再新建会话调一次模型。新建会得到不同的输出，把用户已经看到的思考和回答覆盖掉。
 		// 这一条不能要求 run request 里带模型：resume 的请求常常不带 requested_model，
@@ -94,12 +119,8 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 		if s.session == nil {
 			if f := h.finished[requestID]; f != nil {
 				s.session = f.session
-				// resume 可能带着新的动作（继续运行、后台任务完成）。沿用旧动作会把上一轮的
-				// 用户消息再插一遍，接着跑的那一轮就多了一条重复的输入。
-				s.session.adopt(m.RunRequest)
 			} else if disk := h.sessionFromDiskLocked(requestID); disk != nil {
 				s.session = disk
-				s.session.adopt(m.RunRequest)
 			}
 		}
 		if s.session == nil && resumeOnly(m.RunRequest.GetAction()) {
@@ -109,8 +130,6 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 			if conv := m.RunRequest.GetConversationId(); conv != "" {
 				if f := h.byConv[conv]; f != nil && !f.session.Running() {
 					s.session = f.session
-					// 和同 id 的 resume 一样接住新动作，否则继续跑的那一轮会沿用上一轮的用户消息。
-					s.session.adopt(m.RunRequest)
 				}
 			}
 		}
@@ -133,7 +152,7 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 		}
 		// NoteResume 会先把已答完的会话挂到新 request id 上，却来不及 adopt。
 		// 若不接住新动作，接着跑时仍用上一轮的 UserMessageAction，等于把旧指令再插一遍。
-		if s.session != nil && !start && !s.session.Running() {
+		if s.session != nil && !start && s.session.Finished() && !s.session.Running() {
 			s.session.adopt(m.RunRequest)
 		}
 		if !s.decided {
@@ -142,6 +161,7 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 		}
 	case *cursorpb.AgentClientMessage_ExecClientMessage:
 		if s.session != nil {
+			slog.Debug("exec routed", "request", requestID, "original", "", "session", s.session.RequestID, "id", m.ExecClientMessage.GetId(), "exec", m.ExecClientMessage.GetExecId(), "delivered", true)
 			s.session.deliver(m.ExecClientMessage)
 		}
 	case *cursorpb.AgentClientMessage_InteractionResponse:
@@ -211,8 +231,10 @@ func (h *Hub) Active() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	n := 0
+	seen := map[*Session]bool{}
 	for _, s := range h.slots {
-		if s.session != nil && s.session.Running() {
+		if s.session != nil && s.session.Running() && !seen[s.session] {
+			seen[s.session] = true
 			n++
 		}
 	}
@@ -263,7 +285,7 @@ func (h *Hub) Owns(requestID string) bool {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.finished[requestID] != nil {
+	if h.finished[requestID] != nil || h.aliases[requestID] != nil {
 		return true
 	}
 	s := h.slots[requestID]
@@ -326,11 +348,23 @@ func (h *Hub) sessionFromDiskLocked(requestID string) *Session {
 	return sess
 }
 
-// NoteResume 把一条带 X-Original-Request-Id 的 resume 接到 oldID 已经答完的会话上。
+// NoteResume 只供恢复 RunRequest 使用；已决定的目标绑定不变。工具 I/O 不调用它。
 // 返回 false 表示这条 original 不是本机答完的 run，调用方按原流程处理。
 func (h *Hub) NoteResume(oldID, newID string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.noteResumeLocked(oldID, newID)
+}
+
+func (h *Hub) noteResumeLocked(oldID, newID string) bool {
+	if newID == "" {
+		newID = oldID
+	}
+	// A decided route (including official) is immutable. Never strand a waiter by
+	// swapping the Session behind its request id.
+	if target := h.slots[newID]; target != nil && (target.session != nil || target.decided) {
+		return target.session != nil
+	}
 	var sess *Session
 	if f := h.finished[oldID]; f != nil {
 		sess = f.session
@@ -340,11 +374,8 @@ func (h *Hub) NoteResume(oldID, newID string) bool {
 	} else if sess = h.sessionFromDiskLocked(oldID); sess != nil {
 		// 热交接/重启后内存 finished 已空：按磁盘 run 索引重建，避免 Error resuming chat。
 	}
-	if sess == nil {
+	if sess == nil || sess.Running() {
 		return false
-	}
-	if newID == "" {
-		newID = oldID
 	}
 	// RunSSE 常和 BidiAppend resume 几乎同时到。Wait 会先 slotLocked 出一个空槽并卡在 ready 上；
 	// 这里如果整槽替换，Wait 仍等旧 channel，30 秒后超时把自定义模型 resume 转给官方，
@@ -375,6 +406,11 @@ func (h *Hub) slotLocked(id string) *slot {
 }
 
 func (h *Hub) sweepLocked() {
+	for id, alias := range h.aliases {
+		if time.Since(alias.at) > 2*time.Hour {
+			delete(h.aliases, id)
+		}
+	}
 	for id, s := range h.slots {
 		if time.Since(s.born) > 6*time.Hour {
 			delete(h.slots, id)

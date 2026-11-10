@@ -186,6 +186,9 @@ func (c *inspectConn) decide(route official.Route, name, why string) {
 		dial, label = c.direct, "direct"
 	}
 	slog.Debug("代理范围仅官方：按首包分流", "target", c.addr, "route", label, "name", name, "why", why)
+	if label == "direct" && antigravityRelated(name) {
+		slog.Warn("反重力相关主机被按直连分流（可能漏接）", "target", c.addr, "name", name, "why", why)
+	}
 	ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 	conn, err := dial(ctx, c.network, c.addr)
 	cancel()
@@ -368,4 +371,20 @@ func (c *inspectConn) SetWriteDeadline(t time.Time) error {
 		return conn.SetWriteDeadline(t)
 	}
 	return nil
+}
+
+// antigravityRelated 用于漏接告警：首包分流成直连时，名字仍像反重力官方流量。
+func antigravityRelated(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if official.Name(host) {
+		return true
+	}
+	label := host
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		label = host[:i]
+	}
+	return strings.Contains(host, "antigravity") || (strings.HasSuffix(host, ".run.app") && strings.HasPrefix(label, "antigravity-"))
 }

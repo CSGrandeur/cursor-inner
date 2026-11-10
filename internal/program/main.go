@@ -411,12 +411,14 @@ func Main(version string) {
 	if !opt.debug {
 		application.SyncGrok()
 		application.SyncCodex()
+		application.SyncAntigravity()
 		go func() {
 			tick := time.NewTicker(5 * time.Second)
 			defer tick.Stop()
 			for range tick.C {
 				application.SyncGrok()
 				application.SyncCodex()
+				application.SyncAntigravity()
 			}
 		}()
 	}

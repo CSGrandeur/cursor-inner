@@ -110,6 +110,9 @@ func (b *Bridge) name() string {
 	if strings.HasPrefix(b.key, "codex\n") {
 		return "codex"
 	}
+	if strings.HasPrefix(b.key, "antigravity\n") {
+		return "antigravity"
+	}
 	return "grok"
 }
 

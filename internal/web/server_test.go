@@ -15,23 +15,24 @@ import (
 )
 
 type fake struct {
-	strict        *bool
-	scope         string
-	tunnel        *bool
-	view          View
-	autostart     bool
-	takeover      bool
-	quit          bool
-	opened        bool
-	openedGrok    bool
-	openedCodex   bool
-	discover      []string
-	discoverErr   error
-	discoverType  string
-	discoverURL   string
-	discoverKey   string
-	discoverID    string
-	discoverProxy bool
+	strict            *bool
+	scope             string
+	tunnel            *bool
+	view              View
+	autostart         bool
+	takeover          bool
+	quit              bool
+	opened            bool
+	openedGrok        bool
+	openedCodex       bool
+	openedAntigravity bool
+	discover          []string
+	discoverErr       error
+	discoverType      string
+	discoverURL       string
+	discoverKey       string
+	discoverID        string
+	discoverProxy     bool
 }
 
 func (f *fake) State() (View, error) {
@@ -49,6 +50,9 @@ func (f *fake) SetTakeover(target string, enabled bool) error {
 		return nil
 	case "codex":
 		f.view.TakeoverCodex = enabled
+		return nil
+	case "antigravity":
+		f.view.TakeoverAntigravity = enabled
 		return nil
 	}
 	f.takeover = enabled
@@ -133,12 +137,13 @@ func fakeTestProgress(progress func(provider.Progress)) provider.Result {
 	}
 	return provider.Result{OK: true, DurationMS: 1, TokensPerSecond: 1}
 }
-func (f *fake) Quit() error         { f.quit = true; return nil }
-func (f *fake) OpenCursor() error   { f.opened = true; return nil }
-func (f *fake) OpenGrok() error     { f.openedGrok = true; return nil }
-func (f *fake) OpenCodex() error    { f.openedCodex = true; return nil }
-func (f *fake) OpenLogs() error     { return nil }
-func (f *fake) RunLeakCheck() error { return nil }
+func (f *fake) Quit() error            { f.quit = true; return nil }
+func (f *fake) OpenCursor() error      { f.opened = true; return nil }
+func (f *fake) OpenGrok() error        { f.openedGrok = true; return nil }
+func (f *fake) OpenCodex() error       { f.openedCodex = true; return nil }
+func (f *fake) OpenAntigravity() error { f.openedAntigravity = true; return nil }
+func (f *fake) OpenLogs() error        { return nil }
+func (f *fake) RunLeakCheck() error    { return nil }
 
 func TestOpenCursorEndpoint(t *testing.T) {
 	f := &fake{}
@@ -165,6 +170,20 @@ func TestOpenGrokEndpoint(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 || !f.openedGrok {
 		t.Fatalf("status %d opened %v", res.StatusCode, f.openedGrok)
+	}
+}
+
+func TestOpenAntigravityEndpoint(t *testing.T) {
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+	res, err := http.Post(srv.URL+"/api/antigravity", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || !f.openedAntigravity {
+		t.Fatalf("status %d opened %v", res.StatusCode, f.openedAntigravity)
 	}
 }
 
@@ -312,7 +331,7 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	body := make([]byte, 1<<20)
 	n, _ := res.Body.Read(body)
 	page := string(body[:n])
-	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, ">接管 Codex<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "::-ms-reveal") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="open-codex"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `data-help="context"`) || !strings.Contains(page, `data-help="maxOut"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
+	if !strings.Contains(page, "开机启动") || !strings.Contains(page, ">接管 Cursor<") || !strings.Contains(page, ">接管 Grok<") || !strings.Contains(page, ">接管 Codex<") || !strings.Contains(page, ">接管反重力<") || !strings.Contains(page, "reveal-key") || !strings.Contains(page, "::-ms-reveal") || !strings.Contains(page, "上次测试") || !strings.Contains(page, "/icon.svg") || !strings.Contains(page, `id="image-url"`) || !strings.Contains(page, `name="context_window"`) || !strings.Contains(page, `id="open-cursor"`) || !strings.Contains(page, `id="open-grok"`) || !strings.Contains(page, `id="open-codex"`) || !strings.Contains(page, `id="open-antigravity"`) || !strings.Contains(page, `id="form-clear"`) || !strings.Contains(page, `data-i18n-tip="tipModel"`) || !strings.Contains(page, `data-help="context"`) || !strings.Contains(page, `data-help="maxOut"`) || !strings.Contains(page, `href="https://github.com/CSGrandeur/cursor-inner"`) {
 		t.Fatalf("page missing sections n=%d head=%q", n, page[:min(180, n)])
 	}
 	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/autostart", strings.NewReader(`{"enabled":true}`))
@@ -347,6 +366,16 @@ func TestPageAndAutostartToggle(t *testing.T) {
 	}
 	if !f.view.TakeoverCodex {
 		t.Fatal("codex takeover was not stored")
+	}
+	reqA, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/takeover", strings.NewReader(`{"target":"antigravity","enabled":true}`))
+	reqA.Header.Set("Content-Type", "application/json")
+	resA, err := http.DefaultClient.Do(reqA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resA.Body.Close()
+	if resA.StatusCode != 200 || !f.view.TakeoverAntigravity {
+		t.Fatalf("antigravity takeover status %d stored %v", resA.StatusCode, f.view.TakeoverAntigravity)
 	}
 }
 func (f *fake) SetStrictEgress(enabled bool) error { f.strict = &enabled; return nil }

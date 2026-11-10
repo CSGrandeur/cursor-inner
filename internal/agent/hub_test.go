@@ -1860,7 +1860,7 @@ func TestToolSilenceBecomesAFailureTheModelCanContinue(t *testing.T) {
 			}
 			fm.mu.Lock()
 			defer fm.mu.Unlock()
-			if len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "did not finish within the time limit") {
+			if len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "termination is not confirmed") {
 				t.Fatalf("model did not receive the timeout: %d", len(fm.requests))
 			}
 			return
@@ -1958,6 +1958,91 @@ func TestTurnBudgetPausesTurn(t *testing.T) {
 		t.Fatalf("notice=%v ended=%v checkpoint=%v", notice, ended, checkpoint)
 	}
 	assertPausedEnding(t, history.Load("conv-budget"), "budget")
+}
+
+func advanceAfterStart(start time.Time, later time.Duration) func() time.Time {
+	n := 0
+	return func() time.Time {
+		n++
+		if n == 1 {
+			return start
+		}
+		return start.Add(later)
+	}
+}
+
+func runBudgetTurn(t *testing.T, conversation string) (history *History, notice, ended, checkpoint bool, err error) {
+	t.Helper()
+	fm := &fakeModel{responses: []string{sse(`{"choices":[{"delta":{"content":"ok"}}]}`)}}
+	srv := fm.server(t)
+	model := config.Model{ID: "mine", Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k", Model: "m"}
+	history = NewHistory(t.TempDir())
+	hub := New(func(string) (config.Model, bool) { return model, true }, history)
+	if _, err := hub.Bidi(bidi(t, "budget", runRequest("mine", conversation, "hi", &cursorpb.RequestContextEnv{}))); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	session, waitErr := hub.Wait(ctx, "budget")
+	if waitErr != nil || session == nil {
+		t.Fatalf("session=%v err=%v", session, waitErr)
+	}
+	err = session.Run(ctx, dialer.Direct(), func(m *cursorpb.AgentServerMessage) error {
+		if m.GetConversationCheckpointUpdate() != nil {
+			checkpoint = true
+		}
+		if text := m.GetInteractionUpdate().GetTextDelta().GetText(); strings.Contains(text, "budget") {
+			notice = true
+		}
+		if m.GetInteractionUpdate().GetTurnEnded() != nil {
+			ended = true
+		}
+		return nil
+	})
+	return history, notice, ended, checkpoint, err
+}
+
+// 默认不设墙钟时，即使时钟推进数小时，仍在进行的一轮也不会被暂停。
+func TestTurnBudgetZeroAllowsLongTurn(t *testing.T) {
+	oldBudget, oldNow := turnBudget, now
+	start := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	turnBudget = 0
+	now = advanceAfterStart(start, 2*time.Hour)
+	t.Cleanup(func() { turnBudget, now = oldBudget, oldNow })
+	history, notice, ended, _, err := runBudgetTurn(t, "conv-budget-zero")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if notice || !ended {
+		t.Fatalf("notice=%v ended=%v", notice, ended)
+	}
+	saved := history.Load("conv-budget-zero")
+	if len(saved) == 0 {
+		t.Fatal("history was not saved")
+	}
+	for _, m := range saved {
+		if strings.Contains(m.Content, "budget") || strings.Contains(m.Content, "Operation interrupted") {
+			t.Fatalf("long turn was paused or closed as interrupted: %s %q", m.Role, m.Content)
+		}
+	}
+}
+
+// 预算大于 0 时，用被替换的时钟推进到预算就会暂停，不必真等。
+func TestTurnBudgetHonorsClock(t *testing.T) {
+	oldBudget, oldNow, oldSteps := turnBudget, now, maxSteps
+	start := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	turnBudget = 30 * time.Minute
+	maxSteps = 100
+	now = advanceAfterStart(start, 30*time.Minute)
+	t.Cleanup(func() { turnBudget, now, maxSteps = oldBudget, oldNow, oldSteps })
+	history, notice, ended, checkpoint, err := runBudgetTurn(t, "conv-budget-clock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !notice || !ended || !checkpoint {
+		t.Fatalf("notice=%v ended=%v checkpoint=%v", notice, ended, checkpoint)
+	}
+	assertPausedEnding(t, history.Load("conv-budget-clock"), "budget")
 }
 
 // assertPausedEnding 检查暂停后保存（也就是写进检查点）的结尾。客户端按检查点重绘，

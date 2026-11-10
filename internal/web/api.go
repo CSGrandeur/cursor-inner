@@ -27,11 +27,12 @@ type ModelView struct {
 }
 
 type View struct {
-	ListenURL      string `json:"listen_url"`
-	Takeover       bool   `json:"takeover"`
-	TakeoverGrok   bool   `json:"takeover_grok"`
-	TakeoverCodex  bool   `json:"takeover_codex"`
-	TakeoverActive bool   `json:"takeover_active"`
+	ListenURL           string `json:"listen_url"`
+	Takeover            bool   `json:"takeover"`
+	TakeoverGrok        bool   `json:"takeover_grok"`
+	TakeoverCodex       bool   `json:"takeover_codex"`
+	TakeoverAntigravity bool   `json:"takeover_antigravity"`
+	TakeoverActive      bool   `json:"takeover_active"`
 	// TakeoverState 是三态：off（没要求接管）/ pending（还没定论）/ active / error（明确失败）。
 	// 页面只在 error 时标红，pending 显示中性的过程文字并继续轮询。Reason 见 takeover.Reason*，Since 是进入该状态的时刻（RFC3339）。
 	TakeoverState  string          `json:"takeover_state"`
@@ -109,6 +110,7 @@ type Backend interface {
 	OpenCursor() error
 	OpenGrok() error
 	OpenCodex() error
+	OpenAntigravity() error
 	SetStrictEgress(enabled bool) error
 	SetTunnel(enabled bool) error
 	OpenLogs() error

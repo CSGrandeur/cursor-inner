@@ -30,6 +30,10 @@ type turnPlan struct {
 	resume bool
 	// skip 非空时本次不调用模型，内容是原因。
 	skip string
+	// skipStaleUser 只在拒绝更短的旧 ConversationState、改用更长磁盘历史时为 true。
+	// 这时不要把请求里那条已被后一条用户消息超过的旧原文再追加到末尾。
+	// 当前完整历史上用户有意重提前一句相同的话时，不得置位，必须照常追加。
+	skipStaleUser bool
 }
 
 const (
@@ -252,7 +256,9 @@ func (p turnPlan) apply(messages []provider.Message, ctx *cursorpb.RequestContex
 	}
 	if p.user != nil {
 		messages = prependUsers(messages, p.prepend)
-		messages = append(messages, userTurn(p.user, ctx))
+		if !(p.skipStaleUser && staleUserAlreadySuperseded(messages, userShownText(p.user))) {
+			messages = append(messages, userTurn(p.user, ctx))
+		}
 	}
 	for _, u := range p.extraUser {
 		messages = append(messages, userTurn(u, ctx))
@@ -266,4 +272,53 @@ func (p turnPlan) apply(messages []provider.Message, ctx *cursorpb.RequestContex
 		}
 	}
 	return messages, ""
+}
+
+// staleUserAlreadySuperseded 报告这条用户原文已经在历史里出现过，并且后面还有更新的用户消息。
+// 这时再追加会把旧指令插回最新位置，模型就会去回答上上条。末尾已是同一原文时不视作过期，允许用户连发两句相同的「继续」。
+func staleUserAlreadySuperseded(messages []provider.Message, shown string) bool {
+	shown = normalizeUserShown(shown)
+	if shown == "" {
+		return false
+	}
+	last := -1
+	for i, message := range messages {
+		if message.Role == "user" {
+			last = i
+		}
+	}
+	if last < 0 {
+		return false
+	}
+	for i, message := range messages {
+		if message.Role != "user" {
+			continue
+		}
+		if normalizeUserShown(visibleUserText(message)) != shown {
+			continue
+		}
+		if i < last {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeUserShown 抽出用户可见原文。检查点还原后 Shown 可能为空，且旧内容不一定带 timestamp 前缀，visibleUserText 会把整段 <user_query> 留下。
+func normalizeUserShown(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	clean, _ := splitSystemReminders(text)
+	text = strings.TrimSpace(clean)
+	const open = "<user_query>\x0a"
+	const close = "\x0a</user_query>"
+	if start := strings.Index(text, open); start >= 0 {
+		rest := text[start+len(open):]
+		if end := strings.Index(rest, close); end >= 0 {
+			return strings.TrimSpace(rest[:end])
+		}
+	}
+	return text
 }

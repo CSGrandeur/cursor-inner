@@ -30,6 +30,18 @@ var Suffixes = []string{
 	"oaistatic.com",
 	"oaiusercontent.com",
 	"oaistatsig.com",
+	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth 相关后缀。
+	// googleapis.com 盖住 oauth2 / businessaicode / aiplatform / discoveryengine /
+	// cloudcode-pa / daily-cloudcode-pa / aicode / play.googleapis.com 等。
+	// 不收整站 google.com；登录主机单独收 accounts.google.com。
+	// Cloud Run 更新器（antigravity-hub-auto-updater-*.run.app）见 antigravityCloudRun。
+	"antigravity.google",
+	"antigravity.google.com",
+	"antigravity-unleash.goog",
+	"googleapis.com",
+	"googleusercontent.com",
+	"gstatic.com",
+	"accounts.google.com",
 }
 
 // Hosts 是只按完整主机名匹配的官方端点：它们的上级域名是公共云或第三方，不能按后缀收。
@@ -113,10 +125,23 @@ func matchSuffix(host string, list []string) bool {
 	return false
 }
 
+// antigravityCloudRun 匹配反重力官方更新器落在 Cloud Run 上的主机。
+// 形如 antigravity-hub-auto-updater-<project>.<region>.run.app；不能按 run.app 整后缀收。
+func antigravityCloudRun(host string) bool {
+	if !strings.HasSuffix(host, ".run.app") {
+		return false
+	}
+	label := host
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		label = host[:i]
+	}
+	return strings.HasPrefix(label, "antigravity-")
+}
+
 // Name 报告 host 是不是官方域名（含子域名）。
 func Name(host string) bool {
 	h := normalize(host)
-	return matchSuffix(h, Suffixes) || matchExact(h, Hosts)
+	return matchSuffix(h, Suffixes) || matchExact(h, Hosts) || antigravityCloudRun(h)
 }
 
 func matchExact(host string, list []string) bool {
@@ -132,7 +157,7 @@ func matchExact(host string, list []string) bool {
 // 这类名字一律不在本地解析、不按解析结果直连，防 DNS 重绑定把官方流量引到直连。
 func MustProxy(host string) bool {
 	h := normalize(host)
-	return matchSuffix(h, Suffixes) || matchExact(h, Hosts) || matchSuffix(h, alsoProxy)
+	return matchSuffix(h, Suffixes) || matchExact(h, Hosts) || antigravityCloudRun(h) || matchSuffix(h, alsoProxy)
 }
 
 // Reserved 报告 ip 是否属于直连的内网预留段（回环、未指定、私网、CGNAT、链路本地等）。

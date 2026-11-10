@@ -342,9 +342,28 @@ func runProbe(proxyAddr, target string, dial DialFunc) probeResult {
 
 func (b *Bridge) probe() {
 	dial, key := b.currentDial()
-	r := runProbe(proxyHost(key), probeTarget, dial)
-	attrs := append([]any{"bridge", b.name(), "proxy", proxyHost(key), "target", probeTarget}, r.attrs()...)
+	target := probeTargetFor(b.name())
+	if target == "off" || target == "" {
+		return
+	}
+	r := runProbe(proxyHost(key), target, dial)
+	attrs := append([]any{"bridge", b.name(), "proxy", proxyHost(key), "target", target}, r.attrs()...)
 	slog.Debug("bridge probe", attrs...)
+}
+
+// probeTargetFor 按桥选择默认探测主机；CURSOR_INNER_PROBE_TARGET 仍可统一覆盖（含 off）。
+func probeTargetFor(bridge string) string {
+	if v := strings.TrimSpace(os.Getenv("CURSOR_INNER_PROBE_TARGET")); v != "" {
+		return v
+	}
+	switch bridge {
+	case "antigravity":
+		return "daily-cloudcode-pa.googleapis.com:443"
+	case "codex":
+		return "api.openai.com:443"
+	default:
+		return probeTarget
+	}
 }
 
 // ttfbMS 是首字节耗时；隧道建好但上游一字节都没回时记 -1（典型的“连上了却卡住”）。

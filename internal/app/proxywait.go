@@ -21,9 +21,11 @@ func (a *App) proxyWait() *proxywait.Waiter {
 		a.pw = proxywait.New(proxyWaitSchedule)
 		pw := a.pw
 		dialer.OnProxyDialError(pw.Kick)
+		dialer.OnProxyTransientRetry(pw.Ready)
 		a.pw.OnReady(func() {
 			a.SyncGrok()
 			a.SyncCodex()
+			a.SyncAntigravity()
 			if a.updPending.Swap(false) && a.upd != nil {
 				slog.Info("代理已就绪，补做推迟的自动检查更新", logx.FileOnly)
 				go func() {

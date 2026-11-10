@@ -212,3 +212,31 @@ func TestBadRequestKind(t *testing.T) {
 		t.Fatal("kinds")
 	}
 }
+
+func TestBridgeNameAntigravity(t *testing.T) {
+	var b Bridge
+	b.key = "antigravity\nhttp://127.0.0.1:1"
+	if b.name() != "antigravity" {
+		t.Fatalf("got %q", b.name())
+	}
+	b.key = "codex\nhttp://127.0.0.1:1"
+	if b.name() != "codex" {
+		t.Fatalf("got %q", b.name())
+	}
+	b.key = "http://127.0.0.1:1"
+	if b.name() != "grok" {
+		t.Fatalf("got %q", b.name())
+	}
+}
+
+func TestAntigravityFamily(t *testing.T) {
+	if !antigravityFamily("oauth2.googleapis.com") || !antigravityFamily("antigravity-unleash.goog") {
+		t.Fatal("expected google official hosts")
+	}
+	if !antigravityFamily("antigravity-hub-auto-updater-1.us-central1.run.app") {
+		t.Fatal("expected cloud run updater")
+	}
+	if antigravityFamily("api2.cursor.sh") || antigravityFamily("api.x.ai") || antigravityFamily("example.com") {
+		t.Fatal("non-antigravity hosts must stay out")
+	}
+}

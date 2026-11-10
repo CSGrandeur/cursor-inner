@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"cursor-inner/internal/antigravitylaunch"
 	"cursor-inner/internal/codexbot"
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/selfupdate"
@@ -39,6 +40,7 @@ func recoverAfterExit(dir string, pid int) {
 var (
 	watchGrokClose  = grokbot.Close
 	watchCodexClose = codexbot.Close
+	watchAntiClose  = antigravitylaunch.Close
 )
 
 // closeManagedApps 关掉带本程序代理参数的 Grok Bot / Codex（只在对应接管标记存在时）。
@@ -52,6 +54,11 @@ func closeManagedApps(dir string) {
 	if _, err := os.Stat(filepath.Join(dir, "codex.managed")); err == nil {
 		if ok, _ := watchCodexClose(MarkProxy(dir, "codex.managed")); ok {
 			closed = append(closed, "codex")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "antigravity.managed")); err == nil {
+		if ok, _ := watchAntiClose(MarkProxy(dir, "antigravity.managed")); ok {
+			closed = append(closed, "antigravity")
 		}
 	}
 	NoteRestore(dir, closed...)

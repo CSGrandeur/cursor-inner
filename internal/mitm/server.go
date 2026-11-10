@@ -434,32 +434,8 @@ func (s *Server) bidi(w http.ResponseWriter, r *http.Request) {
 			route = hb
 		}
 	}
-	if route.RequestID == "" {
-		if err == nil {
-			// 客户端回合结束后约 90 秒会用同一条 run 发 resume：新请求带 X-Original-Request-Id。
-			// 别把它当成新的一轮再调一次模型——那会覆盖用户已经看到的回答和思考。
-			original := r.Header.Get("X-Original-Request-Id")
-			if original != "" {
-				if newID, _, perr := protox.DecodeBidi(plain); perr == nil {
-					if s.hub.NoteResume(original, newID) {
-						slog.Debug("BidiAppend resume", "original", original, "request", newID)
-						// 必须继续走 Bidi：把 resume/后台任务等新动作 adopt 进原会话。
-						// 只挂槽位的话，HasQueuedInput 续跑仍用上一轮 UserMessageAction。
-						if r2, berr := s.hub.Bidi(plain); berr == nil {
-							route = r2
-						} else {
-							route = agent.Route{RequestID: newID, ModelID: "", Local: true}
-							err = berr
-						}
-					}
-				}
-			}
-		}
-	}
-	if route.RequestID == "" {
-		if err == nil {
-			route, err = s.hub.Bidi(plain)
-		}
+	if route.RequestID == "" && err == nil {
+		route, err = s.hub.BidiWithOriginal(plain, r.Header.Get("X-Original-Request-Id"))
 	}
 	if err != nil {
 		slog.Debug("BidiAppend 解析失败，转发官方", "error", err)

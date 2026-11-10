@@ -42,6 +42,7 @@ type App struct {
 	shutdown    sync.Once
 	bridge      grokbot.Bridge
 	codexBridge grokbot.Bridge
+	antiBridge  grokbot.Bridge
 	tun         *tunnel.Manager
 	upd         *selfupdate.Updater
 	frozen      atomic.Bool
@@ -153,18 +154,19 @@ func (a *App) State() (web.View, error) {
 	spec, on, perr := dialer.EffectiveAddress(cfg.Proxy)
 	_ = spec
 	view := web.View{
-		ListenURL:      a.listenURL(),
-		Takeover:       cfg.Takeover,
-		TakeoverGrok:   cfg.TakeoverGrok,
-		TakeoverCodex:  cfg.TakeoverCodex,
-		TakeoverActive: snap.Active,
-		MitmURL:        snap.URL,
-		CA:             snap.CA,
-		CADetail:       snap.Detail,
-		LastError:      snap.Problem,
-		CatalogWarning: snap.Warning,
-		Autostart:      a.boot.Current(a.exe),
-		Desktop:        a.desktopView(cfg),
+		ListenURL:           a.listenURL(),
+		Takeover:            cfg.Takeover,
+		TakeoverGrok:        cfg.TakeoverGrok,
+		TakeoverCodex:       cfg.TakeoverCodex,
+		TakeoverAntigravity: cfg.TakeoverAntigravity,
+		TakeoverActive:      snap.Active,
+		MitmURL:             snap.URL,
+		CA:                  snap.CA,
+		CADetail:            snap.Detail,
+		LastError:           snap.Problem,
+		CatalogWarning:      snap.Warning,
+		Autostart:           a.boot.Current(a.exe),
+		Desktop:             a.desktopView(cfg),
 	}
 	view.Proxy.Enabled = cfg.Proxy.Enabled
 	view.Proxy.Address = cfg.Proxy.Address
@@ -245,6 +247,15 @@ func (a *App) SetTakeover(target string, enabled bool) error {
 		}
 		a.SyncCodex()
 		return nil
+	case "antigravity":
+		if err := a.store.Update(func(f *config.File) error {
+			f.TakeoverAntigravity = enabled
+			return nil
+		}); err != nil {
+			return err
+		}
+		a.SyncAntigravity()
+		return nil
 	default:
 		return i18n.E("未知的接管目标", "Unknown takeover target")
 	}
@@ -269,6 +280,7 @@ func (a *App) SetProxy(enabled bool, address string) error {
 	a.WatchProxy()
 	a.SyncGrok()
 	a.SyncCodex()
+	a.SyncAntigravity()
 	return nil
 }
 
@@ -289,6 +301,7 @@ func (a *App) SetProxyScope(scope string) error {
 	}
 	slog.Info("代理范围已切换", "scope", scope)
 	a.SyncGrok()
+	a.SyncAntigravity()
 	return nil
 }
 

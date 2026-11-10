@@ -27,8 +27,8 @@ const (
 	argFailLimit      = 3
 	heartbeatInterval = 5 * time.Second
 	contextTimeout    = 15 * time.Second
-	toolStopped       = "The tool did not finish within the time limit and was stopped. Do not retry the same call. Use a different approach."
-	shellLeftRunning  = "The shell client stopped reporting before the foreground wait ended. The command was not stopped. Check the terminal before starting it again."
+	toolStopped       = "No execution result arrived within the wait limit. An abort was requested, but termination is not confirmed. Check the execution state before retrying."
+	shellLeftRunning  = "No terminal shell result arrived within the foreground wait. Execution state is unknown; the command may still be running. It was not stopped by this wait. Check the terminal before retrying."
 	taskLeftRunning   = "The subagent did not return before the wait ended. It was not stopped. Continue without its result or resume it."
 	replyStopped      = "The user did not respond in time. Continue without that answer."
 	replyWait         = 10 * time.Minute
@@ -37,12 +37,22 @@ const (
 // maxSteps 是一轮里连续调用工具的上限。到上限不报错：告诉用户已暂停、发检查点并正常结束这一轮，
 // 用户说“继续”就能接着做。原来 50 步就报错，长任务做着做着无声停下；200 步对长任务又太紧，
 // Claude Code / Codex 这类交互式 agent 不按步数截断，只在用户按停止时结束。这里放到 1000，
-// 真正的死循环交给 loopTracker，时间和成本用 turnBudget 兜底。测试可以改小。
+// 真正的死循环交给 loopTracker。测试可以改小。
 var maxSteps = 1000
 
-// turnBudget 是一轮最多跑多久。到点像步数到上限那样暂停并写检查点，用户说“继续”再开一轮。
-// 按时间兜底比按步数更贴近长任务：干活的一轮可以跑很久，跑飞的一轮有时间上限。
-var turnBudget = 45 * time.Minute
+// turnBudget 是一轮可选的墙钟上限。默认 0：不按固定时长暂停，让仍在推进的长任务继续。
+// 大于 0 时，到点像步数上限那样暂停并写检查点，用户说“继续”再开一轮。
+// 取消、网络超时、卡死和循环仍由 ctx 取消、请求超时、步数上限和 loopTracker 独立处理。
+// 测试可以改成很短的预算，并用 now 推进时钟，不必真等。
+var turnBudget time.Duration
+
+// now 返回当前时间。测试可替换，用来推进墙钟而不必真等预算走完。
+var now = time.Now
+
+// overTurnBudget 报告这一轮是否已经达到时间预算。budget <= 0 表示不设墙钟上限。
+func overTurnBudget(started time.Time, budget time.Duration, at time.Time) bool {
+	return budget > 0 && !at.Before(started.Add(budget))
+}
 
 // turnLockWait 是新一轮等同一会话上一轮存完历史的上限。取消后的一轮通常几秒内退出。
 var turnLockWait = 2 * time.Minute
@@ -92,6 +102,7 @@ type Session struct {
 	Proxy            config.Proxy   // 出站代理设置，供备用模型按各自“走代理”开关拨号
 	Fallbacks        []config.Model // 流式前失败时的备用模型
 	Web              dialer.Func    // 联网工具（WebFetch、WebSearch、出图）按全局出站代理拨号
+	stateMu          sync.Mutex     // serialize adoption with starting a model runner
 	run              *cursorpb.AgentRunRequest
 	history          *History
 	inbox            chan *cursorpb.ExecClientMessage
@@ -99,6 +110,7 @@ type Session struct {
 	stopped          chan struct{}
 	nextID           uint32
 	inflight         []uint32
+	execs            sync.Map // numeric id -> exec_id, published before transport send
 	argFails         map[string]int
 	silentTools      int
 	terminals        string
@@ -329,6 +341,8 @@ func (s *Session) deliver(msg *cursorpb.ExecClientMessage) {
 
 // ConversationID 是这条 run 所属的会话，用于按会话找回已经答完的 run。
 func (s *Session) ConversationID() string {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
 	if s.run == nil {
 		return ""
 	}
@@ -338,6 +352,11 @@ func (s *Session) ConversationID() string {
 // adopt 接住一条 resume 的 run request。会话已经答完，这时没有别的 goroutine 在读它。
 // resume 偶尔不带会话 id 或模型，缺的沿用上一轮的，否则接着跑的那一轮会读不到历史。
 func (s *Session) adopt(run *cursorpb.AgentRunRequest) {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	if s.Running() || !s.Finished() {
+		return
+	}
 	if run == nil || run.GetAction() == nil {
 		return
 	}
@@ -445,17 +464,27 @@ func (s *Session) Replay() ([]*cursorpb.AgentServerMessage, error) {
 }
 
 func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr error) {
-	s.running.Add(1)
-	defer s.running.Add(-1)
+	s.stateMu.Lock()
+	if !s.running.CompareAndSwap(0, 1) {
+		s.stateMu.Unlock()
+		return errors.New("session already has a live model runner")
+	}
+	s.finished.Store(false)
+	s.stateMu.Unlock()
+	defer s.running.Store(0)
+	defer s.execs.Clear()
 	defer s.finished.Store(true)
 	// 已经答完的 run 被 resume 时会在同一个会话上再跑一轮（例如后台任务完成），
-	// 先清掉上一轮的结束标记和自动压缩记录，否则这一轮会被当成“已经结束”或被跳过压缩。
-	s.finished.Store(false)
+	// 结束标记已在启动锁内清掉；这里重置自动压缩记录，避免沿用上一轮的压缩状态。
 	s.autoSummarized = false
 	s.dial = dial
-	turnStarted := time.Now()
+	turnStarted := now()
 	var mu sync.Mutex
 	send := func(m *cursorpb.AgentServerMessage) error {
+		if exec := m.GetExecServerMessage(); exec != nil {
+			s.execs.Store(exec.GetId(), exec.GetExecId())
+			slog.Debug("exec dispatched", "session", s.RequestID, "id", exec.GetId(), "exec", exec.GetExecId())
+		}
 		noteClient(s.RequestID, m)
 		mu.Lock()
 		defer mu.Unlock()
@@ -527,10 +556,16 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		slog.Warn(fmt.Sprintf("会话 %s 的上一轮 %s 内没有结束，按已保存的历史开始", s.RequestID, turnLockWait))
 	}
 	messages := s.history.Load(conversation)
-	if restored, err := s.restoreFromRequest(ctx, send, conversation); err != nil {
+	restored, err := s.restoreFromRequest(ctx, send, conversation)
+	if err != nil {
 		return err
-	} else if restored != nil {
+	}
+	if restored != nil && preferRestoredHistory(messages, restored, plan.user) {
 		messages = restored
+	} else if restored != nil && staleUserAlreadySuperseded(messages, userShownText(plan.user)) {
+		// 请求带着更短的旧状态和已被超过的旧用户句：保留磁盘历史，且不要把旧句再追加成最新指令。
+		// 当前完整历史上有意重提同一句话时，请求状态并不更短，不会走到这里，仍会追加。
+		plan.skipStaleUser = true
 	}
 	summarizeOnly := plan.summarize
 	user := plan.user
@@ -628,17 +663,16 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	}
 next:
 	for step := 0; step < maxSteps; step++ {
-		if turnBudget > 0 {
-			if elapsed := time.Since(turnStarted); elapsed >= turnBudget {
-				slog.Debug("一轮跑满时间预算，暂停", "conversation", short, "elapsed_s", int(elapsed.Seconds()), "budget_s", int(turnBudget.Seconds()))
-				closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(turnBudgetNotice, int(elapsed.Minutes()), int(turnBudget.Minutes())))
-				messages = closed
-				if err != nil {
-					return err
-				}
-				sentCheckpoint = true
-				return nil
+		if overTurnBudget(turnStarted, turnBudget, now()) {
+			elapsed := now().Sub(turnStarted)
+			slog.Debug("一轮跑满时间预算，暂停", "conversation", short, "elapsed_s", int(elapsed.Seconds()), "budget_s", int(turnBudget.Seconds()))
+			closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(turnBudgetNotice, int(elapsed.Minutes()), int(turnBudget.Minutes())))
+			messages = closed
+			if err != nil {
+				return err
 			}
+			sentCheckpoint = true
+			return nil
 		}
 		var err error
 		messages, _, err = s.drainSteer(send, messages)
@@ -1032,7 +1066,6 @@ func (s *Session) ask(ctx context.Context, send Emit, call provider.ToolCall, qu
 	}
 	if errors.Is(err, errBreak) {
 		slog.Info("等待用户回答时收到新消息，跳过提问继续这一轮", "conversation", s.RequestID, "tool", call.Name)
-		_ = send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}}))
 		return toolOutcome{}, err
 	}
 	if err != nil {
@@ -1067,6 +1100,33 @@ func userTurns(messages []provider.Message) int {
 		}
 	}
 	return n
+}
+
+// preferRestoredHistory 决定请求里的 ConversationState 要不要替换磁盘历史。
+// 客户端回放更早的检查点并带上新问题（真回退）时用请求状态；若请求带着磁盘里已经被后一条用户消息超过的旧用户句，则保留更长的磁盘历史，避免取消后一轮把刚保存的进展和最新用户消息滚回去（2026-11-10：469 条历史被替换成 416）。
+func preferRestoredHistory(disk, restored []provider.Message, newUser *cursorpb.UserMessage) bool {
+	if len(restored) == 0 {
+		return false
+	}
+	if len(disk) == 0 {
+		return true
+	}
+	diskUsers, restoredUsers := userTurns(disk), userTurns(restored)
+	if restoredUsers > diskUsers || (restoredUsers == diskUsers && len(restored) >= len(disk)) {
+		return true
+	}
+	if newUser == nil {
+		return false
+	}
+	return !staleUserAlreadySuperseded(disk, userShownText(newUser))
+}
+
+func userShownText(user *cursorpb.UserMessage) string {
+	if user == nil {
+		return ""
+	}
+	shown, _ := splitSystemReminders(user.GetText())
+	return strings.TrimSpace(shown)
 }
 
 func conversationID(id string) string {
@@ -1178,8 +1238,10 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 			}
 			if done {
 				s.untrack(exec.GetId())
-				if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
-					return toolOutcome{}, err
+				if ui.GetShellToolCall() == nil || ui.GetShellToolCall().GetResult().GetResult() != nil {
+					if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
+						return toolOutcome{}, err
+					}
 				}
 				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "done", ElapsedMs: time.Since(started).Milliseconds(), Bytes: len(text)})
 				if !isErr {
@@ -1333,11 +1395,9 @@ func gaveUp(err error, parent context.Context) bool {
 }
 
 func (s *Session) stopTool(send Emit, call provider.ToolCall, ui *cursorpb.ToolCall, text string) (toolOutcome, error) {
-	if ui != nil {
-		if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
-			return toolOutcome{}, err
-		}
-	}
+	// This is a local observation timeout, not a client terminal result. Do not
+	// emit ToolCallCompleted: the UI must not turn missing execution data into Ran.
+	slog.Debug("tool result unconfirmed", "session", s.RequestID, "tool", call.Name, "call", call.ID)
 	return toolOutcome{call: call, text: text, isErr: true, card: ui}, nil
 }
 
@@ -1355,6 +1415,7 @@ func (s *Session) track(id uint32) {
 }
 
 func (s *Session) untrack(id uint32) {
+	s.execs.Delete(id)
 	kept := s.inflight[:0]
 	for _, have := range s.inflight {
 		if have != id {
@@ -1397,6 +1458,7 @@ func (s *Session) requestContext(ctx context.Context, send Emit) (*cursorpb.Requ
 	waitCtx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 	msg, err := s.await(waitCtx, id)
+	s.execs.Delete(id)
 	if err != nil {
 		return nil, err
 	}

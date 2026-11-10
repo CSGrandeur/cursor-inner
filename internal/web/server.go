@@ -326,6 +326,13 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
+	mux.HandleFunc("POST /api/antigravity", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.OpenAntigravity(); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("POST /api/logs", func(w http.ResponseWriter, r *http.Request) {
 		if err := backend.OpenLogs(); err != nil {
 			writeErr(w, http.StatusNotFound, err)

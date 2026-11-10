@@ -41,7 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'antigravity.google.com', 'antigravity-unleash.goog', 'googleapis.com', 'googleusercontent.com', 'gstatic.com', 'accounts.google.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
@@ -51,7 +51,8 @@ $OfficialHosts = @(
   'cursor.sh', 'api1.cursor.sh', 'api2.cursor.sh', 'api3.cursor.sh', 'api4.cursor.sh', 'api5.cursor.sh', 'repo42.cursor.sh', 'metrics.cursor.sh', 'prod.authentication.cursor.sh',
   'marketplace.cursorapi.com', 'cursor-cdn.com', 'anysphere.co',
   'openai.com', 'api.openai.com', 'auth.openai.com', 'chatgpt.com', 'ab.chatgpt.com', 'chat.openai.com',
-  'oaistatic.com', 'cdn.oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com'
+  'oaistatic.com', 'cdn.oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com',
+  'antigravity.google', 'antigravity.google.com', 'googleapis.com', 'oauth2.googleapis.com', 'accounts.google.com', 'gstatic.com'
 )
 foreach ($region in 'us', 'eu', 'ap') { foreach ($n in 1..30) { $OfficialHosts += "$region$n.cursorvm.com" } }
 $OfficialHosts += $OfficialExactHosts

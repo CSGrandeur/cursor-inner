@@ -63,6 +63,16 @@ func Probe(ctx context.Context, m config.Model, dial dialer.Func, progress func(
 			}
 		}
 	}
+	if DetectFamily(m) == FamilyKimi {
+		if c, o := kimiVariantLimits(m.Model); c > 0 {
+			if m.ContextWindow <= 0 {
+				m.ContextWindow = c
+			}
+			if m.MaxOutputTokens <= 0 {
+				m.MaxOutputTokens = o
+			}
+		}
+	}
 	if m.ContextWindow <= 0 && profile.DefaultContext > 0 {
 		m.ContextWindow = profile.DefaultContext
 	}

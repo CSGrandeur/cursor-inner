@@ -316,6 +316,16 @@ func encodeTurnSteps(turn []provider.Message) ([][]byte, error) {
 				call.Name = names[message.ToolCallID]
 			}
 			card := message.Card
+			if message.IsError && card != nil && ((card.GetShellToolCall() != nil && card.GetShellToolCall().GetResult() == nil) || (card.GetTaskToolCall() != nil && card.GetTaskToolCall().GetResult() == nil)) {
+				// A bridge wait timeout has no shell exit/background acknowledgement.
+				// Preserve the diagnostic, not a resultless card rendered as Ran.
+				raw, err := proto.Marshal(&cursorpb.ConversationStep{Message: &cursorpb.ConversationStep_AssistantMessage{AssistantMessage: &cursorpb.AssistantMessage{Text: message.Content}}})
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, raw)
+				continue
+			}
 			if card == nil {
 				synthesized, err := synthesizeCard(call, message.Content, message.IsError)
 				if err != nil {

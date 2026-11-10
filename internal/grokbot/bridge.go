@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"cursor-inner/internal/connlog"
+	"cursor-inner/internal/official"
 	"cursor-inner/internal/selfupdate"
 )
 
@@ -211,7 +212,7 @@ func (b *Bridge) handle(c net.Conn) {
 	if err != nil {
 		b.stats.dialFailed(target, err)
 		rec.closedBy, rec.reason = "dial", sanitizeErr(err)
-		slog.Warn("Grok 代理桥没能经代理连上目标，已拒绝（不会直连）", "target", target, "error", sanitizeErr(err))
+		slog.Warn(b.name()+" 代理桥没能经代理连上目标，已拒绝（不会直连）", "target", target, "error", sanitizeErr(err))
 		_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
 		return
 	}
@@ -278,6 +279,14 @@ func (b *Bridge) logConn(r *connRec) {
 		"up", r.toUp, "down", r.toClient, "closed_by", r.closedBy}
 	if r.reason != "" {
 		attrs = append(attrs, "reason", r.reason)
+	}
+	if host := hostOf(r.target); host != "" {
+		if official.MustProxy(host) {
+			attrs = append(attrs, "official", true)
+		}
+		if antigravityFamily(host) {
+			attrs = append(attrs, "family", "antigravity")
+		}
 	}
 	if detailOn() {
 		var ttfb time.Duration
@@ -363,4 +372,25 @@ func (br *Bridge) pipe(client, up net.Conn) pipeResult {
 		}
 	}
 	return res
+}
+
+// antigravityFamily 标出反重力相关官方主机，方便在混杂的 bridge conn 里过滤。
+// 只根据主机名判断，不读请求内容。
+func antigravityFamily(host string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if h == "" || !official.Name(h) {
+		return false
+	}
+	switch {
+	case strings.HasSuffix(h, ".googleapis.com"), h == "googleapis.com",
+		strings.HasSuffix(h, ".googleusercontent.com"), h == "googleusercontent.com",
+		strings.HasSuffix(h, ".gstatic.com"), h == "gstatic.com",
+		h == "accounts.google.com",
+		strings.HasSuffix(h, ".antigravity.google"), h == "antigravity.google",
+		strings.HasSuffix(h, ".antigravity.google.com"), h == "antigravity.google.com",
+		strings.HasSuffix(h, ".antigravity-unleash.goog"), h == "antigravity-unleash.goog",
+		strings.HasSuffix(h, ".run.app") && strings.HasPrefix(strings.SplitN(h, ".", 2)[0], "antigravity-"):
+		return true
+	}
+	return false
 }

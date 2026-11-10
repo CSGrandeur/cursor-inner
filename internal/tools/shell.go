@@ -31,20 +31,34 @@ func startShell(id uint32, call provider.ToolCall, a args) (*cursorpb.ExecServer
 		timeout = foregroundMaxMs
 	}
 	threshold := uint64(40_000)
+	parsing := shellParsing(command)
+	description := a.optStr("description")
+	if description == nil {
+		summary := shellDescription(parsing)
+		description = &summary
+	}
 	shell := &cursorpb.ShellArgs{
 		Command:                  command,
 		WorkingDirectory:         stringOr(a, "working_directory"),
 		Timeout:                  timeout,
 		ToolCallId:               call.ID,
 		SimpleCommands:           []string{strings.TrimSpace(command)},
-		ParsingResult:            shellParsing(command),
+		ParsingResult:            parsing,
 		RequestedSandboxPolicy:   shellSandbox(a),
 		FileOutputThresholdBytes: &threshold,
 		TimeoutBehavior:          cursorpb.TimeoutBehavior_TIMEOUT_BEHAVIOR_BACKGROUND,
-		Description:              a.optStr("description"),
+		Description:              description,
 		CloseStdin:               true,
 		OutputNotification:       shellNotification(a),
 		SmartModeApproval:        shellApproval(call.ID, a),
+	}
+	for _, redirect := range parsing.GetRedirects() {
+		if strings.Contains(redirect.GetOperator(), "<") {
+			shell.HasInputRedirect = true
+		}
+		if strings.Contains(redirect.GetOperator(), ">") {
+			shell.HasOutputRedirect = true
+		}
 	}
 	exec := &cursorpb.ExecServerMessage{
 		Id:      id,
@@ -77,22 +91,6 @@ func shellWait(blockUntilMs int32) time.Duration {
 		return 45 * time.Second
 	}
 	return wait
-}
-
-func shellParsing(command string) *cursorpb.ShellCommandParsingResult {
-	fields := strings.Fields(command)
-	if len(fields) == 0 {
-		return nil
-	}
-	args := make([]*cursorpb.ShellCommandParsingResult_ExecutableCommandArg, 0, len(fields)-1)
-	for _, field := range fields[1:] {
-		args = append(args, &cursorpb.ShellCommandParsingResult_ExecutableCommandArg{Type: "word", Value: field})
-	}
-	return &cursorpb.ShellCommandParsingResult{ExecutableCommands: []*cursorpb.ShellCommandParsingResult_ExecutableCommand{{
-		Name:     fields[0],
-		Args:     args,
-		FullText: strings.TrimSpace(command),
-	}}}
 }
 
 func shellSandbox(a args) *cursorpb.SandboxPolicy {
@@ -299,7 +297,14 @@ func shellText(result *cursorpb.ShellResult) (string, bool) {
 		}
 		return shellStreams(v.Success.GetStdout(), v.Success.GetStderr()), false
 	case *cursorpb.ShellResult_Failure:
-		return shellStreams(v.Failure.GetStdout(), v.Failure.GetStderr()), true
+		status := fmt.Sprintf("shell exited with code %d", v.Failure.GetExitCode())
+		if v.Failure.GetAborted() {
+			status = "shell was aborted"
+		}
+		if output := shellStreams(v.Failure.GetStdout(), v.Failure.GetStderr()); output != "shell completed without output" {
+			status += "\n" + output
+		}
+		return status, true
 	case *cursorpb.ShellResult_Timeout:
 		return fmt.Sprintf("shell timed out after %dms in %s", v.Timeout.GetTimeoutMs(), v.Timeout.GetWorkingDirectory()), true
 	case *cursorpb.ShellResult_Rejected:

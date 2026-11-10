@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,13 +13,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
+	"cursor-inner/internal/config"
 	"cursor-inner/internal/i18n"
 
 	"golang.org/x/net/proxy"
-
-	"cursor-inner/internal/config"
 )
 
 type Func func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -140,11 +141,12 @@ func FromProxy(p config.Proxy) (Func, error) {
 		return nil, err
 	}
 	base := &net.Dialer{Timeout: 20 * time.Second, KeepAlive: 30 * time.Second}
+	fwd := &proxyForward{base: base}
 	switch u.Scheme {
 	case "http", "https":
-		return reportFailures(httpProxy(u, base)), nil
+		return reportFailures(httpProxy(u, fwd)), nil
 	}
-	d, err := proxy.FromURL(u, base)
+	d, err := proxy.FromURL(u, fwd)
 	if err != nil {
 		return nil, i18n.Wrap("代理不可用：", "Proxy unavailable: ", err)
 	}
@@ -158,19 +160,98 @@ func FromProxy(p config.Proxy) (Func, error) {
 
 var proxyFailHook atomic.Pointer[func()]
 
+// proxyRetryGate：为真才对本机代理端口拒连做短重试。nil 表示允许。
+// 接到 proxywait 的 Ready 后，Waiting/Down 时不再空耗重试预算。
+var proxyRetryGate atomic.Pointer[func() bool]
+
+// 本机 SOCKS/HTTP 代理端口短暂不可用（手动切节点、热重载、闪断）时的短重试。
+// 只包“连上代理端口”这一跳；上游 reset/拒连不走这里，也绝不改成直连。
+var (
+	proxyRetryGap    = 200 * time.Millisecond
+	proxyRetryBudget = 1200 * time.Millisecond
+)
+
 // OnProxyDialError 注册经代理拨号失败时的回调（只是提示去复查代理是否还在监听，不改路由）。
 func OnProxyDialError(fn func()) { proxyFailHook.Store(&fn) }
+
+// OnProxyTransientRetry 注册是否允许对本机代理端口拒连短重试（通常接 proxywait.Ready）。
+func OnProxyTransientRetry(fn func() bool) { proxyRetryGate.Store(&fn) }
 
 func reportFailures(d Func) Func {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		c, err := d(ctx, network, addr)
 		if err != nil && ctx.Err() == nil {
-			if fn := proxyFailHook.Load(); fn != nil {
-				(*fn)()
-			}
+			kickProxyFail()
 		}
 		return c, err
 	}
+}
+
+func kickProxyFail() {
+	if fn := proxyFailHook.Load(); fn != nil {
+		(*fn)()
+	}
+}
+
+func proxyAllowsTransientRetry() bool {
+	if fn := proxyRetryGate.Load(); fn != nil {
+		return (*fn)()
+	}
+	return true
+}
+
+// proxyForward 把“拨到代理进程本身”的 TCP 包上短重试，再交给 socks/http 握手。
+type proxyForward struct{ base *net.Dialer }
+
+func (f *proxyForward) Dial(network, addr string) (net.Conn, error) {
+	return f.DialContext(context.Background(), network, addr)
+}
+
+func (f *proxyForward) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return dialProxyTCP(ctx, f.base, network, addr)
+}
+
+// dialProxyTCP 只在连不上代理监听端口（connection refused）时短重试；期间 Kick 看护。
+// 其它错误立刻返回。官方流量失败时仍然只等代理，不会直连。
+func dialProxyTCP(ctx context.Context, base *net.Dialer, network, addr string) (net.Conn, error) {
+	start := time.Now()
+	for {
+		c, err := proxyTCPDial(ctx, base, network, addr)
+		if err == nil {
+			return c, nil
+		}
+		if ctx.Err() != nil || !isProxyPortRefused(err) || !proxyAllowsTransientRetry() {
+			return nil, err
+		}
+		kickProxyFail()
+		if time.Since(start) >= proxyRetryBudget {
+			return nil, err
+		}
+		timer := time.NewTimer(proxyRetryGap)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+// proxyTCPDial 可在测试里替换，模拟端口先拒连再恢复。
+var proxyTCPDial = func(ctx context.Context, base *net.Dialer, network, addr string) (net.Conn, error) {
+	return base.DialContext(ctx, network, addr)
+}
+
+func isProxyPortRefused(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return true
+	}
+	s := strings.ToLower(err.Error())
+	// Windows connectex: "... actively refused ..."；Unix: "connection refused"
+	return strings.Contains(s, "connection refused") || strings.Contains(s, "actively refused")
 }
 
 func bareHost(address string) (string, error) {
@@ -229,7 +310,7 @@ func classify(host string) (string, error) {
 	return scheme, nil
 }
 
-func httpProxy(u *url.URL, base *net.Dialer) Func {
+func httpProxy(u *url.URL, fwd proxy.ContextDialer) Func {
 	if u.Scheme == "https" {
 		return func(context.Context, string, string) (net.Conn, error) {
 			return nil, i18n.E("https 代理还不能用，请改成 http 或 socks5", "An https proxy is not available yet. Use http or socks5.")
@@ -239,7 +320,7 @@ func httpProxy(u *url.URL, base *net.Dialer) Func {
 		if network != "tcp" {
 			return nil, i18n.E("http 代理只支持 tcp", "The http proxy only supports tcp")
 		}
-		conn, err := base.DialContext(ctx, "tcp", u.Host)
+		conn, err := fwd.DialContext(ctx, "tcp", u.Host)
 		if err != nil {
 			return nil, err
 		}

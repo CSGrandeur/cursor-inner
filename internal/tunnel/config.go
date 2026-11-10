@@ -95,7 +95,7 @@ func Config(o Options) ([]byte, error) {
 		"dns": map[string]any{
 			"servers": dnsServers,
 			"rules": []any{
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "server": "dns-fake"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater"}, "server": "dns-fake"},
 			},
 			"final":    localTag,
 			"strategy": "prefer_ipv4",
@@ -121,7 +121,7 @@ func Config(o Options) ([]byte, error) {
 				map[string]any{"action": "sniff"},
 				map[string]any{"protocol": "dns", "action": "hijack-dns"},
 				map[string]any{"inbound": "tun-in", "ip_cidr": []string{fake4, fake6}, "outbound": "proxy"},
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "outbound": "proxy"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater"}, "outbound": "proxy"},
 			},
 			"final":                   "direct",
 			"auto_detect_interface":   true,

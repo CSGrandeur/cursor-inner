@@ -31,7 +31,7 @@ func TestProxyDialFailureNotifiesAndNeverGoesDirect(t *testing.T) {
 			t.Fatalf("%s: dial through a closed proxy must fail, not go direct", spec)
 		}
 	}
-	if n.Load() != 2 {
-		t.Fatalf("hook calls=%d want 2", n.Load())
+	if n.Load() < 2 {
+		t.Fatalf("hook calls=%d want at least 2", n.Load())
 	}
 }

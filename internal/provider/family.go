@@ -40,7 +40,7 @@ type Profile struct {
 var profiles = map[Family]Profile{
 	FamilyDeepSeek: {Family: FamilyDeepSeek, ReasoningEcho: true, EmptyReasoning: " ", SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 128000, DefaultMaxOut: 8192},
 	FamilyQwen:     {Family: FamilyQwen, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 262144, DefaultMaxOut: 32768, ParallelToolCalls: true, ThinkTagSplit: true},
-	FamilyKimi:     {Family: FamilyKimi, ReasoningEcho: true, EmptyReasoning: " ", SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 128000, DefaultMaxOut: 8192},
+	FamilyKimi:     {Family: FamilyKimi, ReasoningEcho: true, EmptyReasoning: " ", SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 262144, DefaultMaxOut: 8192},
 	FamilyGLM:      {Family: FamilyGLM, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: false, DefaultContext: 128000, DefaultMaxOut: 4096},
 	FamilyGemini:   {Family: FamilyGemini, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 1000000, DefaultMaxOut: 8192},
 	FamilyGPT:      {Family: FamilyGPT, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 128000, DefaultMaxOut: 16384},
@@ -130,6 +130,8 @@ func qwenVariantLimits(model string) (contextWindow, maxOut int) {
 		n = n[:i]
 	}
 	switch {
+	case strings.HasPrefix(n, "qwen4"): // qwen-code: 1M is the forward default for qwen4
+		return 1000000, 65536
 	case strings.HasPrefix(n, "qwen3-coder-plus"), strings.HasPrefix(n, "qwen3-coder-flash"):
 		return 1000000, 65536
 	case strings.HasPrefix(n, "qwen3-coder"):
@@ -144,6 +146,32 @@ func qwenVariantLimits(model string) (contextWindow, maxOut int) {
 		return 131072, 32768
 	case strings.HasPrefix(n, "qwen"):
 		return 262144, 32768
+	}
+	return 0, 0
+}
+
+var reKimiK3 = regexp.MustCompile(`(?:^|[^a-z0-9])(?:kimi-)?k3(?:[.-]|$)`)
+
+// kimiVariantLimits 按模型名给出 Kimi/Moonshot 各变体的输入上下文与单次输出上限
+// （对齐 qwen-code tokenLimits：K3 一代 1M/128K，k3-256k 仍 256K，K2.5 输出 32K，其余 Kimi 256K/8K）。
+// 不是 Kimi 时返回 0,0。用户已显式设置的窗口/输出优先，不被覆盖。
+func kimiVariantLimits(model string) (contextWindow, maxOut int) {
+	n := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(n, "/"); i >= 0 {
+		n = n[i+1:]
+	}
+	if i := strings.Index(n, ":"); i >= 0 {
+		n = n[:i]
+	}
+	switch {
+	case n == "k3-256k" || n == "kimi-k3-256k":
+		return 262144, 8192
+	case reKimiK3.MatchString(n) || strings.HasPrefix(n, "kimi-k3") || strings.HasPrefix(n, "k3."):
+		return 1000000, 131072
+	case strings.Contains(n, "kimi-k2.5") || strings.Contains(n, "kimi-k2-5") || strings.HasPrefix(n, "k2.5") || strings.HasPrefix(n, "k2-5"):
+		return 262144, 32768
+	case strings.HasPrefix(n, "kimi") || strings.HasPrefix(n, "moonshot"):
+		return 262144, 8192
 	}
 	return 0, 0
 }

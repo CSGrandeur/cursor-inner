@@ -3,6 +3,7 @@ package app
 import (
 	"log/slog"
 
+	"cursor-inner/internal/antigravitylaunch"
 	"cursor-inner/internal/codexbot"
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/grokbot"
@@ -15,11 +16,14 @@ import (
 var (
 	grokClose           = grokbot.Close
 	codexClose          = codexbot.Close
+	antiClose           = antigravitylaunch.Close
 	grokManagedRunning  = grokbot.ManagedRunning
 	codexManagedRunning = codexbot.ManagedRunning
+	antiManagedRunning  = antigravitylaunch.ManagedRunning
 	cursorRunning       = takeover.CursorRunning
 	grokOpen            = func(a *App) error { return a.OpenGrok() }
 	codexOpen           = func(a *App) error { return a.OpenCodex() }
+	antiOpen            = func(a *App) error { return a.OpenAntigravity() }
 )
 
 // closeManaged 在 cursor-inner 退出时关掉它接管的 Grok Bot 与 Codex，并记下以便下次一键恢复。
@@ -48,6 +52,15 @@ func (a *App) closeManaged() {
 			closed = append(closed, "codex")
 		}
 	}
+	if a.ownsMark("antigravity.managed") {
+		ok, err := antiClose(a.markProxy("antigravity.managed"))
+		if err != nil {
+			slog.Warn("退出时没能关掉 Antigravity：" + err.Error())
+		}
+		if ok {
+			closed = append(closed, "antigravity")
+		}
+	}
 	takeover.NoteRestore(a.store.Dir(), closed...)
 }
 
@@ -64,6 +77,9 @@ func (a *App) QuitPlan() web.QuitPlan {
 		if a.ownsMark("codex.managed") && codexManagedRunning(a.markProxy("codex.managed")) {
 			plan.Closes = append(plan.Closes, "codex")
 		}
+		if a.ownsMark("antigravity.managed") && antiManagedRunning(a.markProxy("antigravity.managed")) {
+			plan.Closes = append(plan.Closes, "antigravity")
+		}
 	}
 	plan.Confirm = len(plan.Closes) > 0 && !a.store.Get().QuitNoConfirm
 	plan.Restore = append(plan.Restore, a.pendingRestore()...)
@@ -75,7 +91,7 @@ func (a *App) pendingRestore() []string {
 	dir := a.store.Dir()
 	var out []string
 	for _, n := range takeover.PendingRestore(dir) {
-		if (n == "grok" && grokManagedRunning(a.markProxy("grok.managed"))) || (n == "codex" && codexManagedRunning(a.markProxy("codex.managed"))) {
+		if (n == "grok" && grokManagedRunning(a.markProxy("grok.managed"))) || (n == "codex" && codexManagedRunning(a.markProxy("codex.managed"))) || (n == "antigravity" && antiManagedRunning(a.markProxy("antigravity.managed"))) {
 			takeover.ClearRestore(dir, n)
 			continue
 		}
@@ -114,6 +130,8 @@ func (a *App) RestoreApps(dismiss bool) error {
 			err = grokOpen(a)
 		case n == "codex" && cfg.TakeoverCodex:
 			err = codexOpen(a)
+		case n == "antigravity" && cfg.TakeoverAntigravity:
+			err = antiOpen(a)
 		default:
 			err = i18n.E("接管已关闭，没有恢复（不会以直连方式启动）", "Takeover is off, so it was not restored (it is never started without the proxy)")
 		}

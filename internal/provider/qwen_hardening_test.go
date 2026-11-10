@@ -20,6 +20,7 @@ func TestQwenVariantLimits(t *testing.T) {
 		{"qwen3-coder-480b-a35b", 262144, 65536},
 		{"qwen3-max", 262144, 32768},
 		{"qwen3.5", 1000000, 65536},
+		{"qwen4-max", 1000000, 65536},
 		{"qwen-plus-latest", 1000000, 32768},
 		{"qwq-32b", 131072, 32768},
 		{"qwen2.5-coder:32b", 262144, 32768},

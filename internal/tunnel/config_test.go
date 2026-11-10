@@ -34,8 +34,12 @@ func TestConfigShape(t *testing.T) {
 			t.Fatalf("缺少官方后缀 %s", suf)
 		}
 	}
-	// GitHub/Google 等第三方不该被强制走代理。
-	if strings.Contains(s, "github.com") || strings.Contains(s, "google") {
+	// GitHub 等第三方不该被强制走代理。
+	// Google Antigravity 相关后缀（googleapis.com 等）已在官方名单内，配置里会出现 "google" 子串。
+	if !strings.Contains(s, "antigravity-hub-auto-updater") {
+		t.Fatal("缺少反重力 Cloud Run 更新器 domain_keyword")
+	}
+	if strings.Contains(s, "github.com") {
 		t.Fatal("第三方域名不应出现在配置里")
 	}
 }

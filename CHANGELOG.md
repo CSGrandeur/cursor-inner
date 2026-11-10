@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.29] - 2026-11-10
+
+### Changed
+
+- Custom-model turns no longer pause at a fixed 45-minute wall clock. A turn that is still making progress can keep going; user cancel, network/request timeouts, the step limit, tool-loop detection, repeated invalid arguments, and a silent editor remain in place. The pause-and-checkpoint path is unchanged if a time budget is set (for tests or a later setting).
+- Kimi / Moonshot 未自填上下文窗口时，按变体套用本地上限（对齐 qwen-code）：Kimi K3 一代 1M/128K，k3-256k 仍 256K，K2.5 输出 32K，其余 Kimi 默认 256K。探测模型时写入；已手填的窗口与输出不被覆盖。
+- Qwen4 系列未自填窗口时按 1M/64K 套用（与 qwen-code 前瞻默认一致）。
+
+### Added
+
+- Top bar Open Antigravity launches Google Antigravity with its official icon (extracted from Antigravity.exe). The Network tab can take over Antigravity the same way as Grok and Codex.
+
+### Fixed
+
+- The Windows wrapper that starts Antigravity's language_server is compiled from source at build time; a prebuilt exe is no longer stored in the tree.
+- After a cancelled custom-model turn, a later RunRequest that still carries an older, shorter ConversationState and the previous user message no longer rolls back the longer on-disk history or re-appends that earlier user text as the latest instruction. A genuine client rewind with a new question still replaces history. Sending the same text again on the current history, including a repeated "continue", is still appended.
+- Tool results carrying an original-request header stay with the live run that issued them instead of being diverted to an older finished session. Real resume requests can still replay in-memory or on-disk checkpoints; heartbeats and tool I/O never adopt a finished session.
+- Shell cards without a description now summarize parsed executable commands rather than only the first word of a script. Local wait timeouts no longer emit resultless completion cards or claim that an unacknowledged abort stopped the command.
+- 本机代理端口短暂连不上（例如在 v2rayN 里手动切节点/重载，或其它闪断）时，经代理拨号会短重试约 1 秒，并立刻复查代理是否在听，减轻 Grok Bot 官方桥被单次拒连打断、随后服务端报本机 temporarily unreachable 的情况。代理已判定为等待/不可用时不会空耗重试；失败时仍只等代理，绝不直连。
+
 ## [0.5.28] - 2026-10-29
 
 ### Added
@@ -558,7 +578,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.28...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.29...HEAD
+[0.5.29]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.28...v0.5.29
 [0.5.28]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.27...v0.5.28
 [0.5.27]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.25...v0.5.26

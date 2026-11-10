@@ -103,26 +103,28 @@ type Desktop struct {
 }
 
 type File struct {
-	Takeover      bool     `json:"takeover"`
-	TakeoverGrok  bool     `json:"takeover_grok"`
-	TakeoverCodex bool     `json:"takeover_codex"`
-	Autostart     bool     `json:"autostart"`
-	Proxy         Proxy    `json:"proxy"`
-	Desktop       Desktop  `json:"desktop,omitzero"`
-	Image         ImageAPI `json:"image,omitempty"`
-	Models        []Model  `json:"models"`
+	Takeover            bool     `json:"takeover"`
+	TakeoverGrok        bool     `json:"takeover_grok"`
+	TakeoverCodex       bool     `json:"takeover_codex"`
+	TakeoverAntigravity bool     `json:"takeover_antigravity"`
+	Autostart           bool     `json:"autostart"`
+	Proxy               Proxy    `json:"proxy"`
+	Desktop             Desktop  `json:"desktop,omitzero"`
+	Image               ImageAPI `json:"image,omitempty"`
+	Models              []Model  `json:"models"`
 	// QuitNoConfirm 为真时退出不再弹确认框（确认框里勾了“不再询问”）。
 	QuitNoConfirm bool `json:"quit_no_confirm,omitempty"`
 }
 
 func Default() File {
 	return File{
-		Takeover:      true,
-		TakeoverGrok:  true,
-		TakeoverCodex: true,
-		Autostart:     false,
-		Proxy:         Proxy{Enabled: true},
-		Models:        []Model{},
+		Takeover:            true,
+		TakeoverGrok:        true,
+		TakeoverCodex:       true,
+		TakeoverAntigravity: true,
+		Autostart:           false,
+		Proxy:               Proxy{Enabled: true},
+		Models:              []Model{},
 	}
 }
 
@@ -155,6 +157,7 @@ func Load(dir string) (*Store, error) {
 		}
 		data.TakeoverGrok = missingKeyDefaultsOn(raw, "takeover_grok", data.TakeoverGrok)
 		data.TakeoverCodex = missingKeyDefaultsOn(raw, "takeover_codex", data.TakeoverCodex)
+		data.TakeoverAntigravity = missingKeyDefaultsOn(raw, "takeover_antigravity", data.TakeoverAntigravity)
 	}
 	if data.Models == nil {
 		data.Models = []Model{}
