@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -32,6 +33,7 @@ type fake struct {
 	discoverURL       string
 	discoverKey       string
 	discoverID        string
+	discoverGroupID   string
 	discoverProxy     bool
 }
 
@@ -40,6 +42,9 @@ func (f *fake) State() (View, error) {
 	f.view.Autostart.Enabled = f.autostart
 	if f.view.Models == nil {
 		f.view.Models = []ModelView{}
+	}
+	if f.view.Groups == nil {
+		f.view.Groups = []GroupView{}
 	}
 	return f.view, nil
 }
@@ -84,6 +89,46 @@ func (f *fake) SetDesktop(background, notify *bool) error {
 func (f *fake) AddModel(config.Model) error            { return nil }
 func (f *fake) UpdateModel(string, config.Model) error { return nil }
 func (f *fake) DeleteModel(string) error               { return nil }
+func (f *fake) AddGroup(g config.Group) error {
+	f.view.Groups = append(f.view.Groups, GroupView{ID: "g-new", Name: g.Name, Type: g.Type, BaseURL: g.BaseURL, UseProxy: g.UseProxy, Reasoning: g.Reasoning, KeyHint: "····key"})
+	return nil
+}
+func (f *fake) UpdateGroup(id string, g config.Group) error {
+	for i := range f.view.Groups {
+		if f.view.Groups[i].ID == id {
+			f.view.Groups[i].Name = g.Name
+			return nil
+		}
+	}
+	return i18n.E("没有这个分组", "No such group")
+}
+func (f *fake) DeleteGroup(id string) error {
+	for i := range f.view.Groups {
+		if f.view.Groups[i].ID == id {
+			f.view.Groups = append(f.view.Groups[:i], f.view.Groups[i+1:]...)
+			return nil
+		}
+	}
+	return i18n.E("没有这个分组", "No such group")
+}
+func (f *fake) SetGroupProfile(id, profileID string) error {
+	for i := range f.view.Groups {
+		if f.view.Groups[i].ID == id {
+			f.view.Groups[i].ActiveProfile = profileID
+			return nil
+		}
+	}
+	return i18n.E("没有这个分组", "No such group")
+}
+func (f *fake) GroupKey(id string) (string, error) {
+	for _, g := range f.view.Groups {
+		if g.ID == id {
+			return "sk-group-test", nil
+		}
+	}
+	return "", i18n.E("没有这个分组", "No such group")
+}
+func (f *fake) ResetModelOverrides(string, []string) error { return nil }
 func (f *fake) ModelKey(id string) (string, error) {
 	if id != "m1" {
 		return "", i18n.E("没有这个模型", "No such model")
@@ -91,12 +136,13 @@ func (f *fake) ModelKey(id string) (string, error) {
 	return "sk-test", nil
 }
 
-func (f *fake) DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID string) ([]string, error) {
+func (f *fake) DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID, groupID string) ([]string, error) {
 	f.discoverType = modelType
 	f.discoverURL = baseURL
 	f.discoverKey = apiKey
 	f.discoverProxy = useProxy
 	f.discoverID = reuseID
+	f.discoverGroupID = groupID
 	if f.discoverErr != nil {
 		return nil, f.discoverErr
 	}
@@ -120,10 +166,10 @@ func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
 	}
 	return nil
 }
-func (f *fake) TestDraft(_ config.Model, progress func(provider.Progress)) provider.Result {
+func (f *fake) TestDraft(_ context.Context, _ config.Model, progress func(provider.Progress)) provider.Result {
 	return fakeTestProgress(progress)
 }
-func (f *fake) TestSaved(_ string, progress func(provider.Progress)) provider.Result {
+func (f *fake) TestSaved(_ context.Context, _ string, progress func(provider.Progress)) provider.Result {
 	return fakeTestProgress(progress)
 }
 

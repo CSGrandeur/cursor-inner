@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"cursor-inner/internal/protox"
@@ -181,4 +182,27 @@ func varintField(t *testing.T, body []byte, num int) uint64 {
 		}
 	}
 	return 0
+}
+
+func TestReasoningPickerFollowsModelEffortPolicy(t *testing.T) {
+	generic := Available([]Entry{{ID: "deadbeef", DisplayName: "Generic", Reasoning: true}})
+	if !bytes.Contains(generic, []byte("reasoning=high")) || !bytes.Contains(generic, []byte("reasoning=max")) {
+		t.Fatal("generic list must keep high/max")
+	}
+	if suffix := defaultVariant(t, generic); !strings.Contains(suffix, "reasoning=high") {
+		t.Fatalf("generic default: %s", suffix)
+	}
+
+	qwen := Available([]Entry{
+		{ID: "qwen4", DisplayName: "Qwen4", Reasoning: true, EffortIDs: []string{"low", "medium", "xhigh"}, DefaultEffort: "xhigh"},
+	})
+	if !bytes.Contains(qwen, []byte("reasoning=low")) || !bytes.Contains(qwen, []byte("reasoning=medium")) || !bytes.Contains(qwen, []byte("reasoning=xhigh")) {
+		t.Fatal("qwen4 official levels missing")
+	}
+	if bytes.Contains(qwen, []byte("reasoning=high")) || bytes.Contains(qwen, []byte("reasoning=max")) {
+		t.Fatalf("qwen4 must not advertise unsupported high/max")
+	}
+	if suffix := defaultVariant(t, qwen); !strings.Contains(suffix, "reasoning=xhigh") {
+		t.Fatalf("qwen4 default: %s", suffix)
+	}
 }

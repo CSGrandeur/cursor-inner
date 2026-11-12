@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"cursor-inner/internal/autostart"
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/i18n"
@@ -10,6 +11,8 @@ import (
 type ModelView struct {
 	ID              string           `json:"id"`
 	DisplayName     string           `json:"display_name"`
+	GroupID         string           `json:"group_id,omitempty"`
+	Overrides       []string         `json:"overrides,omitempty"`
 	Type            string           `json:"type"`
 	BaseURL         string           `json:"base_url"`
 	Model           string           `json:"model"`
@@ -24,6 +27,29 @@ type ModelView struct {
 	Fallback        []string         `json:"fallback,omitempty"`
 	KeyHint         string           `json:"key_hint"`
 	LastTest        *config.LastTest `json:"last_test,omitempty"`
+}
+
+// GroupView 是分组的共享配置摘要；密钥只给后四位，明文走 /api/groups/{id}/key。
+type GroupView struct {
+	ID            string             `json:"id"`
+	Name          string             `json:"name"`
+	Type          string             `json:"type"`
+	BaseURL       string             `json:"base_url"`
+	UseProxy      bool               `json:"use_proxy"`
+	Reasoning     bool               `json:"reasoning"`
+	KeyHint       string             `json:"key_hint"`
+	Models        int                `json:"models"`
+	Profiles      []GroupProfileView `json:"profiles,omitempty"`
+	ActiveProfile string             `json:"active_profile,omitempty"`
+}
+
+// GroupProfileView 是一套套餐的摘要（url+类型+密钥后四位）。
+type GroupProfileView struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	BaseURL string `json:"base_url"`
+	KeyHint string `json:"key_hint"`
 }
 
 type View struct {
@@ -48,6 +74,7 @@ type View struct {
 	Autostart      autostart.State `json:"autostart"`
 	Tunnel         TunnelView      `json:"tunnel"`
 	Desktop        DesktopView     `json:"desktop"`
+	Groups         []GroupView     `json:"groups"`
 	Models         []ModelView     `json:"models"`
 }
 
@@ -93,6 +120,14 @@ type Backend interface {
 	AddModel(model config.Model) error
 	UpdateModel(id string, model config.Model) error
 	DeleteModel(id string) error
+	AddGroup(group config.Group) error
+	UpdateGroup(id string, group config.Group) error
+	DeleteGroup(id string) error
+	SetGroupProfile(id, profileID string) error
+	// GroupKey 返回分组密钥明文，只供本机配置页复制；其它接口只给 KeyHint。
+	GroupKey(id string) (string, error)
+	// ResetModelOverrides 把组内成员的指定字段恢复为跟随分组。
+	ResetModelOverrides(id string, fields []string) error
 	// ModelKey 返回单个模型保存的密钥明文，只供本机配置页复制；其它接口只给 KeyHint。
 	ModelKey(id string) (string, error)
 	SetModelProxy(id string, use bool) error
@@ -100,9 +135,9 @@ type Backend interface {
 	SetModelFast(id string, on bool) error
 	SetModelLimits(id string, contextWindow, maxOutput *int) error
 	// DiscoverModels probes upstream provider model ids; never log or return the raw API key.
-	DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID string) ([]string, error)
-	TestDraft(model config.Model, progress func(provider.Progress)) provider.Result
-	TestSaved(id string, progress func(provider.Progress)) provider.Result
+	DiscoverModels(modelType, baseURL, apiKey string, useProxy bool, reuseID, groupID string) ([]string, error)
+	TestDraft(ctx context.Context, model config.Model, progress func(provider.Progress)) provider.Result
+	TestSaved(ctx context.Context, id string, progress func(provider.Progress)) provider.Result
 	Quit() error
 	QuitPlan() QuitPlan
 	QuitConfirmed(dontAsk bool) error

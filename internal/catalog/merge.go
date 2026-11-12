@@ -14,6 +14,10 @@ type Entry struct {
 	Reasoning     bool
 	Fast          bool
 	ContextWindow int
+	// EffortIDs 是思考档 id（显示顺序）。空则用通用 low/medium/high/xhigh/max。
+	EffortIDs []string
+	// DefaultEffort 是菜单默认档。空且列表含 high 时仍用 high，以兼容未知模型。
+	DefaultEffort string
 }
 
 func Available(models []Entry) []byte {
@@ -38,6 +42,52 @@ var (
 	contextSizes = map[string]int{"200k": 200000, "356k": 356000, "500k": 500000, "800k": 800000, "1m": 1000000}
 	efforts      = [][2]string{{"low", "Low"}, {"medium", "Medium"}, {"high", "High"}, {"xhigh", "Extra High"}, {"max", "Max"}}
 )
+
+var effortLabels = map[string]string{"low": "Low", "medium": "Medium", "high": "High", "xhigh": "Extra High", "max": "Max"}
+
+func effortChoices(model Entry) (list [][2]string, def string) {
+	if len(model.EffortIDs) == 0 {
+		list = efforts
+	} else {
+		list = labeledEfforts(model.EffortIDs)
+	}
+	def = strings.ToLower(strings.TrimSpace(model.DefaultEffort))
+	if def == "" || !effortIDIn(list, def) {
+		if effortIDIn(list, "high") {
+			def = "high"
+		} else if len(list) > 0 {
+			def = list[0][0]
+		}
+	}
+	return list, def
+}
+
+func labeledEfforts(ids []string) [][2]string {
+	out := make([][2]string, 0, len(ids))
+	seen := map[string]bool{}
+	for _, raw := range ids {
+		id := strings.ToLower(strings.TrimSpace(raw))
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		label := effortLabels[id]
+		if label == "" {
+			label = id
+		}
+		out = append(out, [2]string{id, label})
+	}
+	return out
+}
+
+func effortIDIn(list [][2]string, id string) bool {
+	for _, item := range list {
+		if item[0] == id {
+			return true
+		}
+	}
+	return false
+}
 
 func availableModel(model Entry) []byte {
 	name := displayName(model)
@@ -72,8 +122,9 @@ func availableModel(model Entry) []byte {
 	msg = protox.AppendBool(msg, 22, true)
 	msg = protox.AppendString(msg, 24, name)
 	msg = protox.AppendBool(msg, 25, true)
-	msg = append(msg, parameterDefinitions(model.Reasoning, model.Fast, choices)...)
-	msg = append(msg, variants(model.ID, name, tooltip, model.Reasoning, model.Fast, choices, defaultContext)...)
+	effortList, defaultEffort := effortChoices(model)
+	msg = append(msg, parameterDefinitions(model.Reasoning, model.Fast, choices, effortList)...)
+	msg = append(msg, variants(model.ID, name, tooltip, model.Reasoning, model.Fast, choices, effortList, defaultContext, defaultEffort)...)
 	msg = protox.AppendVarint(msg, 38, 1)
 	msg = protox.AppendString(msg, 41, "cursor-inner")
 	vendor := protox.AppendVarint(nil, 1, 6)
@@ -162,11 +213,11 @@ func formatContext(window int) (id, label string) {
 	}
 }
 
-func parameterDefinitions(reasoning, fast bool, choices [][2]string) []byte {
+func parameterDefinitions(reasoning, fast bool, choices, effortList [][2]string) []byte {
 	var out []byte
 	out = protox.AppendBytes(out, 29, enumParam("context", "Context", "Context size used to trigger conversation compaction.", choices, false))
 	if reasoning {
-		out = protox.AppendBytes(out, 29, enumParam("reasoning", "Effort", "Effort the model uses to generate its response.", efforts, true))
+		out = protox.AppendBytes(out, 29, enumParam("reasoning", "Effort", "Effort the model uses to generate its response.", effortList, true))
 	}
 	if fast {
 		out = protox.AppendBytes(out, 29, fastParam())
@@ -207,10 +258,10 @@ func fastParam() []byte {
 	return def
 }
 
-func variants(id, name string, tooltip []byte, reasoning, fastSupport bool, contextList [][2]string, defaultContext string) []byte {
+func variants(id, name string, tooltip []byte, reasoning, fastSupport bool, contextList, effortList [][2]string, defaultContext, defaultEffort string) []byte {
 	choices := [][2]string{{"", ""}}
 	if reasoning {
-		choices = efforts
+		choices = effortList
 	}
 	speeds := []bool{false}
 	if fastSupport {
@@ -220,14 +271,14 @@ func variants(id, name string, tooltip []byte, reasoning, fastSupport bool, cont
 	for _, context := range contextList {
 		for _, effort := range choices {
 			for _, fast := range speeds {
-				out = protox.AppendBytes(out, 30, variant(id, name, tooltip, context, effort, fast, reasoning, defaultContext))
+				out = protox.AppendBytes(out, 30, variant(id, name, tooltip, context, effort, fast, reasoning, defaultContext, defaultEffort))
 			}
 		}
 	}
 	return out
 }
 
-func variant(id, name string, tooltip []byte, context, effort [2]string, fast, reasoning bool, defaultContext string) []byte {
+func variant(id, name string, tooltip []byte, context, effort [2]string, fast, reasoning bool, defaultContext, defaultEffort string) []byte {
 	parts := make([]string, 0, 3)
 	if context[0] != defaultContext {
 		parts = append(parts, context[1])
@@ -242,7 +293,10 @@ func variant(id, name string, tooltip []byte, context, effort [2]string, fast, r
 	if len(parts) > 0 {
 		shown = fmt.Sprintf("%s <span style=\"color: var(--cursor-text-tertiary);\">%s</span>", name, strings.Join(parts, " "))
 	}
-	def := context[0] == defaultContext && !fast && (!reasoning || effort[0] == "high")
+	if defaultEffort == "" {
+		defaultEffort = "high"
+	}
+	def := context[0] == defaultContext && !fast && (!reasoning || effort[0] == defaultEffort)
 	slug := id + "-" + context[0]
 	if reasoning {
 		slug += "-" + effort[0]

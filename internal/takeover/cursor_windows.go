@@ -27,7 +27,7 @@ var (
 )
 
 // TerminateCursor 结束所有 Cursor.exe。没在运行不算错。
-func TerminateCursor() error {
+func terminateCursorPlatform() error {
 	pids, err := cursorPIDs()
 	if err != nil {
 		return err

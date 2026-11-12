@@ -82,6 +82,10 @@ const loopOscillationNotice = "\n\n(Paused: the turn kept alternating between th
 const silentToolLimit = 2
 
 // silentToolNotice 是因客户端不回应工具而结束一轮时给用户看的说明。
+// inspectionPauseNotice 是上游内容审核拒绝时给用户看的说明。
+// 必须正常收尾（pauseTurn）：若以错误结束，客户端会把整轮渲染成 Operation interrupted.，已流出的正文和改动会看不见。
+const inspectionPauseNotice = "\n\n（本轮已暂停：上游内容审核未通过%s。已完成步骤和检查点已保留。请修改任务说明或更换模型后发送新消息继续。这不是传输中断或长度截断，也不会自动重试同一请求。）"
+
 const silentToolNotice = "\n\n(Stopped: the editor did not respond to %d tool calls in a row. Send a new message to retry.)"
 
 // toolWaitLimit 是一次普通执行在没有新消息时最多再等多久。
@@ -728,6 +732,15 @@ next:
 			}
 		}
 		if err != nil {
+			if provider.ContentInspection(err) {
+				closed, perr := s.pauseTurn(send, conversation, system, messages, mode, inspectionNotice(err, s.toolCount))
+				messages = closed
+				if perr != nil {
+					return perr
+				}
+				sentCheckpoint = true
+				return nil
+			}
 			return err
 		}
 		if repeated {
@@ -883,6 +896,25 @@ next:
 // 用错误结束的话，客户端会把整轮渲染成 Operation interrupted.，已经流出来的思考和改动都看不见。
 // 收尾用暂停说明，不用 CloseDangling 的 Operation interrupted.：客户端按检查点重绘，最后一条助手消息就是界面上的结尾
 // （2026-10-28：45 分钟预算到点正常暂停，界面仍显示 Operation interrupted.）。返回收尾后的历史，调用方要赋回去再存盘。
+func inspectionNotice(err error, tools int) string {
+	var extra string
+	var api *provider.APIError
+	if errors.As(err, &api) {
+		if api.Code != "" {
+			extra += "，代码 " + api.Code
+		}
+		if api.RequestID != "" {
+			extra += "，request_id=" + api.RequestID
+		} else {
+			extra += "，request_id未知"
+		}
+	}
+	if tools > 0 {
+		extra += fmt.Sprintf("。已完成 %d 次工具后的模型请求被拒绝", tools)
+	}
+	return fmt.Sprintf(inspectionPauseNotice, extra)
+}
+
 func (s *Session) pauseTurn(send Emit, conversation, system string, messages []provider.Message, mode cursorpb.AgentMode, notice string) ([]provider.Message, error) {
 	messages = provider.CloseDanglingWith(messages, strings.TrimSpace(notice))
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TextDelta{TextDelta: &cursorpb.TextDeltaUpdate{Text: notice}}})); err != nil {

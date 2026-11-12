@@ -584,6 +584,47 @@ func TestSelectedContextAndReasoningEffortReachTheModel(t *testing.T) {
 	}
 }
 
+func TestResponsesCursorEffortReachTheModel(t *testing.T) {
+	ok := sse(
+		`{"type":"response.output_text.delta","delta":"OK"}`,
+		`{"type":"response.completed","response":{"status":"completed"}}`,
+	)
+	for _, tc := range []struct {
+		suffix string
+		model  string
+		want   string
+	}{
+		{"reasoning=low", "qwen4-max-preview", "low"},
+		{"reasoning=medium", "qwen4-max-preview", "medium"},
+		{"reasoning=xhigh", "qwen4-max-preview", "xhigh"},
+		{"reasoning=high", "qwen4-max-preview", "xhigh"},
+		{"reasoning=high", "some-other-model", "high"},
+	} {
+		t.Run(tc.model+"/"+tc.suffix, func(t *testing.T) {
+			fm := &fakeModel{responses: []string{ok}}
+			srv := fm.server(t)
+			model := config.Model{ID: "mine", Type: "openai-responses", BaseURL: srv.URL, APIKey: "k", Model: tc.model, Reasoning: true}
+			hub := New(func(string) (config.Model, bool) { return model, true }, nil)
+			msg := runRequest("mine", "conv-"+tc.want, "ping", &cursorpb.RequestContextEnv{OsVersion: "linux"})
+			msg.GetRunRequest().RequestedModel.ModelId = "mine[context=200k," + tc.suffix + ",fast=false]"
+			if _, err := hub.Bidi(bidi(t, "eff-"+tc.suffix, msg)); err != nil {
+				t.Fatal(err)
+			}
+			drive(t, hub, "eff-"+tc.suffix, model, nil)
+			if len(fm.requests) == 0 {
+				t.Fatal("no model request")
+			}
+			body := fm.requests[0]
+			if !strings.Contains(body, `"effort":"`+tc.want+`"`) {
+				t.Fatalf("want reasoning.effort=%s, body=%s", tc.want, body)
+			}
+			if tc.model == "qwen4-max-preview" && tc.suffix == "reasoning=high" && strings.Contains(body, `"effort":"high"`) {
+				t.Fatalf("stale high leaked: %s", body)
+			}
+		})
+	}
+}
+
 func TestAskQuestionWaitsForTheUser(t *testing.T) {
 	fm := &fakeModel{responses: []string{
 		sse(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"ask","function":{"name":"AskQuestion","arguments":"{\"questions\":[{\"id\":\"q1\",\"prompt\":\"Which?\",\"options\":[{\"id\":\"a\",\"label\":\"Alpha\"}]}]}"}}]}}]}`),

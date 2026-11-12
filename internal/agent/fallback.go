@@ -12,6 +12,9 @@ import (
 
 // Fallbackable 表示在尚未向界面流出任何字之前，值得切换到备用模型的错误。
 func Fallbackable(err error) bool {
+	if provider.ContentInspection(err) {
+		return false
+	}
 	var api *provider.APIError
 	if !errors.As(err, &api) {
 		return false

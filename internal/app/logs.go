@@ -7,7 +7,7 @@ import (
 	"cursor-inner/internal/config"
 )
 
-// OpenLogs 打开日志所在的文件夹。个人记录版把日志放在 <data>/logs 下，发版只有 <data>/inner.log。
+// OpenLogs 打开日志所在的文件夹。有 <data>/logs 目录时打开它，否则打开 <data>（inner.log 所在）。
 func (a *App) OpenLogs() error {
 	dir := config.DefaultDir()
 	if logs := filepath.Join(dir, "logs"); isDir(logs) {

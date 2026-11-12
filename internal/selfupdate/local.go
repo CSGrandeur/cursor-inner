@@ -27,8 +27,20 @@ type LocalResult struct {
 // 复制到更新目录并算 sha256 → 预检（--version 能跑、报出版本号）→ 等自定义模型回合空闲
 // → 同目录换文件 → 同端口交接（新进程健康检查不过就回滚）。不校验签名：来源是本机文件，
 // 由调用方（开发用的 devswap）负责只接受本机用户自己放的请求。dryRun 只做到预检为止。
+// LocalOptions 控制本机热替换。InterruptBusy 仅在用户明确允许打断进行中的
+// 自定义模型回合时使用：跳过等待空闲，仍走官方同端口交接，不得结束 Cursor。
+type LocalOptions struct {
+	DryRun        bool
+	InterruptBusy bool
+}
+
 func (u *Updater) ApplyLocal(ctx context.Context, src string, dryRun bool) (LocalResult, error) {
+	return u.ApplyLocalOpts(ctx, src, LocalOptions{DryRun: dryRun})
+}
+
+func (u *Updater) ApplyLocalOpts(ctx context.Context, src string, opt LocalOptions) (LocalResult, error) {
 	var res LocalResult
+	dryRun := opt.DryRun
 	res.DryRun = dryRun
 	src, err := filepath.Abs(src)
 	if err != nil {
@@ -77,10 +89,14 @@ func (u *Updater) ApplyLocal(ctx context.Context, src string, dryRun bool) (Loca
 		return res, nil
 	}
 	if u.opt.Busy != nil && u.opt.Busy() {
-		u.set(func(s *Status) { s.State = StateWaitingIdle })
-		if err := WaitIdle(ctx, u.opt.Busy, 3*time.Second, time.Second); err != nil {
-			u.set(func(s *Status) { s.State = StateIdle })
-			return res, err
+		if opt.InterruptBusy {
+			slog.Info("按请求中断进行中的自定义模型回合，开始同端口交接（不结束 Cursor）", logx.FileOnly)
+		} else {
+			u.set(func(s *Status) { s.State = StateWaitingIdle })
+			if err := WaitIdle(ctx, u.opt.Busy, 3*time.Second, time.Second); err != nil {
+				u.set(func(s *Status) { s.State = StateIdle })
+				return res, err
+			}
 		}
 	}
 	u.set(func(s *Status) { s.State = StateHandover })

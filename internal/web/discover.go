@@ -13,12 +13,13 @@ func registerDiscover(mux *http.ServeMux, backend Backend) {
 			APIKey   string `json:"api_key"`
 			UseProxy bool   `json:"use_proxy"`
 			ID       string `json:"id"`
+			GroupID  string `json:"group_id"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		models, err := backend.DiscoverModels(body.Type, body.BaseURL, body.APIKey, body.UseProxy, body.ID)
+		models, err := backend.DiscoverModels(body.Type, body.BaseURL, body.APIKey, body.UseProxy, body.ID, body.GroupID)
 		if err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return

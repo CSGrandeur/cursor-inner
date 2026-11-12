@@ -25,6 +25,7 @@ import (
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/logx"
 	"cursor-inner/internal/mitm"
+	"cursor-inner/internal/provider"
 	"cursor-inner/internal/selfupdate"
 	"cursor-inner/internal/takeover"
 	"cursor-inner/internal/updateview"
@@ -191,7 +192,12 @@ func Main(version string) {
 		cfg := store.Get()
 		out := make([]catalog.Entry, 0, len(cfg.Models))
 		for _, model := range cfg.Models {
-			out = append(out, catalog.Entry{ID: model.ID, DisplayName: model.DisplayName, Reasoning: model.Reasoning, Fast: model.FastSupport && model.Type == "openai-chat", ContextWindow: model.ContextWindow})
+			levels, def := provider.EffortPolicy(model)
+			out = append(out, catalog.Entry{
+				ID: model.ID, DisplayName: model.DisplayName, Reasoning: model.Reasoning,
+				Fast: model.FastSupport && model.Type == "openai-chat", ContextWindow: model.ContextWindow,
+				EffortIDs: levels, DefaultEffort: def,
+			})
 		}
 		return out
 	}, func(id string) (config.Model, bool) {
@@ -373,7 +379,8 @@ func Main(version string) {
 		application.SetTakeoverSkipped(true)
 		log.Printf("已跳过接管，Cursor 不会被结束")
 	} else if cfg.Takeover {
-		if err := application.EnableTakeover(); err != nil {
+		kind, err := application.StartTakeover()
+		if err != nil {
 			slog.Error(fmt.Sprintf("接管失败：%v", err))
 		} else {
 			snap := life.Snapshot()
@@ -383,7 +390,11 @@ func Main(version string) {
 			if !snap.Detail.IsZero() {
 				log.Print(snap.Detail)
 			}
-			log.Printf("已结束 Cursor，重新打开后生效")
+			if kind == takeover.StartResumed {
+				log.Printf("已恢复接管，Cursor 无需重启")
+			} else {
+				log.Printf("已结束 Cursor，重新打开后生效")
+			}
 		}
 	} else if life.ClearStale() {
 		log.Printf("已清除上次留下的接管设置，并结束 Cursor")

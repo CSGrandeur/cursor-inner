@@ -50,11 +50,11 @@ func TestTextToolSystemRescueRoundTrip(t *testing.T) {
 }
 
 func TestWantsTextToolModeAndDetail(t *testing.T) {
-	vllm := statusError(400, []byte(`{"error":{"message":"\"auto\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set","type":"BadRequestError"}}`), "")
+	vllm := statusError(400, []byte(`{"error":{"message":"\"auto\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set","type":"BadRequestError"}}`), nil)
 	if !wantsTextToolMode(vllm) {
 		t.Error("vLLM tool-parser 400 should trigger text tool mode")
 	}
-	if wantsTextToolMode(statusError(400, []byte(`{"error":{"message":"invalid value for temperature"}}`), "")) {
+	if wantsTextToolMode(statusError(400, []byte(`{"error":{"message":"invalid value for temperature"}}`), nil)) {
 		t.Error("unrelated 400 should not trigger")
 	}
 	if got := Explain(vllm); !strings.Contains(got, "tool-call-parser") || !strings.Contains(got, "请求被拒绝") {
@@ -67,9 +67,9 @@ func TestUpstreamDetailRedactsAndCaps(t *testing.T) {
 	if strings.Contains(d, "sk-ABCDEF0123456789") || !strings.Contains(d, "[redacted]") {
 		t.Errorf("secret not redacted: %q", d)
 	}
-	long := `{"message":"` + strings.Repeat("x", 500) + `"}`
-	if r := []rune(upstreamDetail([]byte(long))); len(r) > 201 {
-		t.Errorf("detail not capped: %d runes", len(r))
+	long := `{"message":"` + strings.Repeat("x", 800) + `"}`
+	if r := []rune(upstreamDetail([]byte(long))); len(r) != detailRuneLimit+1 || !strings.HasSuffix(string(r), "…") {
+		t.Errorf("detail not capped: %d runes %q", len(r), string(r[len(r)-3:]))
 	}
 }
 

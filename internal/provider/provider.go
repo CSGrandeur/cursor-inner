@@ -70,6 +70,20 @@ func Prepare(m config.Model) (config.Model, error) {
 	return m, nil
 }
 
+// PrepareGrouped 与 Prepare 相同，但组内模型的 id 只由模型名和显示名决定：
+// 共享的 url/类型/密钥来自分组套餐，切换套餐时 id 不变，Cursor 里已选的模型和备用模型引用不丢。
+func PrepareGrouped(m config.Model) (config.Model, error) {
+	prepared, err := Prepare(m)
+	if err != nil {
+		return prepared, err
+	}
+	if prepared.GroupID != "" {
+		sum := sha256.Sum256([]byte("group\n" + prepared.Model + "\n" + prepared.DisplayName))
+		prepared.ID = hex.EncodeToString(sum[:8])
+	}
+	return prepared, nil
+}
+
 func hashID(m config.Model) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{m.Type, m.BaseURL, m.Model, m.APIKey, m.DisplayName}, "\n")))
 	return hex.EncodeToString(sum[:8])
@@ -132,7 +146,13 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func, onTokens func(u
 		}
 		return result
 	}
-	resp, err := do(ctx, m, dial, chatRequest{Messages: []Message{{Role: "user", Content: testPrompt}}, MaxTokens: 2048})
+	opts := probeOptsFrom(ctx)
+	resp, err := do(ctx, m, dial, chatRequest{
+		Messages:        []Message{{Role: "user", Content: testPrompt}},
+		MaxTokens:       2048,
+		ReasoningEffort: opts.ReasoningEffort,
+		OmitInclude:     opts.OmitInclude,
+	})
 	if err != nil {
 		result.Error = i18n.Of(err)
 		return finish()

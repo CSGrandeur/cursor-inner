@@ -61,7 +61,7 @@ func TestPageTabsGroupSettings(t *testing.T) {
 		return name
 	}
 	want := map[string][]string{
-		"models":  {"model-table", "model-form", "draft-test"},
+		"models":  {"model-lists", "group-tools", "group-form", "model-form", "draft-test"},
 		"network": {"takeover-cursor", "takeover-grok", "takeover-codex", "takeover-antigravity", "tun-on", "strict-on", "proxy-address", "scope"},
 		"update":  {"update-row", "update-check", "up-steps", "up-fill"},
 		"general": {"image-url", "autostart", "background", "notify"},

@@ -35,4 +35,8 @@ func TestQwenVariantLimitsIncludesQwen4(t *testing.T) {
 	if c != 1000000 || o != 65536 {
 		t.Fatalf("qwen4-max: got (%d,%d)", c, o)
 	}
+	c, o = qwenVariantLimits("qwen4-max-preview")
+	if c != 1000000 || o != 393216 {
+		t.Fatalf("qwen4-max-preview: got (%d,%d)", c, o)
+	}
 }

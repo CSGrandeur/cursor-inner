@@ -402,6 +402,11 @@
     animation: spin .8s linear infinite;
   }
   .test-run-time { flex: none; color: var(--muted); font-size: 11px; }
+  .test-run-actions { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+  .test-steps li.unknown { color: var(--muted); }
+  .test-steps li.unknown::before { opacity: .4; }
+  .test-steps li.skipped { color: var(--faint); }
+  .test-steps li.skipped::before { opacity: .25; }
   .test-steps { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 0; padding: 0; list-style: none; font-size: 11px; color: var(--faint); }
   .test-steps li { display: inline-flex; align-items: center; gap: 5px; }
   .test-steps li::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .5; }
@@ -434,6 +439,107 @@
   input.token::-webkit-outer-spin-button, input.token::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .actions input.token { width: calc(8ch + 16px); box-sizing: border-box; }
   .empty { margin: 0; padding: 4px 20px 18px; color: var(--faint); }
+
+  /* —— 模型分组 —— */
+  .panel-tools { display: flex; align-items: center; gap: 8px; padding: 6px 16px 0; }
+  .panel-tools[hidden] { display: none; }
+  .panel-tools .hint { margin-left: auto; }
+  .group-sec + .group-sec, .group-sec + .table-scroll, .table-scroll + .group-sec { border-top: 1px solid var(--line); }
+  .group-head {
+    display: flex; align-items: center; gap: 8px; min-height: 38px;
+    padding: 6px 12px 6px 10px; cursor: pointer; user-select: none;
+  }
+  .group-head:hover { background: var(--raise); }
+  .group-head:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+  .group-chev {
+    flex: none; width: 14px; height: 14px; color: var(--faint);
+    transition: transform .16s cubic-bezier(.3, .7, .4, 1);
+  }
+  .group-sec.collapsed .group-chev { transform: rotate(-90deg); }
+  .group-name { font-weight: 600; font-size: 13px; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .group-sum {
+    display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;
+    color: var(--muted); font-size: 12px;
+  }
+  .group-sum .tag { flex: none; }
+  .group-sum .url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
+  .group-sum .sep { color: var(--line-strong); flex: none; }
+  .group-badges { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+  .gbadge {
+    font-size: 11px; line-height: 1.35; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    color: var(--muted); background: var(--raise); border: 1px solid var(--line);
+  }
+  .gbadge.on { color: var(--good); background: var(--good-soft); border-color: transparent; }
+  .group-ops { display: inline-flex; align-items: center; gap: 4px; flex: none; margin-left: auto; }
+  .group-sec.collapsed .group-body { display: none; }
+  .group-body .table-scroll { border-top: 1px solid var(--line); }
+  .group-body table thead th { padding-top: 6px; }
+  .group-empty { margin: 0; padding: 8px 16px 12px 34px; color: var(--faint); font-size: 12px; }
+  .follow-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; line-height: 1.35; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    color: var(--muted); background: var(--raise); border: 1px solid var(--line); cursor: help;
+  }
+  .follow-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+  .ov-tag {
+    display: inline-flex; align-items: center;
+    font-size: 11px; line-height: 1.35; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    color: var(--signal); background: var(--signal-soft); cursor: help;
+  }
+  td.mid .cell-wrap { display: inline-flex; align-items: center; gap: 3px; }
+  button.ov-reset {
+    width: 16px; height: 16px; padding: 0; flex: none;
+    display: inline-grid; place-items: center;
+    border: 0; border-radius: 4px; background: transparent; color: var(--faint);
+    font-size: 11px; line-height: 1; cursor: pointer;
+  }
+  button.ov-reset:hover { color: var(--signal); background: var(--signal-soft); }
+  .group-form { border-top: 1px solid var(--line); padding: 10px 14px 12px; background: var(--raise); }
+  .group-form[hidden] { display: none; }
+  .group-form h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+  .group-grid { display: grid; grid-template-columns: 1.2fr 132px 1.8fr 1.2fr; gap: 8px; align-items: end; }
+  .group-grid .actions { margin-top: 8px; }
+  .profiles-head { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; }
+  .profiles-title { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .profiles-head .hint-inline { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); font-size: 12px; }
+  .profile-row {
+    display: grid; grid-template-columns: 1.1fr 132px 1.7fr 1.2fr 26px;
+    gap: 8px; align-items: center; padding: 4px 0;
+  }
+  .profile-row + .profile-row { border-top: 1px solid var(--line); }
+  .profile-row input, .profile-row select { height: 26px; }
+  .profile-row .secret input { padding-right: 30px; }
+  .profile-row .secret button { width: 28px; }
+  .profile-del { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; color: var(--faint); }
+  .profile-del:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
+  .profile-switch {
+    height: 22px; max-width: 132px; padding: 0 6px;
+    font-size: 11px; color: var(--muted); background: var(--field);
+    border: 1px solid var(--line-strong); border-radius: 6px;
+  }
+  .profile-switch:hover { color: var(--text); }
+  @media (max-width: 860px) {
+    .profile-row { grid-template-columns: 1fr 1fr; }
+    .profile-row .secret { grid-column: span 1; }
+  }
+  #model-form .grid.grouped .g-field input:not([type="checkbox"]), #model-form .grid.grouped .g-field select { border-style: dashed; }
+  #model-form.grouped .actions .g-field .switch span { border-style: dashed; }
+  .group-pick { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+  .group-pick label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .group-pick select { width: auto; min-width: 150px; max-width: 260px; height: 26px; }
+  .group-pick .new-name { width: 200px; height: 26px; }
+  .group-pick .new-name[hidden] { display: none; }
+  .group-pick .hint-inline { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 960px) {
+    .group-sum .url, .group-sum .sep.sep-url { display: none; }
+    .group-badges { display: none; }
+    .group-name { max-width: 140px; }
+  }
+  @media (max-width: 860px) {
+    .group-grid { grid-template-columns: 1fr 1fr; }
+    .group-head { flex-wrap: wrap; row-gap: 4px; }
+    .group-ops { margin-left: 0; }
+  }
   .credit { margin: 22px 2px 0; color: var(--faint); font-size: 12px; }
   .credit a { color: inherit; text-decoration: none; }
   .credit a:hover { color: var(--muted); }
@@ -696,31 +802,15 @@
         <span class="only-cursor" data-i18n="modelsOnly">仅支持 Cursor</span>
         <span class="hint" data-i18n="modelsHint">测试会探测工具、推理、图片与缓存，并记录速度；结果可自动勾选设置</span>
       </div>
-      <div class="table-scroll">
-      <table id="model-table">
-        <colgroup>
-          <col class="c-name"><col><col class="c-test"><col class="c-sw"><col class="c-sw"><col class="c-sw"><col class="c-num"><col class="c-num"><col class="c-ops">
-        </colgroup>
-        <thead>
-          <tr>
-            <th data-i18n="colModel" data-i18n-tip="tipModel">模型</th>
-            <th data-i18n="colEndpoint" data-i18n-tip="tipEndpoint">接口</th>
-            <th data-i18n="colLastTest" data-i18n-tip="tipLastTest">上次测试</th>
-            <th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy">代理</th>
-            <th class="mid" data-i18n="colReason" data-i18n-tip="tipReason">推理</th>
-            <th class="mid" data-i18n="colFast" data-i18n-tip="tipFast">Fast</th>
-            <th class="mid"><span data-i18n="colContext">上下文</span><button type="button" class="qa" data-help="context" data-i18n-aria="more">?</button></th>
-            <th class="mid"><span data-i18n="colMax">最大</span><button type="button" class="qa" data-help="maxOut" data-i18n-aria="more">?</button></th>
-            <th class="ops" data-i18n="colOps" data-i18n-tip="tipOps">操作</th>
-          </tr>
-        </thead>
-        <tbody id="models"></tbody>
-      </table>
+      <div class="panel-tools" id="group-tools" hidden>
+        <button id="group-new" type="button" class="sm" data-i18n="newGroup">新建分组</button>
+        <span class="hint" data-i18n="followGroupTip">未单独配置的字段使用分组的设置；改动后即成为这个模型的自定义值。</span>
       </div>
+      <div id="model-lists"></div>
       <div class="test-run" id="test-run" hidden>
         <div class="test-run-head">
           <span class="test-run-title"><i class="spin"></i><strong id="test-run-name"></strong></span>
-          <span class="test-run-time mono" id="test-run-time">0.0 s</span>
+          <span class="test-run-actions"><span class="test-run-time mono" id="test-run-time">0.0 s</span><button type="button" class="sm" id="test-run-cancel" hidden data-i18n="testCancel">取消</button></span>
         </div>
         <ol class="test-steps" id="test-run-steps"></ol>
         <div class="uptrack"><div class="upfill" id="test-run-fill"></div></div>
@@ -728,11 +818,38 @@
       </div>
       <p class="empty" id="empty" data-i18n="empty">还没有自定义模型，在下面添加第一个。</p>
 
+      <form id="group-form" class="group-form" hidden>
+        <h3 id="group-form-title" data-i18n="newGroup">新建分组</h3>
+        <div class="group-grid">
+          <label class="field"><span data-i18n="groupName">分组名称</span><input name="group_name" type="text" required></label>
+        </div>
+        <div class="profiles-head">
+          <span class="profiles-title" data-i18n="profiles">套餐</span>
+          <span class="hint-inline" data-i18n="profilesTip">同一平台的多套地址与密钥，组头下拉切换。</span>
+          <button id="profile-add" type="button" class="sm" data-i18n="addProfile">添加套餐</button>
+        </div>
+        <div id="profile-rows"></div>
+        <div class="actions">
+          <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
+          <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
+          <span class="spacer"></span>
+          <button id="group-form-cancel" type="button" data-i18n="clear">清空</button>
+          <button id="group-submit" class="primary" type="submit" data-i18n="save">保存</button>
+        </div>
+      </form>
+
       <form id="model-form" class="add">
         <h3 id="form-title" data-i18n="addModel">添加模型</h3>
-        <div class="grid">
+        <div class="group-pick">
+          <label><span data-i18n="groupsTitle">分组</span>
+            <select id="model-group" name="group_pick"></select>
+          </label>
+          <input id="model-group-new-name" class="new-name" type="text" data-i18n-placeholder="groupNewName" placeholder="新分组名称" hidden>
+          <span class="hint-inline" id="group-pick-hint"></span>
+        </div>
+        <div class="grid" id="model-grid">
           <label class="field"><span data-i18n="displayName">显示名</span><input name="display_name" type="text" required></label>
-          <label class="field"><span data-i18n="type">类型</span>
+          <label class="field g-field"><span data-i18n="type">类型</span>
             <select name="type">
               <option value="openai-chat">OpenAI Chat</option>
               <option value="openai-responses">OpenAI Responses</option>
@@ -753,8 +870,8 @@
             </span>
             <datalist id="discovered-models"></datalist>
           </label>
-          <label class="field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
-          <label class="field"><span data-i18n="apiKey">密钥</span>
+          <label class="field g-field"><span data-i18n="baseUrl">接口地址</span><input name="base_url" type="text" placeholder="https://api.example.com/v1" required spellcheck="false" class="mono"></label>
+          <label class="field g-field"><span data-i18n="apiKey">密钥</span>
             <span class="secret">
               <input id="api-key" name="api_key" type="password" required autocomplete="off" class="mono">
               <button id="reveal-key" type="button" aria-label="显示密钥" title="显示密钥">
@@ -774,8 +891,8 @@
           <label class="field wide"><span data-i18n="fallback">备用模型</span><input name="fallback" type="text" spellcheck="false" class="mono" data-i18n-placeholder="fallbackHint" placeholder="其它已添加模型的名称，逗号分隔"></label>
         </div>
         <div class="actions">
-          <label class="mini"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
-          <label class="mini"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
+          <label class="mini g-field"><span class="switch sm"><input name="use_proxy" type="checkbox"><span></span></span><span data-i18n="useProxy">走代理</span></label>
+          <label class="mini g-field"><span class="switch sm"><input name="reasoning" type="checkbox"><span></span></span><span data-i18n="reasoning">推理</span></label>
           <label class="mini"><span class="switch sm"><input name="fast" type="checkbox"><span></span></span><span data-i18n="fast">Fast</span></label>
           <label class="mini"><span data-i18n="contextWindow">上下文窗口</span><button type="button" class="qa" data-help="context" data-i18n-aria="more">?</button><input name="context_window" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
           <label class="mini"><span data-i18n="maxOutput">最大输出</span><button type="button" class="qa" data-help="maxOut" data-i18n-aria="more">?</button><input name="max_output_tokens" type="number" min="0" step="1" class="mono token" data-i18n-placeholder="optional" placeholder="可选"></label>
@@ -984,6 +1101,16 @@ const MESSAGES = {
     tipFast: "打开后，Cursor 里可以使用 Fast，请求带 service_tier。只有 OpenAI Chat 能开。",
     tipOps: "测试这条配置，编辑它，把它复制到下面的添加表单，或删除。",
     empty: "还没有自定义模型，在下面添加第一个。", addModel: "添加模型", editModel: "编辑模型",
+    groupsTitle: "分组", newGroup: "新建分组", editGroup: "编辑分组", groupName: "分组名称", groupNone: "独立模型", groupNew: "＋ 新建分组…",
+    groupCount: "{n} 个模型", groupAddModel: "添加模型", groupEdit: "编辑分组", groupDelete: "删除分组", groupCollapse: "折叠分组", groupExpand: "展开分组",
+    groupDeleteAsk: "删除分组“{name}”？组内 {n} 个模型会转为独立模型，当前配置保留。", groupDeleted: "分组已删除，组内模型已转为独立模型", groupSaved: "分组已保存",
+    groupProxyOn: "走代理", groupProxyOff: "直连", groupReasonOn: "默认推理", groupReasonOff: "默认不推理",
+    followGroup: "跟随分组", followGroupTip: "未单独配置的字段使用分组的设置；改动后即成为这个模型的自定义值。",
+    overridesTag: "自定义", overridesTip: "这些字段与分组不同：{fields}。在表单里改回分组值，或点开关旁的复位，即可恢复跟随。",
+    resetOverride: "恢复跟随分组", resetDone: "已恢复跟随分组",
+    groupFieldHint: "留空跟随分组", groupKeyHint: "留空使用分组密钥", groupNewName: "新分组名称",
+    profiles: "套餐", addProfile: "添加套餐", profileName: "套餐名称", delProfile: "删除套餐", profileSwitch: "切换套餐",
+    profilesTip: "同一平台的多套地址与密钥，组头下拉切换。", profileSwitched: "已切换套餐「{name}」",
     discoverModels: "探测模型", discovering: "探测中…", discoverNeed: "请先填写接口地址和密钥", discoverOk: "找到 {n} 个模型", discoverNone: "上游没有返回模型", discoverHint: "按接口地址向上游拉取模型列表，点选填入模型名", discoverTitle: "上游模型 · {n}", discoverPick: "点选填入模型名", discoverClose: "关闭",
     displayName: "显示名", type: "类型", modelName: "模型名", baseUrl: "接口地址", apiKey: "密钥", keyLabel: "密钥",
     useProxy: "走代理", reasoning: "推理", fast: "Fast", contextWindow: "上下文窗口", maxOutput: "最大输出", maxImages: "图片张数上限", imageBudget: "图片总量上限（MB）", defaultImages: "默认 20", defaultBudget: "默认 24", optional: "可选", test: "测试", add: "添加", edit: "编辑", copy: "复制", clear: "清空", del: "删除",
@@ -994,17 +1121,21 @@ const MESSAGES = {
     liveOn: "接管中", liveOff: "未接管",
     untested: "未测试", failed: "失败", testFailed: "测试失败", testFailedWith: "测试失败：{error}", unknownError: "未知错误",
     testDetail: "速度 {speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated} · 能力 {caps} · 返回：{output}",
-    testRunning: "正在测试 {model}", testPreparing: "准备中…",
-    testStageTools: "工具调用", testStageReasoning: "推理", testStageImages: "图片输入", testStageCache: "缓存", testStageSpeed: "测速",
+    testRunning: "正在测试 {model}", testPreparing: "准备中…", testCancel: "取消",
+    testStageGenerate: "基本生成", testStageTools: "工具调用", testStageReasoning: "推理", testStageImages: "图片输入", testStageCache: "缓存", testStageSpeed: "测速",
     testInfoTools: "让模型调用一次探测工具", testInfoReasoning: "发一条要求推理的请求", testInfoImages: "带一张图片，看模型能否识别", testInfoCache: "同一前缀连发两次，看第二次是否命中缓存", testInfoSpeed: "让模型输出 1 到 120，边收边统计",
     testInfoTokens: "已收到 {tokens} tokens · {speed} tok/s", testStreamLost: "测试没有返回结果",
     estimated: "（估算）", requestFailed: "请求失败 {status}",
     goneTitle: "cursor-inner 已退出", goneBody: "Cursor 的代理设置已还原，可以关闭这个页面。",
+    testInfoGenerate: "先发一条短文本，确认模型能返回内容", testInfoTools: "让模型调用一次探测工具", testInfoReasoning: "发送一条带推理档的短请求", testInfoImages: "发送一张图片，看模型能否读到", testInfoCache: "用同一前缀发两次，看是否命中缓存", testInfoSpeed: "流式计数 token",
+    testInfoWaitingHeaders: "正等响应头", testInfoStream: "已收到流", testInfoToolArgs: "等待工具参数",
     capsTitle: "能力探测结果", capsClose: "关闭",
-    capNativeTools: "工具调用", capReasoning: "推理", capImage: "图片输入", capCache: "缓存命中", capSpeed: "速度",
-    capStatusSupported: "支持", capStatusOff: "不支持", capStatusNone: "未命中", capReasonOff: "未开启",
-    capToolsNative: "支持原生工具调用", capToolsText: "不支持原生工具调用，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "不支持工具调用",
-    capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试失败：{error}",
+    capNativeTools: "工具调用", capReasoning: "推理", capImage: "图片输入", capCache: "缓存命中", capSpeed: "速度", capGenerate: "基本生成",
+    capStatusSupported: "已测出", capStatusOff: "不支持", capStatusNone: "未命中", capReasonOff: "未开启",
+    capStatusUnknown: "未测出", capStatusRejected: "该接口拒绝此测试方式", capSkipped: "因基础生成未完成，未测此项",
+    capToolsNative: "已测出原生工具调用", capToolsText: "原生工具未按预期工作，已改用文本工具模式", capToolsTextWhy: "把工具写进提示词、从文本里解析调用，可能不如原生稳定", capToolsNo: "此次未测出工具调用",
+    capToolsRejected: "该接口拒绝此测试方式",
+    capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试异常：{error}",
     ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
     tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyWaiting: "等待代理…", stProxyDown: "代理没有启动", proxyWaitingTip: "代理 {addr} 还没开始监听（代理软件可能还在启动）。就绪后会自动接上；等待期间官方流量不会直连。", proxyDownTip: "代理 {addr} 一直没有开始监听。请打开你的代理软件（例如 v2rayN、Clash），打开后会自动接上，不用重启 cursor-inner。", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", takeTimeout: "接管等待超时，仍没有接上。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
     switchLang: "EN"
@@ -1046,6 +1177,16 @@ const MESSAGES = {
     tipFast: "Allows Fast in Cursor and sends service_tier. OpenAI Chat only.",
     tipOps: "Test this model, edit it, copy it into the form below, or delete it.",
     empty: "No custom models yet. Add the first one below.", addModel: "Add model", editModel: "Edit model",
+    groupsTitle: "Groups", newGroup: "New group", editGroup: "Edit group", groupName: "Group name", groupNone: "Standalone", groupNew: "＋ New group…",
+    groupCount: "{n} models", groupAddModel: "Add model", groupEdit: "Edit group", groupDelete: "Delete group", groupCollapse: "Collapse group", groupExpand: "Expand group",
+    groupDeleteAsk: "Delete group \"{name}\"? Its {n} models become standalone and keep their current settings.", groupDeleted: "Group deleted; its models are now standalone", groupSaved: "Group saved",
+    groupProxyOn: "via proxy", groupProxyOff: "direct", groupReasonOn: "reasoning by default", groupReasonOff: "no reasoning by default",
+    followGroup: "follows group", followGroupTip: "Fields you leave unset use the group's settings; changing one makes it this model's own value.",
+    overridesTag: "custom", overridesTip: "These fields differ from the group: {fields}. Set them back to the group value in the form, or use the reset next to the switch, to follow the group again.",
+    resetOverride: "Follow the group again", resetDone: "Now following the group",
+    groupFieldHint: "leave blank to follow the group", groupKeyHint: "leave blank to use the group key", groupNewName: "New group name",
+    profiles: "Plans", addProfile: "Add plan", profileName: "Plan name", delProfile: "Delete plan", profileSwitch: "Switch plan",
+    profilesTip: "Several URL + key sets for one platform; switch from the group header.", profileSwitched: "Switched to plan \"{name}\"",
     discoverModels: "Discover models", discovering: "Discovering…", discoverNeed: "Enter endpoint URL and API key first", discoverOk: "Found {n} models", discoverNone: "Upstream returned no models", discoverHint: "Fetch the provider model list from the endpoint URL and pick one", discoverTitle: "Upstream models · {n}", discoverPick: "Click to fill model name", discoverClose: "Close",
     displayName: "Display name", type: "Type", modelName: "Model name", baseUrl: "Endpoint URL", apiKey: "API key", keyLabel: "Key",
     useProxy: "Use proxy", reasoning: "Reasoning", fast: "Fast", contextWindow: "Context window", maxOutput: "Max output", maxImages: "Max images", imageBudget: "Image total (MB)", defaultImages: "default 20", defaultBudget: "default 24", optional: "optional", test: "Test", add: "Add", edit: "Edit", copy: "Copy", clear: "Clear", del: "Delete",
@@ -1056,18 +1197,21 @@ const MESSAGES = {
     liveOn: "Takeover active", liveOff: "Not taken over",
     untested: "Not tested", failed: "Failed", testFailed: "Test failed", testFailedWith: "Test failed: {error}", unknownError: "unknown error",
     testDetail: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated} · caps {caps} · reply: {output}",
-    testRunning: "Testing {model}", testPreparing: "Preparing…",
-    testStageTools: "Tool calls", testStageReasoning: "Reasoning", testStageImages: "Image input", testStageCache: "Cache", testStageSpeed: "Speed",
-    testInfoTools: "Asking the model to call a probe tool", testInfoReasoning: "Sending a reasoning request", testInfoImages: "Sending an image to see if the model can read it", testInfoCache: "Sending the same prefix twice to check for a cache hit", testInfoSpeed: "Streaming 1 to 120 and counting tokens",
+    testRunning: "Testing {model}", testPreparing: "Preparing…", testCancel: "Cancel",
+    testStageGenerate: "Basic generation", testStageTools: "Tool calls", testStageReasoning: "Reasoning", testStageImages: "Image input", testStageCache: "Cache", testStageSpeed: "Speed",
+    testInfoGenerate: "Sending a short text request to confirm the model replies", testInfoTools: "Asking the model to call a probe tool", testInfoReasoning: "Sending a short request with a reasoning setting", testInfoImages: "Sending an image to see if the model can read it", testInfoCache: "Sending the same prefix twice to check for a cache hit", testInfoSpeed: "Counting streamed tokens",
+    testInfoWaitingHeaders: "Waiting for response headers", testInfoStream: "Received the stream", testInfoToolArgs: "Waiting for tool arguments",
     testInfoTokens: "{tokens} tokens received · {speed} tok/s", testStreamLost: "The test ended without a result",
     estimated: " (estimated)", requestFailed: "Request failed {status}",
     quitConfirm: "Quit cursor-inner?\n\nCursor's proxy settings will be restored and any running Cursor will be closed. Proxy arguments added to Grok Bot are removed; if it is running, it is opened again.",
     goneTitle: "cursor-inner has quit", goneBody: "Cursor's proxy settings have been restored. You can close this page.",
     capsTitle: "Capability probe", capsClose: "Close",
-    capNativeTools: "Tool calls", capReasoning: "Reasoning", capImage: "Image input", capCache: "Cache hit", capSpeed: "Speed",
-    capStatusSupported: "Supported", capStatusOff: "Not supported", capStatusNone: "No hit", capReasonOff: "Off",
-    capToolsNative: "Native tool calls supported", capToolsText: "Native tool calls not supported; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calls not supported",
-    capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test failed: {error}",
+    capNativeTools: "Tool calls", capReasoning: "Reasoning", capImage: "Image input", capCache: "Cache hit", capSpeed: "Speed", capGenerate: "Basic generation",
+    capStatusSupported: "Confirmed", capStatusOff: "Not supported", capStatusNone: "No hit", capReasonOff: "Off",
+    capStatusUnknown: "Not determined", capStatusRejected: "The endpoint rejected this test method", capSkipped: "Skipped because basic generation did not finish",
+    capToolsNative: "Native tool calling confirmed", capToolsText: "Native tools did not work as expected; using text tool mode", capToolsTextWhy: "Tools go into the prompt and calls are parsed from text, which may be less reliable than native.", capToolsNo: "Tool calling was not determined in this test",
+    capToolsRejected: "The endpoint rejected this test method",
+    capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test error: {error}",
     ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
     tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyWaiting: "Waiting for proxy…", stProxyDown: "Proxy not running", proxyWaitingTip: "The proxy {addr} is not listening yet (your proxy software may still be starting). cursor-inner connects automatically once it is up; official traffic never goes direct while waiting.", proxyDownTip: "The proxy {addr} has not started listening. Start your proxy software (for example v2rayN or Clash); cursor-inner connects automatically once it is up, no restart needed.", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", takeTimeout: "Timed out waiting for takeover; it is still not in place. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
     switchLang: "中文"
@@ -1150,6 +1294,7 @@ function applyLang() {
   document.querySelector("#lang").textContent = t("switchLang");
   syncReveal();
   syncFormMode();
+  rebuildGroupPick();
   if (lastState) render(lastState);
   renderStatus();
 }
@@ -1207,27 +1352,38 @@ function openCapsDialog(result, name) {
   if (caps && caps.family) title += " \u00b7 " + caps.family;
   document.querySelector("#caps-title").textContent = title;
   body.replaceChildren();
-  if (!result || !result.ok) {
-    body.append(capRow(t("capNativeTools"), "off", t("capFailed", {error: (result && tr(result.error)) || t("unknownError")})));
-    dlg.showModal();
-    return;
+  if (result && result.error && (tr(result.error) || !result.ok)) {
+    body.append(capRow(t("capGenerate") || "generate", result.ok ? "info" : "degraded", t("capFailed", {error: tr(result.error) || t("unknownError")})));
   }
-  if (caps && caps.tools && caps.text_tool_mode) {
-    body.append(capRow(t("capNativeTools"), "degraded", t("capToolsText"), t("capToolsTextWhy")));
-  } else if (caps && caps.tools) {
-    body.append(capRow(t("capNativeTools"), "ok", t("capToolsNative")));
-  } else {
-    body.append(capRow(t("capNativeTools"), "off", t("capToolsNo")));
+  function capStatusOf(status, confirmed) {
+    if (status === "confirmed" || (!status && confirmed)) return {kind: "ok", text: t("capStatusSupported")};
+    if (status === "rejected") return {kind: "degraded", text: t("capStatusRejected")};
+    return {kind: "info", text: t("capStatusUnknown")};
   }
-  body.append(caps && caps.reasoning
-    ? capRow(t("capReasoning"), "ok", t("capStatusSupported"))
-    : capRow(t("capReasoning"), "off", t("capReasonOff")));
-  body.append(caps && caps.images
-    ? capRow(t("capImage"), "ok", t("capStatusSupported"))
-    : capRow(t("capImage"), "off", t("capStatusOff")));
-  body.append(caps && caps.cache_hit
-    ? capRow(t("capCache"), "ok", t("capStatusSupported"))
-    : capRow(t("capCache"), "off", t("capStatusNone")));
+  function addCap(name, status, confirmed, note) {
+    const s = capStatusOf(status, confirmed);
+    const why = note ? tr(note) : "";
+    body.append(capRow(name, s.kind, s.text, why && why !== s.text ? why : ""));
+  }
+  if (caps) {
+    if (caps.generate_status || caps.generate) {
+      addCap(t("capGenerate"), caps.generate_status, caps.generate, caps.generate_note);
+    }
+    if (caps.tools && caps.text_tool_mode) {
+      body.append(capRow(t("capNativeTools"), "degraded", t("capToolsText"), t("capToolsTextWhy")));
+    } else if (caps.tools_status === "rejected") {
+      addCap(t("capNativeTools"), "rejected", false, caps.tools_note);
+    } else if (caps.tools) {
+      body.append(capRow(t("capNativeTools"), "ok", t("capToolsNative")));
+    } else {
+      addCap(t("capNativeTools"), caps.tools_status, false, caps.tools_note);
+    }
+    addCap(t("capReasoning"), caps.reasoning_status, caps.reasoning, caps.reasoning_note);
+    addCap(t("capImage"), caps.images_status, caps.images, caps.images_note);
+    addCap(t("capCache"), caps.cache_status, caps.cache_hit, caps.cache_note);
+  } else if (!result || !result.ok) {
+    body.append(capRow(t("capNativeTools"), "info", t("capStatusUnknown")));
+  }
   body.append(capRow(t("capSpeed"), "info", t("capSpeedVal", {
     speed: formatSpeed(result.tokens_per_second),
     first: result.first_valid_response_ms == null ? "--" : result.first_valid_response_ms,
@@ -1382,10 +1538,11 @@ function setDiscoveredModels(models) {
 }
 
 async function discoverUpstreamModels() {
+  const g = selectedGroup();
   const base = String(form.base_url.value || "").trim();
   const key = String(form.api_key.value || "").trim();
   const btn = document.querySelector("#discover-models");
-  if (!base || (!key && !editingId)) {
+  if (!g && (!base || (!key && !editingId))) {
     showError(t("discoverNeed"));
     showDiscoverState("error", t("discoverNeed"));
     return;
@@ -1401,6 +1558,7 @@ async function discoverUpstreamModels() {
       api_key: key,
       use_proxy: form.use_proxy.checked
     };
+    if (g) body.group_id = g.id;
     if (editingId) body.id = editingId;
     const data = await send("/api/models/discover", {
       method: "POST",
@@ -1429,9 +1587,73 @@ async function discoverUpstreamModels() {
   }
 }
 
+// —— 表单的分组选择 ——
+// 选组后共享字段（类型 / 地址 / 密钥 / 走代理 / 推理）留空即跟随分组；
+// 改动哪个字段，提交时就带哪个覆盖位。布尔开关用「碰过才算覆盖」。
+const groupPick = document.querySelector("#model-group");
+const groupNewName = document.querySelector("#model-group-new-name");
+let formTouched = new Set();
+
+function selectedGroup() {
+  const v = groupPick.value;
+  if (!v || v === "__new") return null;
+  return groupByID(v);
+}
+
+function rebuildGroupPick(keep) {
+  const want = keep !== undefined ? keep : groupPick.value;
+  groupPick.replaceChildren();
+  const solo = document.createElement("option");
+  solo.value = "";
+  solo.textContent = t("groupNone");
+  groupPick.append(solo);
+  for (const g of (lastState && lastState.groups) || []) {
+    const opt = document.createElement("option");
+    opt.value = g.id;
+    opt.textContent = g.name;
+    groupPick.append(opt);
+  }
+  const fresh = document.createElement("option");
+  fresh.value = "__new";
+  fresh.textContent = t("groupNew");
+  groupPick.append(fresh);
+  groupPick.value = [...groupPick.options].some(o => o.value === want) ? want : "";
+  syncGroupFields();
+}
+
+function syncGroupFields() {
+  const v = groupPick.value;
+  const grouped = v !== "";
+  const isNew = v === "__new";
+  groupNewName.hidden = !isNew;
+  document.querySelector("#model-grid").classList.toggle("grouped", grouped && !isNew);
+  form.classList.toggle("grouped", grouped && !isNew);
+  const g = selectedGroup();
+  const hint = document.querySelector("#group-pick-hint");
+  hint.textContent = grouped && !isNew && g ? t("followGroupTip") : "";
+  // 选已有组：共享字段变可选，占位符提示跟随；新建组或独立模型：地址和密钥必填。
+  form.base_url.required = !grouped || isNew;
+  document.querySelector("#api-key").required = (!grouped || isNew) && !editingId;
+  form.base_url.placeholder = grouped && !isNew ? t("groupFieldHint") : "https://api.example.com/v1";
+  document.querySelector("#api-key").placeholder = grouped && !isNew ? t("groupKeyHint") : (editingId ? t("keepKey") : "");
+  if (grouped && !isNew && g) {
+    if (!formTouched.has("type")) form.type.value = g.type;
+    if (!formTouched.has("use_proxy")) form.use_proxy.checked = !!g.use_proxy;
+    if (!formTouched.has("reasoning")) form.reasoning.checked = !!g.reasoning;
+  }
+}
+
+function addModelToGroup(groupID) {
+  clearForm();
+  rebuildGroupPick(groupID);
+  form.scrollIntoView({block: "nearest"});
+  form.display_name.focus();
+}
+
 function formModel() {
   const fd = new FormData(form);
   const fallback = resolveFallback(fd.get("fallback"), lastState ? lastState.models : [], editingId);
+  const g = selectedGroup();
   const body = {
     display_name: fd.get("display_name") || "",
     type: fd.get("type"),
@@ -1448,7 +1670,35 @@ function formModel() {
     prompt_cache_key: String(fd.get("prompt_cache_key") || "").trim(),
     fallback
   };
+  if (g) {
+    body.group_id = g.id;
+    const overrides = [];
+    if (formTouched.has("type") && body.type !== g.type) overrides.push("type");
+    if (String(body.base_url).trim() && body.base_url !== g.base_url) overrides.push("base_url");
+    if (String(body.api_key).trim()) overrides.push("api_key");
+    if (formTouched.has("use_proxy") && body.use_proxy !== g.use_proxy) overrides.push("use_proxy");
+    if (formTouched.has("reasoning") && body.reasoning !== g.reasoning) overrides.push("reasoning");
+    body.overrides = overrides;
+    if (!String(body.base_url).trim()) body.base_url = g.base_url;
+    if (!String(body.api_key).trim()) body.api_key = "";
+  } else if (editingId) {
+    body.group_id = "";
+  }
   if (editingId) body.id = editingId;
+  return body;
+}
+
+// 草稿测试要完整配置：跟随分组的字段用组值补上，密钥留空时后端按 id 沿用已存的。
+function draftForTest() {
+  const body = formModel();
+  body.fallback = body.fallback.ids;
+  const g = selectedGroup();
+  if (g) {
+    if (!body.type) body.type = g.type;
+    if (!body.base_url) body.base_url = g.base_url;
+    if (!formTouched.has("use_proxy")) body.use_proxy = g.use_proxy;
+    if (!formTouched.has("reasoning")) body.reasoning = g.reasoning;
+  }
   return body;
 }
 
@@ -1458,19 +1708,24 @@ function syncFormMode() {
   document.querySelector("#form-title").textContent = editing ? t("editModel") : t("addModel");
   document.querySelector("#model-submit").textContent = editing ? t("save") : t("add");
   const key = document.querySelector("#api-key");
-  key.required = !editing;
-  key.placeholder = editing ? t("keepKey") : "";
+  const g = selectedGroup();
+  key.required = !editing && !g;
+  key.placeholder = g ? t("groupKeyHint") : (editing ? t("keepKey") : "");
 }
 
 function clearForm() {
   editingId = "";
+  formTouched = new Set();
   form.reset();
+  groupNewName.value = "";
+  rebuildGroupPick("");
   setDiscoveredModels([]);
   setKeyRevealed(false);
   syncFormMode();
 }
 
 function fillForm(model, mode, apiKey) {
+  formTouched = new Set();
   form.display_name.value = model.display_name || "";
   form.type.value = model.type || "openai-chat";
   form.model.value = model.model || "";
@@ -1486,9 +1741,18 @@ function fillForm(model, mode, apiKey) {
   form.prompt_cache_key.value = model.prompt_cache_key || "";
   form.fallback.value = fallbackText(model.fallback, lastState ? lastState.models : []);
   editingId = mode === "edit" ? model.id : "";
+  rebuildGroupPick(model.group_id || "");
+  if (model.group_id && mode === "edit") {
+    // 编辑组内模型：共享字段显示当前生效值；没覆盖的字段清空，提示跟随。
+    const overrides = model.overrides || [];
+    if (!overrides.includes("base_url")) form.base_url.value = "";
+    if (!overrides.includes("api_key")) form.api_key.value = "";
+    for (const f of overrides) formTouched.add(f);
+  }
   setDiscoveredModels([]);
   setKeyRevealed(false);
   syncFormMode();
+  syncGroupFields();
   if (lastState) render(lastState);
   form.scrollIntoView({block: "nearest"});
   form.display_name.focus();
@@ -1526,6 +1790,7 @@ function tokenField(value) {
 
 function flagCell(model, field, label, disabled) {
   const td = el("td", "mid");
+  const wrap = el("span", "cell-wrap");
   const sw = el("span", "switch sm");
   const box = el("input");
   box.type = "checkbox";
@@ -1537,7 +1802,23 @@ function flagCell(model, field, label, disabled) {
     body: JSON.stringify({[field]: box.checked})
   })));
   sw.append(box, el("span"));
-  td.append(sw);
+  wrap.append(sw);
+  if (model.group_id && (model.overrides || []).includes(field)) {
+    const reset = el("button", "ov-reset", "↺");
+    reset.type = "button";
+    reset.dataset.tip = t("resetOverride");
+    reset.setAttribute("aria-label", t("resetOverride"));
+    reset.addEventListener("click", () => act(async () => {
+      const state = await send("/api/models/" + model.id + "/reset-overrides", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({fields: [field]})
+      });
+      toast(t("resetDone"), "ok");
+      return state;
+    }));
+    wrap.append(reset);
+  }
+  td.append(wrap);
   return td;
 }
 
@@ -1569,14 +1850,18 @@ function el(tag, className, text) {
 // 测试依次跑工具、推理、图片、缓存和测速。后台按 NDJSON 逐行推进度，页面画成阶段列表、
 // 进度条和实时说明。按钮文字不换，只在原位置转圈，宽度不会跳。
 const TEST_LABELS = {
-  tools: "testStageTools", reasoning: "testStageReasoning", images: "testStageImages",
-  cache: "testStageCache", speed: "testStageSpeed"
+  generate: "testStageGenerate", tools: "testStageTools", reasoning: "testStageReasoning",
+  images: "testStageImages", cache: "testStageCache", speed: "testStageSpeed"
 };
 const TEST_INFO = {
-  tools: "testInfoTools", reasoning: "testInfoReasoning", images: "testInfoImages",
-  cache: "testInfoCache", speed: "testInfoSpeed"
+  generate: "testInfoGenerate", tools: "testInfoTools", reasoning: "testInfoReasoning",
+  images: "testInfoImages", cache: "testInfoCache", speed: "testInfoSpeed"
+};
+const TEST_STATE_INFO = {
+  waiting_headers: "testInfoWaitingHeaders", stream: "testInfoStream", tool_args: "testInfoToolArgs"
 };
 let testRunning = false;
+let testAbort = null;
 let testPlan = [];
 let testDone = 0;
 let testTimer = 0;
@@ -1624,16 +1909,25 @@ function updateTestRun(event) {
   if (!event.stage) return;
   const li = document.querySelector("#test-run-steps li[data-stage='" + event.stage + "']");
   const info = document.querySelector("#test-run-info");
+  if (event.info) info.textContent = tr(event.info);
   if (event.state === "start") {
     if (li) li.className = "now";
     if (event.stage === "speed") testSpeedStart = Date.now();
-    info.textContent = t(TEST_INFO[event.stage] || "testPreparing");
+    if (!event.info) info.textContent = t(TEST_INFO[event.stage] || "testPreparing");
+  } else if (event.state === "waiting_headers" || event.state === "stream" || event.state === "tool_args") {
+    if (li) li.className = "now";
+    if (!event.info) info.textContent = t(TEST_STATE_INFO[event.state] || TEST_INFO[event.stage] || "testPreparing");
   } else if (event.state === "tokens") {
     const seconds = testSpeedStart ? (Date.now() - testSpeedStart) / 1000 : 0;
     const speed = seconds > 0 ? (event.tokens / seconds).toFixed(1) : "0.0";
     info.textContent = t("testInfoTokens", {tokens: event.tokens, speed});
+  } else if (event.state === "skipped") {
+    if (li) li.className = "skipped";
+    if (!event.info) info.textContent = t("capSkipped");
+    testDone++;
+    document.querySelector("#test-run-fill").style.width = Math.round(testDone / Math.max(1, testPlan.length) * 100) + "%";
   } else if (event.state === "done") {
-    if (li) li.className = event.ok ? "done" : (event.stage === "speed" ? "bad" : "off");
+    if (li) li.className = event.ok ? "done" : "unknown";
     testDone++;
     document.querySelector("#test-run-fill").style.width = Math.round(testDone / Math.max(1, testPlan.length) * 100) + "%";
   }
@@ -1641,6 +1935,7 @@ function updateTestRun(event) {
 
 async function streamTest(url, payload, onEvent) {
   const options = {method: "POST", headers: {}};
+  if (testAbort) options.signal = testAbort.signal;
   if (payload) {
     options.headers["Content-Type"] = "application/json";
     options.body = JSON.stringify(payload);
@@ -1682,6 +1977,12 @@ async function runTest(button, name, request) {
   button.setAttribute("aria-busy", "true");
   for (const other of document.querySelectorAll(".test-btn")) other.disabled = true;
   startTestRun(name);
+  const cancelBtn = document.querySelector("#test-run-cancel");
+  testAbort = new AbortController();
+  if (cancelBtn) {
+    cancelBtn.hidden = false;
+    cancelBtn.onclick = () => { if (testAbort) testAbort.abort(); };
+  }
   let result = null;
   try {
     result = await request(updateTestRun);
@@ -1693,6 +1994,9 @@ async function runTest(button, name, request) {
     button.removeAttribute("aria-busy");
     for (const other of document.querySelectorAll(".test-btn")) other.disabled = false;
     testRunning = false;
+    testAbort = null;
+    const doneBtn = document.querySelector("#test-run-cancel");
+    if (doneBtn) { doneBtn.hidden = true; doneBtn.onclick = null; }
   }
   if (result) showTest(result, name);
   return result;
@@ -1777,13 +2081,169 @@ function render(state) {
   renderStatus();
   schedulePoll();
 
-  const box = document.querySelector("#models");
-  box.replaceChildren();
-  const none = state.models.length === 0;
+  renderModelLists(state);
+}
+
+// —— 模型列表：按组分节 ——
+// 每个分组一节：组头（名称 + 摘要 + 操作）可折叠，组内是模型行；独立模型保持平铺表格。
+// 折叠状态存 localStorage，刷新和语言切换都不丢。
+const COLLAPSE_KEY = "cursor-inner-collapsed-groups";
+let collapsedGroups = new Set();
+try { collapsedGroups = new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "[]")); } catch (_) {}
+function saveCollapsed() {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedGroups])); } catch (_) {}
+}
+const CHEV_SVG = '<svg class="group-chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
+
+function groupByID(id) {
+  return ((lastState && lastState.groups) || []).find(g => g.id === id) || null;
+}
+
+function modelTable(models) {
+  const scroll = el("div", "table-scroll");
+  const table = el("table");
+  table.innerHTML =
+    '<colgroup><col class="c-name"><col><col class="c-test"><col class="c-sw"><col class="c-sw"><col class="c-sw"><col class="c-num"><col class="c-num"><col class="c-ops"></colgroup>' +
+    "<thead><tr>" +
+    '<th data-i18n="colModel" data-i18n-tip="tipModel"></th>' +
+    '<th data-i18n="colEndpoint" data-i18n-tip="tipEndpoint"></th>' +
+    '<th data-i18n="colLastTest" data-i18n-tip="tipLastTest"></th>' +
+    '<th class="mid" data-i18n="colProxy" data-i18n-tip="tipProxy"></th>' +
+    '<th class="mid" data-i18n="colReason" data-i18n-tip="tipReason"></th>' +
+    '<th class="mid" data-i18n="colFast" data-i18n-tip="tipFast"></th>' +
+    '<th class="mid"><span data-i18n="colContext"></span><button type="button" class="qa" data-help="context" data-i18n-aria="more">?</button></th>' +
+    '<th class="mid"><span data-i18n="colMax"></span><button type="button" class="qa" data-help="maxOut" data-i18n-aria="more">?</button></th>' +
+    '<th class="ops" data-i18n="colOps" data-i18n-tip="tipOps"></th>' +
+    "</tr></thead>";
+  const body = el("tbody");
+  for (const model of models) body.append(modelRow(model));
+  table.append(body);
+  scroll.append(table);
+  return scroll;
+}
+
+function groupSection(group, models) {
+  const sec = el("section", "group-sec");
+  sec.dataset.group = group.id;
+  if (collapsedGroups.has(group.id)) sec.classList.add("collapsed");
+  const head = el("div", "group-head");
+  head.setAttribute("role", "button");
+  head.tabIndex = 0;
+  head.innerHTML = CHEV_SVG;
+  const name = el("span", "group-name", group.name);
+  name.dataset.tip = group.name;
+  head.append(name, el("span", "count", String(models.length)));
+  if ((group.profiles || []).length > 1) {
+    const sw = el("select", "profile-switch");
+    sw.setAttribute("aria-label", t("profileSwitch"));
+    sw.dataset.tip = t("profileSwitch");
+    for (const p of group.profiles) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sw.append(opt);
+    }
+    sw.value = group.active_profile || group.profiles[0].id;
+    sw.addEventListener("click", (ev) => ev.stopPropagation());
+    sw.addEventListener("keydown", (ev) => ev.stopPropagation());
+    sw.addEventListener("change", () => {
+      const pid = sw.value;
+      act(async () => {
+        const state = await send("/api/groups/" + group.id + "/profile", {
+          method: "PUT", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({profile_id: pid})
+        });
+        const g2 = (state.groups || []).find(x => x.id === group.id);
+        const p2 = g2 && (g2.profiles || []).find(x => x.id === pid);
+        toast(t("profileSwitched", {name: p2 ? p2.name : ""}), "ok");
+        return state;
+      });
+    });
+    head.append(sw);
+  }
+  const sum = el("span", "group-sum");
+  const tag = el("button", "tag", group.type);
+  tag.type = "button";
+  tag.dataset.tip = t("copyUrl");
+  tag.addEventListener("click", (ev) => { ev.stopPropagation(); copyText(group.base_url); });
+  sum.append(tag);
+  if (group.key_hint) {
+    const key = el("button", "key-hint");
+    key.type = "button";
+    key.dataset.tip = t("copyKey");
+    key.append(el("span", "key-label", t("keyLabel")), el("span", "mono", group.key_hint));
+    key.addEventListener("click", (ev) => { ev.stopPropagation(); copyGroupKey(group); });
+    sum.append(key);
+  }
+  sum.append(el("span", "sep sep-url", "·"));
+  const url = el("span", "url mono", group.base_url);
+  url.dataset.tip = group.base_url || "";
+  sum.append(url);
+  head.append(sum);
+  const badges = el("span", "group-badges");
+  badges.append(el("span", "gbadge" + (group.use_proxy ? " on" : ""), t(group.use_proxy ? "groupProxyOn" : "groupProxyOff")));
+  badges.append(el("span", "gbadge" + (group.reasoning ? " on" : ""), t(group.reasoning ? "groupReasonOn" : "groupReasonOff")));
+  head.append(badges);
+  const ops = el("span", "group-ops");
+  const addBtn = el("button", "sm", t("groupAddModel"));
+  addBtn.type = "button";
+  addBtn.addEventListener("click", (ev) => { ev.stopPropagation(); addModelToGroup(group.id); });
+  const editBtn = el("button", "sm", t("edit"));
+  editBtn.type = "button";
+  editBtn.dataset.tip = t("groupEdit");
+  editBtn.addEventListener("click", (ev) => { ev.stopPropagation(); openGroupForm(group); });
+  const delBtn = el("button", "sm danger", t("del"));
+  delBtn.type = "button";
+  delBtn.dataset.tip = t("groupDelete");
+  delBtn.addEventListener("click", (ev) => { ev.stopPropagation(); deleteGroup(group, models.length); });
+  ops.append(addBtn, editBtn, delBtn);
+  head.append(ops);
+  const toggle = () => {
+    if (collapsedGroups.has(group.id)) collapsedGroups.delete(group.id);
+    else collapsedGroups.add(group.id);
+    saveCollapsed();
+    sec.classList.toggle("collapsed", collapsedGroups.has(group.id));
+    syncGroupHeadAria(head, group.id);
+  };
+  head.addEventListener("click", toggle);
+  head.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(); }
+  });
+  syncGroupHeadAria(head, group.id);
+  const bodyWrap = el("div", "group-body");
+  if (models.length) bodyWrap.append(modelTable(models));
+  else bodyWrap.append(el("p", "group-empty", t("groupCount", {n: 0})));
+  sec.append(head, bodyWrap);
+  return sec;
+}
+
+function syncGroupHeadAria(head, id) {
+  const collapsed = collapsedGroups.has(id);
+  head.setAttribute("aria-expanded", String(!collapsed));
+  head.setAttribute("aria-label", t(collapsed ? "groupExpand" : "groupCollapse"));
+}
+
+function renderModelLists(state) {
+  rebuildGroupPick();
+  const root = document.querySelector("#model-lists");
+  root.replaceChildren();
+  const groups = state.groups || [];
+  const none = state.models.length === 0 && groups.length === 0;
   document.querySelector("#empty").hidden = !none;
-  document.querySelector("#model-table").hidden = none;
+  document.querySelector("#group-tools").hidden = none;
   document.querySelector("#model-count").textContent = state.models.length;
-  for (const model of state.models) {
+  for (const group of groups) {
+    root.append(groupSection(group, state.models.filter(m => m.group_id === group.id)));
+  }
+  const solo = state.models.filter(m => !m.group_id);
+  if (solo.length) root.append(modelTable(solo));
+  // 动态生成的表头也要按当前语言填文字。
+  root.querySelectorAll("[data-i18n]").forEach(node => { node.textContent = t(node.dataset.i18n); });
+  root.querySelectorAll("[data-i18n-tip]").forEach(node => { node.dataset.tip = t(node.dataset.i18nTip); });
+  root.querySelectorAll("[data-i18n-aria]").forEach(node => { node.setAttribute("aria-label", t(node.dataset.i18nAria)); });
+}
+
+function modelRow(model) {
     const tr_ = el("tr");
     if (model.id === editingId) tr_.classList.add("editing");
     const who = el("td");
@@ -1811,6 +2271,19 @@ function render(state) {
       apiHead.append(key);
     }
     const urlLine = el("div", "url-line");
+    if (model.group_id) {
+      const overrides = model.overrides || [];
+      const shared = ["type", "base_url", "api_key"];
+      if (overrides.some(f => shared.includes(f))) {
+        const ov = el("span", "ov-tag", t("overridesTag"));
+        ov.dataset.tip = t("overridesTip", {fields: overrides.map(fieldLabel).join("、")});
+        urlLine.append(ov);
+      } else {
+        const follow = el("span", "follow-tag", t("followGroup"));
+        follow.dataset.tip = t("followGroupTip");
+        urlLine.append(follow);
+      }
+    }
     const url = el("span", "url mono", model.base_url);
     url.dataset.tip = model.base_url || "";
     urlLine.append(url);
@@ -1867,8 +2340,29 @@ function render(state) {
       limitCell(model, "max_output_tokens", t("maxOutput")),
       ops
     );
-    box.append(tr_);
+    return tr_;
+}
+
+function fieldLabel(field) {
+  return {type: t("type"), base_url: t("baseUrl"), api_key: t("apiKey"), use_proxy: t("useProxy"), reasoning: t("reasoning")}[field] || field;
+}
+
+async function copyGroupKey(group) {
+  try {
+    const data = await send("/api/groups/" + group.id + "/key");
+    await copyText(data.api_key || "", t("copiedKey"));
+  } catch (err) {
+    showError(err.message);
   }
+}
+
+function deleteGroup(group, count) {
+  if (!confirm(t("groupDeleteAsk", {name: group.name, n: count}))) return;
+  act(async () => {
+    const state = await send("/api/groups/" + group.id, {method: "DELETE"});
+    toast(t("groupDeleted"), "ok");
+    return state;
+  });
 }
 
 async function act(fn) {
@@ -1971,6 +2465,27 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const editing = editingId;
   act(async () => {
+    // 选了「新建分组」：先建组（共享字段来自本表单），再把模型加进去。
+    if (groupPick.value === "__new") {
+      const name = String(groupNewName.value || "").trim();
+      if (!name) throw new Error(t("groupNewName"));
+      const created = await send("/api/groups", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          name,
+          type: form.type.value,
+          base_url: String(form.base_url.value || "").trim(),
+          api_key: String(form.api_key.value || "").trim(),
+          use_proxy: form.use_proxy.checked,
+          reasoning: form.reasoning.checked
+        })
+      });
+      const fresh = (created.groups || []).find(g => g.name === name);
+      if (!fresh) throw new Error(t("groupSaved"));
+      lastState = created;
+      rebuildGroupPick(fresh.id);
+      formTouched = new Set();
+    }
     const body = formModel();
     if (body.fallback.unknown.length) throw new Error(t("fallbackUnknown", {name: body.fallback.unknown[0]}));
     body.fallback = body.fallback.ids;
@@ -1987,6 +2502,139 @@ document.querySelector("#form-clear").addEventListener("click", () => {
   clearForm();
   if (lastState) render(lastState);
 });
+
+// —— 分组表单 ——
+const groupForm = document.querySelector("#group-form");
+const profileRows = document.querySelector("#profile-rows");
+let editingGroupId = "";
+const EYE_OFF = '<svg class="eye-off" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/><circle cx="8" cy="8" r="1.6"/><path d="M3 13 13 3"/></svg>';
+const EYE_ON = '<svg class="eye-on" hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/><circle cx="8" cy="8" r="1.6"/></svg>';
+
+function profileRow(p, editing) {
+  const row = el("div", "profile-row");
+  row.dataset.id = (p && p.id) || "";
+  const name = el("input");
+  name.type = "text";
+  name.className = "p-name";
+  name.required = true;
+  name.placeholder = t("profileName");
+  name.setAttribute("aria-label", t("profileName"));
+  name.value = (p && p.name) || "";
+  const type = el("select");
+  type.className = "p-type";
+  type.setAttribute("aria-label", t("type"));
+  for (const [v, label] of [["openai-chat", "OpenAI Chat"], ["openai-responses", "OpenAI Responses"], ["anthropic", "Anthropic"]]) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = label;
+    type.append(opt);
+  }
+  type.value = (p && p.type) || "openai-chat";
+  const url = el("input", "mono p-url");
+  url.type = "text";
+  url.required = true;
+  url.spellcheck = false;
+  url.placeholder = "https://api.example.com/v1";
+  url.setAttribute("aria-label", t("baseUrl"));
+  url.value = (p && p.base_url) || "";
+  const secret = el("span", "secret");
+  const key = el("input", "mono p-key");
+  key.type = "password";
+  key.autocomplete = "off";
+  key.required = !editing;
+  key.placeholder = editing ? t("keepKey") : "";
+  key.setAttribute("aria-label", t("apiKey"));
+  const eye = el("button");
+  eye.type = "button";
+  eye.innerHTML = EYE_OFF + EYE_ON;
+  eye.title = t("showKey");
+  eye.setAttribute("aria-label", t("showKey"));
+  eye.addEventListener("click", () => {
+    const show = key.type === "password";
+    key.type = show ? "text" : "password";
+    eye.querySelector(".eye-on").hidden = !show;
+    eye.querySelector(".eye-off").hidden = show;
+    eye.title = show ? t("hideKey") : t("showKey");
+    eye.setAttribute("aria-label", eye.title);
+  });
+  secret.append(key, eye);
+  const del = el("button", "profile-del", "×");
+  del.type = "button";
+  del.title = t("delProfile");
+  del.setAttribute("aria-label", t("delProfile"));
+  del.addEventListener("click", () => {
+    if (profileRows.children.length <= 1) return;
+    row.remove();
+  });
+  row.append(name, type, url, secret, del);
+  return row;
+}
+
+function openGroupForm(group) {
+  editingGroupId = group ? group.id : "";
+  groupForm.hidden = false;
+  document.querySelector("#group-form-title").textContent = group ? t("editGroup") : t("newGroup");
+  document.querySelector("#group-submit").textContent = t("save");
+  groupForm.group_name.value = group ? group.name : "";
+  groupForm.use_proxy.checked = group ? !!group.use_proxy : false;
+  groupForm.reasoning.checked = group ? !!group.reasoning : false;
+  profileRows.replaceChildren();
+  const profiles = group && (group.profiles || []).length ? group.profiles : [null];
+  for (const p of profiles) profileRows.append(profileRow(p, !!group));
+  groupForm.scrollIntoView({block: "nearest"});
+  groupForm.group_name.focus();
+}
+
+function closeGroupForm() {
+  editingGroupId = "";
+  groupForm.hidden = true;
+  groupForm.reset();
+  profileRows.replaceChildren();
+}
+
+document.querySelector("#profile-add").addEventListener("click", () => {
+  profileRows.append(profileRow(null, !!editingGroupId));
+  const last = profileRows.lastElementChild;
+  if (last) last.querySelector(".p-name").focus();
+});
+
+document.querySelector("#group-new").addEventListener("click", () => openGroupForm(null));
+document.querySelector("#group-form-cancel").addEventListener("click", () => closeGroupForm());
+groupForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const editing = editingGroupId;
+  act(async () => {
+    const profiles = [...profileRows.children].map(row => ({
+      id: row.dataset.id || "",
+      name: String(row.querySelector(".p-name").value || "").trim(),
+      type: row.querySelector(".p-type").value,
+      base_url: String(row.querySelector(".p-url").value || "").trim(),
+      api_key: String(row.querySelector(".p-key").value || "").trim()
+    }));
+    const body = {
+      name: String(groupForm.group_name.value || "").trim(),
+      use_proxy: groupForm.use_proxy.checked,
+      reasoning: groupForm.reasoning.checked,
+      profiles
+    };
+    const state = editing
+      ? await send("/api/groups/" + editing, {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)})
+      : await send("/api/groups", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    closeGroupForm();
+    toast(t("groupSaved"), "ok");
+    return state;
+  });
+});
+
+// 分组下拉与共享字段的「碰过才算覆盖」。
+groupPick.addEventListener("change", () => {
+  formTouched = new Set();
+  syncGroupFields();
+  syncFormMode();
+});
+form.type.addEventListener("change", () => formTouched.add("type"));
+form.use_proxy.addEventListener("change", () => formTouched.add("use_proxy"));
+form.reasoning.addEventListener("change", () => formTouched.add("reasoning"));
 document.querySelector("#discover-models").addEventListener("click", () => void discoverUpstreamModels());
 // fixed 定位的弹层不随页面滚动，滚动/缩放时重新对齐锚点（弹层隐藏时 no-op）。
 document.addEventListener("scroll", () => placeDiscoverPop(), true);
@@ -2008,8 +2656,7 @@ document.addEventListener("keydown", (ev) => {
 });
 const draftTest = document.querySelector("#draft-test");
 draftTest.addEventListener("click", () => {
-  const draft = formModel();
-  draft.fallback = draft.fallback.ids;
+  const draft = draftForTest();
   runTest(draftTest, draft.display_name || t("addModel"), (onEvent) =>
     streamTest("/api/models/test", draft, onEvent));
 });

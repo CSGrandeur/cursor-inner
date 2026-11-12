@@ -21,7 +21,7 @@ func cursorMatch() []string {
 	return []string{"-x", "cursor"}
 }
 
-func TerminateCursor() error {
+func terminateCursorPlatform() error {
 	if !cursorRunning() {
 		return nil
 	}

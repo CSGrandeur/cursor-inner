@@ -8,12 +8,12 @@
 <p align="center"><sub>自己的模型用 Cursor 的 Agent · Cursor、Grok、Codex 走你的代理</sub></p>
 
 <p align="center">
-  <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner“style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
-  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total“style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
-  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner“style=flat-square&color=151514&label=stars" alt="Stars"></a>
-  <a href="#安装"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514“style=flat-square" alt="Platform"></a>
-  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514“style=flat-square&logo=go&logoColor=white" alt="Go"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner“style=flat-square&color=151514" alt="License"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/releases"><img src="https://img.shields.io/github/downloads/CSGrandeur/cursor-inner/total?style=flat-square&color=151514&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/CSGrandeur/cursor-inner/stargazers"><img src="https://img.shields.io/github/stars/CSGrandeur/cursor-inner?style=flat-square&color=151514&label=stars" alt="Stars"></a>
+  <a href="#安装"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-151514?style=flat-square" alt="Platform"></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-151514?style=flat-square&logo=go&logoColor=white" alt="Go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/CSGrandeur/cursor-inner?style=flat-square&color=151514" alt="License"></a>
 </p>
 
 <p align="center">
@@ -24,34 +24,29 @@
 
 <br>
 
-cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列表里，并用 Cursor 的 Agent 读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。选 Cursor 自带的模型时，请求仍发给 Cursor。
-
-接管 Cursor、Grok、Codex 和反重力，让它们走你填的代理。系统代理往往兜不住这几个，有人便打开系统 TUN，其它程序也被带上。因此不必再改系统代理，也不必开系统 TUN，其它程序仍走原来的路。退出或意外结束时，Cursor 原来的代理设置会写回去。可用于 Windows、macOS 和 Linux，配置页可以切换中文和英文。
+cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列表里，用 Cursor 的 Agent 读改文件、运行命令、搜索，调用当前对话里的 MCP 和子代理；选官方模型时，请求原样发往 Cursor。Cursor、Grok、Codex、反重力走你填的一个代理地址，不改系统代理，也不开系统 TUN 带上其它程序。退出或意外结束时，Cursor 原来的代理设置会写回。Windows、macOS、Linux 可用，配置页中英文可切换。
 
 <p align="center">
-  <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-zh-dark.png">
+    <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
+  </picture>
 </p>
 
 模型接口可能另行计费。cursor-inner 是独立项目，与 Cursor 及其开发商没有关联。
 
 ## 功能
 
-- **自己的模型。** 在配置页添加、测试、编辑和删除。通过后出现在 Cursor 模型列表末尾。Cursor 3.26 起的新对话路径也会用你的自定义模型回答，工具参数照常传给模型。
-- **OpenAI Responses 完整支持。** 自定义模型选「OpenAI Responses」时，工具并行调用、思考显示、流式正文和配置页测速/缓存探测都正常，正文不会再重复一遍。
-- **上游探测模型。** 在「模型」页填好接口地址和密钥后，点模型名旁的「探测模型」，从上游 `/v1/models` 拉列表，点选填入模型名；编辑时密钥留空仍可用已保存的密钥（主机未改时）。
-- **官方模型照常。** 列表只追加。选官方模型时，请求原样发往 Cursor。
-- **换回官方模型不误伤。** 同一对话里先前用过自定义模型时，正文里残留的自定义模型 id 不会再让官方回合被拦成 Server error。
-- **Agent 能干活。** 自定义模型可以读改文件、运行命令、搜索，以及调用当前对话里的 MCP 和子代理。改动先在对话里看 diff，接受后才写入。
-- **长任务能叫醒你。** 自定义模型可以自己在本机留一条后台命令（用 `block_until_ms: 0` 起的 `sleep`，或一条轮询远端进程、做完就退出的循环），命令结束就自动接着回答；也可以让它用 `notify_on_output` 在匹配到某行输出时被叫醒，命令继续跑。远端 nohup、tmux、脱离的进程不算，它不会空口答应「到节点报你」。
-- **用量一眼看清。** 自定义模型的 Context Usage 与官方模型同一套分段色条和 View Report，不再只有 used/max 文本。
-- **工具别钻牛角尖。** 同一工具带相同参数连续调用几次时，会在结果里提醒优先用终端和读写文件；真正需要操作界面时仍可用 Computer Use。只有连续 8 次完全相同、或同名工具 A-B 振荡时才会暂停回合，中间夹了 sleep 或其它工具的长轮询不会被误停。
-- **本机会话可改名。** 自定义模型对话的侧栏改名和自动标题在本地完成，不再把本机会话 id 交给官方。
-- **走你的代理。** 只接管 Cursor、Grok、Codex，以及**接管反重力**，填一个地址即可。不必为了这几个去改系统代理，也不必开系统 TUN 把其它程序一起带上。也可以只让 Grok、x.ai、Cursor、OpenAI 这些官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。给反重力加代理启动参数；没在运行不会拉起。没在运行的 Codex 也不会被拉起。
-- **仍有直连时。** 接管之后，若这几个里还有个别官方连接不走代理，可在 cursor-inner 里打开 TUN 模式或严格模式，只覆盖官方地址，不动系统里其它程序。开不了就继续用接管。
-- **停得清楚。** 自定义模型回合默认不再按固定 45 分钟墙钟暂停，仍在推进的长任务可以继续。主动暂停（步数上限、工具死循环，以及可选的回合时间预算）会留下暂停说明，点停止显示「已停止」，上游报错保留 Explain 原文，不再一律写成 Operation interrupted.；热更新或重启后，已答完的本机会话也能正常 Resume。取消后若客户端带着更早的对话状态，也不会把上一轮已经记下的最新用户消息滚回去。
-- **生产库别乱动。** 自定义模型的系统提示里加了一小段 production_safety：未明确授权不改真实数据库、不做破坏性回滚，不可逆操作先等确认。
-- **更新即用。** 一键更新后，下一次对话就用新版本回答；旧的进程不再占着 Cursor 复用的连接最长 10 分钟，正在进行的回合在原进程跑完。
-- **更新和退出。** 有新版本时一键更新，Cursor 和 Grok 不用重启。退出或意外结束都会把 Cursor 原来的代理设置写回去。
+- **自己的模型。** OpenAI Chat、OpenAI Responses、Anthropic 三种接口。在配置页添加、测试、编辑、删除，通过后追加在 Cursor 模型列表末尾。
+- **模型分组。** 同一家供应商的模型放进一个分组，统一填接口地址、类型、密钥，组里每个模型只配模型名、上下文窗口等其余项。分组可折叠，只看名称、接口和密钥摘要。一个组可以存多套套餐（同一平台的多套地址与密钥，组头下拉切换。比如按量付费和 Token Plan），点“添加套餐”维护，组内模型跟着换。每个模型仍可单独配：表单里改哪个字段，哪个字段就成了它自己的；表格里拨过的开关旁有复位，点一下恢复跟随分组。删组时组内模型转为独立模型，配置保留。
+- **探测上游模型。** 填好地址和密钥，点模型名旁的「探测模型」，从上游列表里点选模型名。
+- **连通性测试。** 测试探测工具调用、推理、图片、缓存并记录速度；表下列出阶段、进度条和实时输出 token 数，测试中可点“取消”；结果随配置保存。
+- **官方模型照常。** 列表只追加、不替换；官方模型的请求原样发往 Cursor。同一对话里换回官方模型，不受先前自定义模型的影响。
+- **Agent 能干活。** 读改文件、运行命令、搜索、调用本轮对话的 MCP 和子代理；改动先看 diff，接受后才写入。用量条与官方模型同一套。
+- **长任务能接着跑。** 模型可以在本机留一条后台命令，命令结束自动接着回答；也可以在某行输出出现时被叫醒。
+- **停得清楚。** 点停止显示「已停止」；上游拒绝或报错会说明原因，已完成的步骤和检查点保留。热更新或重启后，已答完的对话能正常恢复。
+- **走你的代理。** 接管 Cursor、Grok、Codex、反重力，填一个地址即可；也可以只让官方地址走代理，其余直连。每个自定义模型单独决定是否走代理。接管后仍有个别直连时，TUN 模式或严格模式只覆盖官方地址，不动其它程序。
+- **更新和退出。** 一键更新，Cursor 和 Grok 不用重启，只安装签名有效的版本。退出或意外结束都会还原 Cursor 的代理设置；Windows 上点关闭只收进通知区域。
 
 ## 安装
 
@@ -67,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.5.29`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.6.0`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -113,21 +108,21 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 ## 使用
 
 1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的“启动 Cursor”“启动 Grok”“启动 Codex”“启动反重力”再打开它们，不退出 cursor-inner。
-2. 在“模型”里填写显示名、类型、模型名、接口地址和密钥；不确定模型名时可先点「探测模型」从上游列表里选，再点“测试”。测试期间表下会显示正在探测的阶段、进度条和实时输出 token 数。编辑时密钥留空表示不改。
+2. 在“模型”里填写显示名、模型名、接口地址和密钥；同一家供应商有多个模型时，点“新建分组”，填分组名称和共享的地址、类型、密钥，再往组里添加模型。不确定模型名时点「探测模型」从上游列表里选。点“测试”验证，表下会显示阶段、进度和实时 token 数。编辑时密钥留空表示不改。
 3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点“刷新模型列表”（Refresh model list），或执行 Reload Window。
 4. 用完点“退出”。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选“退出”才结束。Cursor 的设置会还原。
 
-   退出前会问一次“退出 cursor-inner？”，并列出“这些程序正经由 cursor-inner 联网，会一并关闭：”（Cursor，以及 cursor-inner 接管的 Grok、Codex 和反重力），提示“下次启动时可一键恢复 Grok、Codex 和反重力，照常走代理。”。勾“不再询问”以后直接退出，点“取消”不退出；Ctrl+C、注销、关机不问。只关 cursor-inner 自己接管的进程，你自己另开的不动；cursor-inner 被强杀时由守护进程补关。下次打开 cursor-inner，配置页顶部会显示上次关掉的程序：点“恢复”按当前接管设置带代理重新打开（拿不到可用代理就报错，绝不直连），点“忽略”不再提示。
+   退出前会问一次“退出 cursor-inner？”，并列出会一并关闭的程序；勾“不再询问”以后直接退出。只关 cursor-inner 自己接管的进程，你自己另开的不动。下次打开时，配置页顶部可以一键“恢复”上次关掉的程序，照常走代理；点“忽略”不再提示。
 
 > [!IMPORTANT]
 > 选 **Auto** 时 Cursor 只用官方模型。要用自定义模型，必须在列表里手动选。
 
 配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
 
-- **模型**：仅支持 Cursor。添加、探测模型和测试。测试会看速度，并探测工具、推理、图片和缓存；表下会列出阶段、进度和实时 token 数。列表里的密钥带“密钥”标签，点击即可复制；“复制”会把配置连同密钥带进下面的添加表单，密钥默认隐藏，点眼睛才显示明文。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空。读入的图片会先缩小（长边 1568 像素、约 256KB）；一次请求里的图片超过上限（默认 20 张、24MB）时，从最旧的工具图片起分批省略，最新几张始终保留。备用模型填写其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流；填了列表里没有的名称会提示，不会保存。上下文窗口和最大输出旁的““”会打开一张小帮助卡，说明数值含义、留空时怎么算。Kimi / Moonshot 未自填窗口时按变体套用本地上限，Qwen4 系列未自填时按 1M/64K；已手填的窗口与输出不被覆盖。有新版本时，更新页按标题和列表显示更新说明。
-- **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、接管反重力、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。若开机时 cursor-inner 比代理软件先起来，状态栏会显示“等待代理…”，就绪后自动接上，官方流量不会直连；代理中途关掉也会同样等待。接管 Codex 给 Codex 加上代理启动参数；没在运行不会拉起。给反重力加代理启动参数；没在运行不会拉起。这个进程的联网都走上面的代理。
-- **更新**：按钮是“检查更新”和“更新”。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。失败时只说明发生了什么、该怎么做，不会露出下载地址。
-- **通用**：出图、开机启动。Windows 上还有**后台运行**（启动时不开控制台窗口，只留通知区域图标。）和**通知**（更新结果和泄漏告警弹系统通知。）。要让 Agent 生成图片，在“出图”里填 OpenAI 兼容接口。
+- **模型**：仅支持 Cursor。添加、探测模型和测试；列表里的密钥带“密钥”标签，点击复制；“复制”把配置连同密钥带进添加表单，密钥默认隐藏。分组在列表里按节显示，点组头折叠或展开，折叠后只剩摘要；组头可以直接给组添加模型、编辑或删除分组。组内模型的接口列标着“跟随分组”，与分组不同的字段标“自定义”，悬停可看是哪几个。组里存了多套套餐时，组头出现套餐下拉，切换后组内模型立即使用新套餐的地址、类型和密钥；在分组编辑里的“套餐”区点“添加套餐”增加一套，每套填套餐名称、类型、地址和密钥，编辑时密钥留空表示不改。表单顶部的分组下拉可以选已有分组、独立模型或新建分组；选组后地址、类型、密钥留空即跟随分组。未单独配置的字段使用分组的设置；改动后即成为这个模型的自定义值。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空；读入的图片会先缩小，一次请求超过上限时从最旧的工具图片起省略，最新几张保留。备用模型填其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流。上下文窗口和最大输出旁的“?”打开一张小帮助卡。打开推理后，Cursor 的思考档列表按模型能力生成。
+- **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、接管反重力、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。cursor-inner 比代理软件先启动时，状态栏显示“等待代理…”，就绪后自动接上，官方流量不会直连。
+- **更新**：按钮是“检查更新”和“更新”。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
+- **通用**：出图、开机启动。Windows 上还有**后台运行**和**通知**。要让 Agent 生成图片，在“出图”里填 OpenAI 兼容接口。
 
 <details>
 <summary><b>命令行</b></summary>
@@ -143,16 +138,14 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 ## 流量怎么走
 
-```mermaid
-flowchart LR
-    Cursor -->|本机代理| CI["cursor-inner"]
-    CI -->|自定义模型| YourAPI["你的模型接口"]
-    CI -->|官方模型| Official["Cursor 官方服务"]
-    Grok["Grok"] --> Proxy["你的代理"]
-    CI --> Proxy
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-zh-dark.svg">
+    <img src="docs/images/flow-zh-light.svg" alt="Cursor 经本机代理 cursor-inner 分流：自定义模型发往你的接口，官方模型原样发往 Cursor；Grok 等走你的代理，其他主机原样隧道" width="100%">
+  </picture>
+</p>
 
-Cursor 里会读代理设置的流量先到本机：自定义模型由本机调用你的接口，官方模型原样转发。Grok 走你配置的代理。配置页只接受本机访问。
+Cursor 里读代理设置的流量先到本机：自定义模型由本机调用你的接口，官方模型原样转发，其余主机原样隧道、不解密。Grok、Codex、反重力走你配置的代理。配置页只接受本机访问。
 
 ## 已知限制
 
@@ -199,7 +192,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 <details>
 <summary><b>Cursor 升级后还能用吗？</b></summary>
 
-官方模型不受影响。Cursor 3.26 之后的对话路径，自定义模型也会由本机回答。若仍遇到自定义模型回合卡住或恢复失败，更新到本版并重启一次 Cursor。
+官方模型不受影响，自定义模型也由本机回答。若遇到自定义模型回合卡住或恢复失败，更新到本版并重启一次 Cursor。
 
 </details>
 
@@ -230,7 +223,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.5.29 ./build.sh linux
+VERSION=v0.6.0 ./build.sh linux
 ```
 
 ## 致谢

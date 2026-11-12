@@ -23,6 +23,18 @@ type Note struct {
 	Prompt    int    `json:"prompt_tokens,omitempty"`
 	Output    int    `json:"completion_tokens,omitempty"`
 	Error     string `json:"error,omitempty"`
+	// 上游诊断字段。VendorRequestID 只在供应商返回时填写，不编造。
+	Provider        string `json:"provider,omitempty"`
+	Effort          string `json:"effort,omitempty"`
+	Roles           string `json:"roles,omitempty"`
+	Chars           int    `json:"content_runes,omitempty"`
+	Code            string `json:"code,omitempty"`
+	ErrorType       string `json:"error_type,omitempty"`
+	VendorRequestID string `json:"vendor_request_id,omitempty"`
+	// 与同一回合上一次模型请求的结构差分（只记计数，不记正文）。
+	DeltaMessages int `json:"delta_messages,omitempty"`
+	DeltaRunes    int `json:"delta_runes,omitempty"`
+	DeltaBytes    int `json:"delta_bytes,omitempty"`
 }
 
 type sinkFunc func(Note)

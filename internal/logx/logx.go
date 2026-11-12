@@ -232,7 +232,7 @@ var (
 	sinks  []func(slog.Record)
 )
 
-// AddSink 让额外的记录者也收到每一条日志。只有个人记录版会挂上；发版不调用，保持精简。
+// AddSink 让额外的记录者也收到每一条日志。默认不挂任何 sink，保持精简。
 func AddSink(fn func(slog.Record)) {
 	if fn == nil {
 		return

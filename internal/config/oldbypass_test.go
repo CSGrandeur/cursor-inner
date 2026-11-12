@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 开发版曾写过 "bypass" 名单；字段已删除，旧配置必须照常读取、其余设置不丢。
+// 旧版本曾写过 "bypass" 名单；字段已删除，旧配置必须照常读取、其余设置不丢。
 func TestOldConfigWithBypassFieldStillLoads(t *testing.T) {
 	dir := t.TempDir()
 	raw := `{"takeover_grok":true,"proxy":{"enabled":true,"address":"127.0.0.1:1080"},"bypass":["alpha.example",".alpha.example","gamma.example"],"models":[]}`

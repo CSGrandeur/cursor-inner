@@ -12,6 +12,7 @@ import (
 	"cursor-inner/internal/provider"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // blobID 是 blob 内容的 SHA-256，32 字节。Cursor 和 cursor-byok 都按这个校验。
@@ -69,12 +70,18 @@ func writeCheckpoint(system, requestID string, messages []provider.Message, mode
 		return checkpointBuild{}, err
 	}
 	var turns [][]byte
-	for i, turn := range splitTurns(messages) {
-		if id, ok := reusableTurn(prev, prevBlobs, i, turn); ok {
+	prevTurns := decodePrevTurns(prev, prevBlobs)
+	matched := 0
+	for _, turn := range splitTurns(messages) {
+		encoded, err := encodeTurnSteps(turn)
+		if err != nil {
+			return checkpointBuild{}, err
+		}
+		if id, ok := reusableTurn(prevTurns, &matched, turn, encoded); ok {
 			turns = append(turns, id)
 			continue
 		}
-		id, err := putTurn(put, turn, requestID)
+		id, err := putTurn(put, turn, requestID, encoded)
 		if err != nil {
 			return checkpointBuild{}, err
 		}
@@ -246,7 +253,7 @@ func toolNames(messages []provider.Message) map[string]string {
 	return names
 }
 
-func putTurn(put func([]byte) ([]byte, error), turn []provider.Message, requestID string) ([]byte, error) {
+func putTurn(put func([]byte) ([]byte, error), turn []provider.Message, requestID string, encoded [][]byte) ([]byte, error) {
 	user := &cursorpb.UserMessage{Text: visibleUserText(turn[0])}
 	if reminder := reminderBodyFromContent(turn[0].Content); reminder != "" {
 		user.SubagentSystemReminder = &reminder
@@ -256,10 +263,6 @@ func putTurn(put func([]byte) ([]byte, error), turn []provider.Message, requestI
 		return nil, err
 	}
 	userID, err := put(userRaw)
-	if err != nil {
-		return nil, err
-	}
-	encoded, err := encodeTurnSteps(turn)
 	if err != nil {
 		return nil, err
 	}
@@ -329,9 +332,21 @@ func encodeTurnSteps(turn []provider.Message) ([][]byte, error) {
 			if card == nil {
 				synthesized, err := synthesizeCard(call, message.Content, message.IsError)
 				if err != nil {
-					continue
+					// 合成不出内置卡（MCP、子代理等）不能把结果丢掉：客户端按 steps 渲染，
+					// 丢一条就少一段上一轮的内容。MCP 卡带名字和结果，其余退成文本步骤。
+					if mcp := mcpCard(call, message.Content, message.IsError); mcp != nil {
+						card = mcp
+					} else {
+						raw, err := proto.Marshal(&cursorpb.ConversationStep{Message: &cursorpb.ConversationStep_AssistantMessage{AssistantMessage: &cursorpb.AssistantMessage{Text: toolFallbackText(call, message.Content)}}})
+						if err != nil {
+							return nil, err
+						}
+						out = append(out, raw)
+						continue
+					}
+				} else {
+					card = synthesized
 				}
-				card = synthesized
 			}
 			raw, err := proto.Marshal(&cursorpb.ConversationStep{Message: &cursorpb.ConversationStep_ToolCall{ToolCall: card}})
 			if err != nil {
@@ -380,6 +395,70 @@ func synthesizeCard(call provider.ToolCall, result string, isErr bool) (*cursorp
 	return card, nil
 }
 
+// mcpCard 给 MCP 工具结果合成客户端能渲染的卡；名字不像 MCP 工具时返回 nil。
+func mcpCard(call provider.ToolCall, result string, isErr bool) *cursorpb.ToolCall {
+	server, tool, ok := splitMcpName(call.Name)
+	if !ok {
+		return nil
+	}
+	args := map[string]*structpb.Value{}
+	var fields map[string]any
+	if json.Unmarshal([]byte(call.Arguments), &fields) == nil {
+		for k, v := range fields {
+			if sv, err := structpb.NewValue(v); err == nil {
+				args[k] = sv
+			}
+		}
+	}
+	id := call.ID
+	card := &cursorpb.ToolCall{ToolCallId: &id}
+	mcp := &cursorpb.McpToolCall{
+		Args: &cursorpb.McpArgs{
+			Name:               server + "-" + tool,
+			Args:               args,
+			ToolCallId:         call.ID,
+			ProviderIdentifier: server,
+			ToolName:           tool,
+			ServerIdentifier:   server,
+		},
+	}
+	if isErr {
+		mcp.Result = &cursorpb.McpToolResult{Result: &cursorpb.McpToolResult_Error{Error: &cursorpb.McpToolError{Error: result}}}
+	} else {
+		mcp.Result = &cursorpb.McpToolResult{Result: &cursorpb.McpToolResult_Success{Success: &cursorpb.McpSuccess{
+			Content: []*cursorpb.McpToolResultContentItem{{Content: &cursorpb.McpToolResultContentItem_Text{Text: &cursorpb.McpTextContent{Text: result}}}},
+		}}}
+	}
+	card.Tool = &cursorpb.ToolCall_McpToolCall{McpToolCall: mcp}
+	return card
+}
+
+// splitMcpName 认 mcp__server__tool 和 plugin-server-tool 两种 MCP 命名；内置工具名返回 false。
+func splitMcpName(name string) (server, tool string, ok bool) {
+	if strings.HasPrefix(name, "mcp__") {
+		rest := strings.TrimPrefix(name, "mcp__")
+		if i := strings.Index(rest, "__"); i > 0 && i+2 < len(rest) {
+			return rest[:i], rest[i+2:], true
+		}
+		return "", "", false
+	}
+	if strings.HasPrefix(name, "plugin-") {
+		rest := strings.TrimPrefix(name, "plugin-")
+		if i := strings.LastIndex(rest, "-"); i > 0 && i+1 < len(rest) {
+			return rest[:i], rest[i+1:], true
+		}
+	}
+	return "", "", false
+}
+
+func toolFallbackText(call provider.ToolCall, result string) string {
+	name := call.Name
+	if name == "" {
+		name = "tool"
+	}
+	return "[" + name + "]\n" + result
+}
+
 func argString(raw string, keys ...string) string {
 	var fields map[string]any
 	if json.Unmarshal([]byte(raw), &fields) != nil {
@@ -393,49 +472,85 @@ func argString(raw string, keys ...string) string {
 	return ""
 }
 
-func reusableTurn(prev *cursorpb.ConversationStateStructure, blobs map[string][]byte, index int, turn []provider.Message) ([]byte, bool) {
-	if prev == nil || index >= len(prev.GetTurns()) || len(turn) == 0 {
-		return nil, false
-	}
-	raw, ok := blobs[string(prev.Turns[index])]
-	if !ok {
-		return nil, false
-	}
-	var wrapper cursorpb.ConversationTurnStructure
-	if proto.Unmarshal(raw, &wrapper) != nil || wrapper.GetAgentConversationTurn() == nil {
-		return nil, false
-	}
-	agentTurn := wrapper.GetAgentConversationTurn()
-	userRaw, ok := blobs[string(agentTurn.GetUserMessage())]
-	if !ok {
-		return nil, false
-	}
-	var user cursorpb.UserMessage
-	if proto.Unmarshal(userRaw, &user) != nil || user.GetText() != visibleUserText(turn[0]) {
-		return nil, false
-	}
-	if countSteps(turn) > len(agentTurn.GetSteps()) {
-		return nil, false
-	}
-	return append([]byte(nil), prev.Turns[index]...), true
+// prevTurn 是上一份检查点里解出的轮，供按用户边界复用。
+// steps 存每步的原始字节：复用必须内容完全一致，只比步数会把新内容配给旧轮，
+// 客户端重绘时整轮新输出消失（2026-11-12 用户报告「上一轮输出很多不见了」）。
+type prevTurn struct {
+	id    []byte
+	user  string
+	steps [][]byte
 }
 
-func countSteps(turn []provider.Message) int {
-	n := 0
-	for _, message := range turn[1:] {
-		switch message.Role {
-		case "assistant":
-			if message.Reasoning != "" {
-				n++
+func decodePrevTurns(prev *cursorpb.ConversationStateStructure, blobs map[string][]byte) []prevTurn {
+	if prev == nil {
+		return nil
+	}
+	var out []prevTurn
+	for _, tid := range prev.GetTurns() {
+		raw, ok := blobs[string(tid)]
+		if !ok {
+			continue
+		}
+		var wrapper cursorpb.ConversationTurnStructure
+		if proto.Unmarshal(raw, &wrapper) != nil || wrapper.GetAgentConversationTurn() == nil {
+			continue
+		}
+		at := wrapper.GetAgentConversationTurn()
+		userRaw, ok := blobs[string(at.GetUserMessage())]
+		if !ok {
+			continue
+		}
+		var user cursorpb.UserMessage
+		if proto.Unmarshal(userRaw, &user) != nil {
+			continue
+		}
+		var steps [][]byte
+		complete := true
+		for _, sid := range at.GetSteps() {
+			raw, ok := blobs[string(sid)]
+			if !ok {
+				complete = false
+				break
 			}
-			if message.Content != "" {
-				n++
-			}
-		case "tool":
-			n++
+			steps = append(steps, raw)
+		}
+		if !complete {
+			continue
+		}
+		out = append(out, prevTurn{id: tid, user: user.GetText(), steps: steps})
+	}
+	return out
+}
+
+// reusableTurn 按用户消息边界复用旧轮，而不是按数组下标。历史被压缩、重排或去重后
+// 下标会错位：旧实现把空轮配给有内容的轮，客户端渲染时整轮内容消失（2026-11-12 用户报告）。
+// 从上次匹配位置向后找第一条同用户、且每步字节完全一致的轮；找不到才重建。
+// 只比步数不够：同用户文本（如重复的「继续」）步数相同但内容不同时，复用旧轮会丢新输出。
+func reusableTurn(prev []prevTurn, matched *int, turn []provider.Message, encoded [][]byte) ([]byte, bool) {
+	if len(turn) == 0 || len(prev) == 0 {
+		return nil, false
+	}
+	want := visibleUserText(turn[0])
+	for j := *matched; j < len(prev); j++ {
+		if prev[j].user != want || !sameSteps(prev[j].steps, encoded) {
+			continue
+		}
+		*matched = j + 1
+		return append([]byte(nil), prev[j].id...), true
+	}
+	return nil, false
+}
+
+func sameSteps(a, b [][]byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !bytes.Equal(a[i], b[i]) {
+			return false
 		}
 	}
-	return n
+	return true
 }
 
 func splitTurns(messages []provider.Message) [][]provider.Message {

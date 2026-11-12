@@ -116,13 +116,20 @@ func (a *App) SyncAutostart() (autostart.State, error) {
 }
 
 func (a *App) EnableTakeover() error {
+	_, err := a.StartTakeover()
+	return err
+}
+
+// StartTakeover 打开接管：若已有接管标记则在原地址恢复（不结束 Cursor），
+// 否则首次写入设置并结束 Cursor 以便新代理生效。
+func (a *App) StartTakeover() (takeover.StartKind, error) {
 	if err := a.store.Update(func(f *config.File) error {
 		f.Takeover = true
 		return nil
 	}); err != nil {
-		return err
+		return "", err
 	}
-	return a.life.Enable()
+	return a.life.ResumeOrEnable()
 }
 
 func (a *App) DisableTakeover() error {
@@ -193,10 +200,36 @@ func (a *App) State() (web.View, error) {
 	tstate, tdetail := a.tun.Status()
 	view.Tunnel.Status = int(tstate)
 	view.Tunnel.Detail = tdetail
+	for _, g := range cfg.Groups {
+		count := 0
+		for _, model := range cfg.Models {
+			if model.GroupID == g.ID {
+				count++
+			}
+		}
+		gv := web.GroupView{
+			ID: g.ID, Name: g.Name, Type: g.Type, BaseURL: g.BaseURL,
+			UseProxy: g.UseProxy, Reasoning: g.Reasoning,
+			KeyHint: config.Model{APIKey: g.APIKey}.KeyHint(), Models: count,
+			ActiveProfile: g.ActiveProfile,
+		}
+		for _, p := range g.Profiles {
+			gv.Profiles = append(gv.Profiles, web.GroupProfileView{
+				ID: p.ID, Name: p.Name, Type: p.Type, BaseURL: p.BaseURL,
+				KeyHint: config.Model{APIKey: p.APIKey}.KeyHint(),
+			})
+		}
+		view.Groups = append(view.Groups, gv)
+	}
+	if view.Groups == nil {
+		view.Groups = []web.GroupView{}
+	}
 	for _, model := range cfg.Models {
 		view.Models = append(view.Models, web.ModelView{
 			ID:              model.ID,
 			DisplayName:     model.DisplayName,
+			GroupID:         model.GroupID,
+			Overrides:       model.Overrides(),
 			Type:            model.Type,
 			BaseURL:         model.BaseURL,
 			Model:           model.Model,
@@ -336,7 +369,15 @@ func (a *App) SetAutostart(enabled bool) error {
 }
 
 func (a *App) AddModel(model config.Model) error {
-	prepared, err := provider.Prepare(model)
+	cfg := a.store.Get()
+	if model.GroupID != "" {
+		g, ok := groupOf(&cfg, model.GroupID)
+		if !ok {
+			return i18n.E("没有这个分组", "No such group")
+		}
+		model = fillFromGroup(model, g)
+	}
+	prepared, err := provider.PrepareGrouped(model)
 	if err != nil {
 		return err
 	}
@@ -364,13 +405,28 @@ func (a *App) UpdateModel(id string, model config.Model) error {
 				continue
 			}
 			prev := f.Models[i]
+			if model.GroupID != "" {
+				g, ok := groupOf(f, model.GroupID)
+				if !ok {
+					return i18n.E("没有这个分组", "No such group")
+				}
+				model = fillFromGroup(model, g)
+			}
 			if strings.TrimSpace(model.APIKey) == "" {
 				if !sameEndpoint(prev, model) {
 					return i18n.E("换了服务器地址，请重新填写 API Key", "The server host changed; enter the API key again")
 				}
 				model.APIKey = prev.APIKey
+				model.APIKeySet = prev.APIKeySet
 			}
-			prepared, err := provider.Prepare(model)
+			// 设置页保存不含思考档字段，空值时保留旧配置，避免把 effort_levels / default_effort 冲掉。
+			if len(model.EffortLevels) == 0 {
+				model.EffortLevels = append([]string(nil), prev.EffortLevels...)
+			}
+			if strings.TrimSpace(model.DefaultEffort) == "" {
+				model.DefaultEffort = prev.DefaultEffort
+			}
+			prepared, err := provider.PrepareGrouped(model)
 			if err != nil {
 				return err
 			}
@@ -382,7 +438,10 @@ func (a *App) UpdateModel(id string, model config.Model) error {
 					return i18n.E("已经添加过这个模型", "This model has already been added")
 				}
 			}
-			if prev.Type == prepared.Type && prev.BaseURL == prepared.BaseURL && prev.Model == prepared.Model && prev.APIKey == prepared.APIKey {
+			if prev.GroupID != "" && prepared.GroupID != "" {
+				// 组内模型 id 稳定，接入变化不丢测试结果。
+				prepared.LastTest = prev.LastTest
+			} else if prev.Type == prepared.Type && prev.BaseURL == prepared.BaseURL && prev.Model == prepared.Model && prev.APIKey == prepared.APIKey {
 				prepared.LastTest = prev.LastTest
 			}
 			f.Models[i] = prepared
@@ -461,6 +520,7 @@ func (a *App) SetModelReasoning(id string, on bool) error {
 		for i := range f.Models {
 			if f.Models[i].ID == id {
 				f.Models[i].Reasoning = on
+				f.Models[i].ReasoningSet = f.Models[i].GroupID != ""
 				return nil
 			}
 		}
@@ -473,6 +533,7 @@ func (a *App) SetModelProxy(id string, use bool) error {
 		for i := range f.Models {
 			if f.Models[i].ID == id {
 				f.Models[i].UseProxy = use
+				f.Models[i].UseProxySet = f.Models[i].GroupID != ""
 				return nil
 			}
 		}
@@ -480,11 +541,14 @@ func (a *App) SetModelProxy(id string, use bool) error {
 	})
 }
 
-func (a *App) TestSaved(id string, progress func(provider.Progress)) provider.Result {
+func (a *App) TestSaved(ctx context.Context, id string, progress func(provider.Progress)) provider.Result {
 	cfg := a.store.Get()
 	for _, model := range cfg.Models {
 		if model.ID == id {
-			result := a.probe(model, progress)
+			result := a.probe(ctx, model, progress)
+			if prev := model.LastTest; prev != nil {
+				result.Capabilities = provider.MergeCapabilities(prev.Capabilities, result.Capabilities)
+			}
 			snap := result.LastTest()
 			_ = a.store.Update(func(f *config.File) error {
 				for i := range f.Models {
@@ -501,33 +565,45 @@ func (a *App) TestSaved(id string, progress func(provider.Progress)) provider.Re
 	return provider.Result{Error: i18n.T("没有这个模型", "No such model")}
 }
 
-func (a *App) TestDraft(model config.Model, progress func(provider.Progress)) provider.Result {
+func (a *App) TestDraft(ctx context.Context, model config.Model, progress func(provider.Progress)) provider.Result {
+	cfg := a.store.Get()
 	if strings.TrimSpace(model.APIKey) == "" && model.ID != "" {
-		for _, existing := range a.store.Get().Models {
+		for _, existing := range cfg.Models {
 			if existing.ID == model.ID {
 				// 只在地址和类型都没变时沿用已存的 Key，免得把 Key 发给新填的地址。
 				if sameEndpoint(existing, model) {
 					model.APIKey = existing.APIKey
+					model.APIKeySet = existing.APIKeySet
 				}
 				break
 			}
+		}
+	}
+	if model.GroupID != "" {
+		if g, ok := groupOf(&cfg, model.GroupID); ok {
+			model = fillFromGroup(model, g)
 		}
 	}
 	prepared, err := provider.Prepare(model)
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}
 	}
-	return a.probe(prepared, progress)
+	return a.probe(ctx, prepared, progress)
 }
 
-func (a *App) probe(model config.Model, progress func(provider.Progress)) provider.Result {
+func (a *App) probe(ctx context.Context, model config.Model, progress func(provider.Progress)) provider.Result {
 	d, err := dialer.ForModel(a.store.Get().Proxy, model.UseProxy)
 	if err != nil {
 		return provider.Result{Error: i18n.Of(err)}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, provider.ProbeTotalBudget())
 	defer cancel()
-	model = provider.ApplyModelsDevDefaults(ctx, model, d, config.DefaultDir())
+	defCtx, defCancel := context.WithTimeout(ctx, 5*time.Second)
+	model = provider.ApplyModelsDevDefaults(defCtx, model, d, config.DefaultDir())
+	defCancel()
 	result, updated := provider.Probe(ctx, model, d, progress)
 	if result.OK {
 		_ = a.store.Update(func(f *config.File) error {

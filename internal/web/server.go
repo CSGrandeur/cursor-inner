@@ -147,6 +147,64 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeState(w, backend)
 	})
+	mux.HandleFunc("POST /api/groups", func(w http.ResponseWriter, r *http.Request) {
+		var group config.Group
+		if err := readJSON(r, &group); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.AddGroup(group); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
+	mux.HandleFunc("PUT /api/groups/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var group config.Group
+		if err := readJSON(r, &group); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.UpdateGroup(r.PathValue("id"), group); err != nil {
+			status := http.StatusBadRequest
+			if err.Error() == "没有这个分组" {
+				status = http.StatusNotFound
+			}
+			writeErr(w, status, err)
+			return
+		}
+		writeState(w, backend)
+	})
+	mux.HandleFunc("PUT /api/groups/{id}/profile", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			ProfileID string `json:"profile_id"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backend.SetGroupProfile(r.PathValue("id"), body.ProfileID); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
+	mux.HandleFunc("DELETE /api/groups/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := backend.DeleteGroup(r.PathValue("id")); err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		writeState(w, backend)
+	})
+	mux.HandleFunc("GET /api/groups/{id}/key", func(w http.ResponseWriter, r *http.Request) {
+		key, err := backend.GroupKey(r.PathValue("id"))
+		if err != nil {
+			writeErr(w, http.StatusNotFound, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]string{"api_key": key})
+	})
 	mux.HandleFunc("POST /api/models", func(w http.ResponseWriter, r *http.Request) {
 		var model config.Model
 		if err := readJSON(r, &model); err != nil {
@@ -166,7 +224,7 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 			return
 		}
 		streamTest(w, func(progress func(provider.Progress)) provider.Result {
-			return backend.TestDraft(model, progress)
+			return backend.TestDraft(r.Context(), model, progress)
 		})
 	})
 	mux.HandleFunc("GET /api/models/{id}/key", func(w http.ResponseWriter, r *http.Request) {
@@ -187,18 +245,20 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 	})
 	mux.HandleFunc("PUT /api/models/{id}", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			DisplayName     *string `json:"display_name"`
-			Type            string  `json:"type"`
-			BaseURL         string  `json:"base_url"`
-			APIKey          string  `json:"api_key"`
-			Model           string  `json:"model"`
-			UseProxy        *bool   `json:"use_proxy"`
-			Reasoning       *bool   `json:"reasoning"`
-			Fast            *bool   `json:"fast"`
-			ContextWindow   *int    `json:"context_window"`
-			MaxOutputTokens *int    `json:"max_output_tokens"`
-			MaxImages       *int    `json:"max_images"`
-			ImageBudgetMB   *int    `json:"image_budget_mb"`
+			DisplayName     *string  `json:"display_name"`
+			GroupID         *string  `json:"group_id"`
+			Type            string   `json:"type"`
+			BaseURL         string   `json:"base_url"`
+			APIKey          string   `json:"api_key"`
+			Model           string   `json:"model"`
+			UseProxy        *bool    `json:"use_proxy"`
+			Reasoning       *bool    `json:"reasoning"`
+			Fast            *bool    `json:"fast"`
+			ContextWindow   *int     `json:"context_window"`
+			MaxOutputTokens *int     `json:"max_output_tokens"`
+			MaxImages       *int     `json:"max_images"`
+			ImageBudgetMB   *int     `json:"image_budget_mb"`
+			Overrides       []string `json:"overrides"`
 		}
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -214,6 +274,27 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 				UseProxy:    body.UseProxy != nil && *body.UseProxy,
 				Reasoning:   body.Reasoning != nil && *body.Reasoning,
 				FastSupport: body.Fast != nil && *body.Fast,
+			}
+			if body.GroupID != nil {
+				model.GroupID = *body.GroupID
+			}
+			// 覆盖位由页面明确给出（用户改了哪个共享字段）；没带 overrides 时
+			// 由后端按与组值的差异判定。
+			if body.Overrides != nil {
+				for _, field := range body.Overrides {
+					switch field {
+					case "type":
+						model.TypeSet = true
+					case "base_url":
+						model.BaseURLSet = true
+					case "api_key":
+						model.APIKeySet = true
+					case "use_proxy":
+						model.UseProxySet = true
+					case "reasoning":
+						model.ReasoningSet = true
+					}
+				}
 			}
 			if body.ContextWindow != nil {
 				model.ContextWindow = *body.ContextWindow
@@ -272,9 +353,27 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		}
 		writeState(w, backend)
 	})
+	mux.HandleFunc("POST /api/models/{id}/reset-overrides", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Fields []string `json:"fields"`
+		}
+		if err := readJSON(r, &body); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if len(body.Fields) == 0 {
+			writeErr(w, http.StatusBadRequest, i18n.E("没有要恢复的字段", "No fields to reset"))
+			return
+		}
+		if err := backend.ResetModelOverrides(r.PathValue("id"), body.Fields); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		writeState(w, backend)
+	})
 	mux.HandleFunc("POST /api/models/{id}/test", func(w http.ResponseWriter, r *http.Request) {
 		streamTest(w, func(progress func(provider.Progress)) provider.Result {
-			return backend.TestSaved(r.PathValue("id"), progress)
+			return backend.TestSaved(r.Context(), r.PathValue("id"), progress)
 		})
 	})
 	mux.HandleFunc("POST /api/cursor", func(w http.ResponseWriter, r *http.Request) {
@@ -382,6 +481,7 @@ type testEvent struct {
 	State  string           `json:"state,omitempty"`
 	OK     bool             `json:"ok,omitempty"`
 	Tokens uint64           `json:"tokens,omitempty"`
+	Info   i18n.Text        `json:"info,omitzero"`
 	Result *provider.Result `json:"result,omitempty"`
 }
 
@@ -404,7 +504,7 @@ func streamTest(w http.ResponseWriter, run func(func(provider.Progress)) provide
 		flusher.Flush()
 	}
 	result := run(func(p provider.Progress) {
-		send(testEvent{Plan: p.Plan, Stage: p.Stage, State: p.State, OK: p.OK, Tokens: p.Tokens})
+		send(testEvent{Plan: p.Plan, Stage: p.Stage, State: p.State, OK: p.OK, Tokens: p.Tokens, Info: p.Info})
 	})
 	send(testEvent{Result: &result})
 }

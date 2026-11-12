@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"cursor-inner/internal/config"
@@ -105,5 +106,32 @@ func TestUpdateModelKeepsKeyAndReplacesInPlace(t *testing.T) {
 	}
 	if store.Get().Models[1].ID != other {
 		t.Fatal("second model moved")
+	}
+}
+
+func TestUpdateModelPreservesEffortLevels(t *testing.T) {
+	store, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	application := &App{store: store}
+	if err := application.AddModel(config.Model{
+		DisplayName: "Qwen", Type: "openai-responses", BaseURL: "https://example.com/v1", APIKey: "k",
+		Model: "qwen4-max-preview", Reasoning: true,
+		EffortLevels: []string{"low", "xhigh"}, DefaultEffort: "low",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	id := store.Get().Models[0].ID
+	// 模拟设置页保存：载荷不含思考档字段。
+	if err := application.UpdateModel(id, config.Model{
+		DisplayName: "Qwen", Type: "openai-responses", BaseURL: "https://example.com/v1",
+		Model: "qwen4-max-preview", Reasoning: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := store.Get().Models[0]
+	if strings.Join(got.EffortLevels, ",") != "low,xhigh" || got.DefaultEffort != "low" {
+		t.Fatalf("settings save wiped effort config: %+v", got)
 	}
 }

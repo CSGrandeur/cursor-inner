@@ -38,3 +38,10 @@ func TestResolveFallback(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestFallbackableRejectsContentInspectionEvenIfServerKind(t *testing.T) {
+	err := &provider.APIError{Kind: provider.KindServer, Type: "server_error", Code: "InternalError.Algo.DataInspectionFailed", Text: "inappropriate content"}
+	if Fallbackable(err) {
+		t.Fatal("must not auto-switch models on content inspection")
+	}
+}

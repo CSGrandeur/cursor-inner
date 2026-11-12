@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 // fakeExe 写一个能回答 --version 的小脚本（Windows 上跳过，用 e2e 覆盖）。
@@ -97,5 +98,47 @@ func TestApplyLocalRejectsBrokenAndSelf(t *testing.T) {
 	}
 	if _, err := u.ApplyLocal(context.Background(), filepath.Join(dir, "missing"), true); err == nil {
 		t.Fatal("missing file accepted")
+	}
+}
+
+func TestApplyLocalInterruptBusySkipsWaitIdle(t *testing.T) {
+	dir := t.TempDir()
+	exe := fakeExe(t, dir, "running", "v1.0.0")
+	src := fakeExe(t, dir, "new", "v1.0.1-dev")
+	var got string
+	u := New(Options{
+		Version:  "v1.0.0",
+		Exe:      exe,
+		DataDir:  dir,
+		Busy:     func() bool { return true },
+		Handover: func(_ context.Context, to string) error { got = to; return nil },
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := u.ApplyLocal(ctx, src, false); err == nil {
+		t.Fatal("default path must wait for idle and fail while busy")
+	}
+	if got != "" {
+		t.Fatal("handover must not run while waiting")
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+	if _, err := u.ApplyLocalOpts(ctx2, src, LocalOptions{InterruptBusy: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got != "v1.0.1-dev" {
+		t.Fatalf("handover version %q", got)
+	}
+}
+
+func TestApplyLocalStillWaitsWithoutInterrupt(t *testing.T) {
+	dir := t.TempDir()
+	exe := fakeExe(t, dir, "running", "v1.0.0")
+	src := fakeExe(t, dir, "new", "v1.0.1-dev")
+	u := New(Options{Version: "v1.0.0", Exe: exe, DataDir: dir, Busy: func() bool { return true }, Handover: func(context.Context, string) error { t.Fatal("must not hand over"); return nil }})
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+	if _, err := u.ApplyLocalOpts(ctx, src, LocalOptions{}); err == nil {
+		t.Fatal("want idle wait error")
 	}
 }

@@ -50,18 +50,31 @@ type Model struct {
 	FastSupport     bool   `json:"fast,omitempty"`
 	ContextWindow   int    `json:"context_window,omitempty"`
 	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+	// GroupID 指向共享接入配置的分组；空为独立模型。组内模型落盘时只存与组不同的
+	// 共享字段（*_set 标记覆盖），读取时 Store.Get 已套回组值，消费方拿到的总是完整配置。
+	GroupID      string `json:"group_id,omitempty"`
+	TypeSet      bool   `json:"type_set,omitempty"`
+	BaseURLSet   bool   `json:"base_url_set,omitempty"`
+	APIKeySet    bool   `json:"api_key_set,omitempty"`
+	UseProxySet  bool   `json:"use_proxy_set,omitempty"`
+	ReasoningSet bool   `json:"reasoning_set,omitempty"`
 	// MaxImages / ImageBudgetMB：一次请求里最多带多少张图、图片合计多少 MB；超出时从最旧的工具图片起分批省略。0 用默认值。
 	MaxImages      int       `json:"max_images,omitempty"`
 	ImageBudgetMB  int       `json:"image_budget_mb,omitempty"`
 	PromptCacheKey string    `json:"prompt_cache_key,omitempty"`
 	Fallback       []string  `json:"fallback,omitempty"` // 其它已保存模型的 id，仅在尚未流出任何字时切换
 	LastTest       *LastTest `json:"last_test,omitempty"`
-	Effort         string    `json:"-"`
-	Fast           bool      `json:"-"`
-	ImageBaseURL   string    `json:"-"`
-	ImageAPIKey    string    `json:"-"`
-	ImageModel     string    `json:"-"`
-	TextToolMode   bool      `json:"-"` // 本次运行时：端点不支持原生工具，改用文本工具协议
+	// EffortLevels 是 Cursor 思考档菜单的 id，按显示顺序。空则用该模型族已文档化的列表，未知模型用通用 low/medium/high/xhigh/max。
+	// 例如 Qwen4 官方为 low、medium、xhigh。旧配置没有该字段，保持兼容。
+	EffortLevels []string `json:"effort_levels,omitempty"`
+	// DefaultEffort 是菜单默认档，以及客户端选了不支持的旧档时改用的值。空则用家族或通用默认。
+	DefaultEffort string `json:"default_effort,omitempty"`
+	Effort        string `json:"-"`
+	Fast          bool   `json:"-"`
+	ImageBaseURL  string `json:"-"`
+	ImageAPIKey   string `json:"-"`
+	ImageModel    string `json:"-"`
+	TextToolMode  bool   `json:"-"` // 本次运行时：端点不支持原生工具，改用文本工具协议
 }
 
 // ImageAPI 是设置页选择的出图接口。留空时模型看不到 GenerateImage。
@@ -84,14 +97,37 @@ type LastTest struct {
 	Capabilities         *Capabilities `json:"capabilities,omitempty"`
 }
 
+// Cap status 取值：confirmed（已测出）、unknown（超时/解析失败/未触发，未测出）、
+// rejected（服务端明确拒绝该测试参数或测试方式）。空字符串表示旧记录只有 bool。
+const (
+	CapConfirmed = "confirmed"
+	CapUnknown   = "unknown"
+	CapRejected  = "rejected"
+)
+
 // Capabilities 是能力探测结果；探测成功后可用来自动勾选设置。
+// bool 字段仅在已测出时为 true；超时不得写成 false 来表示“不支持”。
+// 新增 *Status / *Note 字段对旧配置向后兼容（省略则为旧记录）。
 type Capabilities struct {
-	Tools        bool   `json:"tools"`
-	Reasoning    bool   `json:"reasoning"`
-	Images       bool   `json:"images"`
-	CacheHit     bool   `json:"cache_hit"`
-	Family       string `json:"family,omitempty"`
-	TextToolMode bool   `json:"text_tool_mode,omitempty"` // 端点不接受原生工具，改走文本工具协议
+	Tools           bool      `json:"tools"`
+	Reasoning       bool      `json:"reasoning"`
+	Images          bool      `json:"images"`
+	CacheHit        bool      `json:"cache_hit"`
+	Family          string    `json:"family,omitempty"`
+	TextToolMode    bool      `json:"text_tool_mode,omitempty"` // 端点不接受原生工具，改走文本工具协议
+	Generate        bool      `json:"generate,omitempty"`
+	GenerateStatus  string    `json:"generate_status,omitempty"`
+	ToolsStatus     string    `json:"tools_status,omitempty"`
+	ReasoningStatus string    `json:"reasoning_status,omitempty"`
+	ImagesStatus    string    `json:"images_status,omitempty"`
+	CacheStatus     string    `json:"cache_status,omitempty"`
+	SpeedStatus     string    `json:"speed_status,omitempty"`
+	ToolsNote       i18n.Text `json:"tools_note,omitzero"`
+	ReasoningNote   i18n.Text `json:"reasoning_note,omitzero"`
+	ImagesNote      i18n.Text `json:"images_note,omitzero"`
+	CacheNote       i18n.Text `json:"cache_note,omitzero"`
+	GenerateNote    i18n.Text `json:"generate_note,omitzero"`
+	SpeedNote       i18n.Text `json:"speed_note,omitzero"`
 }
 
 // Desktop 是 Windows 上托盘和控制台窗口的设置。零值就是老行为：开着控制台窗口，弹通知。
@@ -111,6 +147,7 @@ type File struct {
 	Proxy               Proxy    `json:"proxy"`
 	Desktop             Desktop  `json:"desktop,omitzero"`
 	Image               ImageAPI `json:"image,omitempty"`
+	Groups              []Group  `json:"groups,omitempty"`
 	Models              []Model  `json:"models"`
 	// QuitNoConfirm 为真时退出不再弹确认框（确认框里勾了“不再询问”）。
 	QuitNoConfirm bool `json:"quit_no_confirm,omitempty"`
@@ -137,6 +174,7 @@ func DefaultDir() string {
 	return filepath.Join(base, "cursor-inner")
 }
 
+// Store 内存里保存解析后的完整配置（组值已套进成员）；落盘时拆回组的覆盖形式。
 type Store struct {
 	mu   sync.Mutex
 	path string
@@ -162,6 +200,7 @@ func Load(dir string) (*Store, error) {
 	if data.Models == nil {
 		data.Models = []Model{}
 	}
+	data.Models = resolveModels(normalizeModels(data.Models, data.Groups), data.Groups)
 	s := &Store{path: path, data: data}
 	if _, statErr := os.Stat(path); statErr != nil {
 		if werr := s.persist(); werr != nil {
@@ -181,6 +220,7 @@ func Peek(dir string) (File, bool) {
 	if err := json.Unmarshal(raw, &f); err != nil {
 		return File{}, false
 	}
+	f.Models = resolveModels(normalizeModels(f.Models, f.Groups), f.Groups)
 	return f, true
 }
 
@@ -219,12 +259,27 @@ func (s *Store) Update(fn func(*File) error) error {
 	if next.Models == nil {
 		next.Models = []Model{}
 	}
+	// 内存里模型是完整值 + 覆盖位。落盘按位拆回稀疏形式，读回按（可能刚改过的）
+	// 组值解析：改组值传导到未覆盖成员，删组把成员物化成独立模型。
+	// 应用层改成员共享字段时须同时置对应 *_set 位（见 blankFollowing）。
+	next.Models = normalizeModels(next.Models, next.Groups)
+	// 先按位拆成落盘形式，再按新组值解析出内存里的完整模型：
+	// 改组值传导到未覆盖成员，删组把成员物化成独立模型。
+	sparse := make([]Model, len(next.Models))
+	for i, m := range next.Models {
+		sparse[i] = blankFollowing(m)
+	}
+	next.Models = resolveModels(sparse, next.Groups)
 	s.data = next
-	return s.persist()
+	return s.persistSparse()
 }
 
 func (s *Store) clone() File {
 	out := s.data
+	out.Groups = append([]Group(nil), s.data.Groups...)
+	for i := range out.Groups {
+		out.Groups[i].Profiles = append([]GroupProfile(nil), s.data.Groups[i].Profiles...)
+	}
 	out.Models = append([]Model(nil), s.data.Models...)
 	for i := range out.Models {
 		if out.Models[i].LastTest != nil {
@@ -249,6 +304,19 @@ func (s *Store) persist() error {
 	}
 	raw = append(raw, '\n')
 	return fsutil.WriteFile(s.path, raw)
+}
+
+// persistSparse 落盘时把组内成员未覆盖的共享字段清零；内存里的 s.data 保持完整值。
+func (s *Store) persistSparse() error {
+	full := s.data.Models
+	sparse := make([]Model, len(full))
+	for i, m := range full {
+		sparse[i] = blankFollowing(m)
+	}
+	s.data.Models = sparse
+	err := s.persist()
+	s.data.Models = full
+	return err
 }
 
 func (m Model) KeyHint() string {

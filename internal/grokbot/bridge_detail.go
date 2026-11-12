@@ -18,7 +18,7 @@ import (
 	"cursor-inner/internal/connlog"
 )
 
-// 连接详细日志：只有个人记录版调用 SetConnDetail 打开，发版即使带 --debug 也保持原来的行数与字段。
+// 连接详细日志：经 SetConnDetail 打开；默认即使带 --debug 也保持原来的行数与字段。
 // 打开后在 “bridge conn” 行上多记开始时间、首字节耗时、HTTP 状态（明文请求才看得到）、断开归类，
 // 每分钟按主机汇总慢请求与失败（“bridge hosts”），并探测一次代理本身和经代理到官方主机的耗时（“bridge probe”）。
 // 只记主机:端口、耗时、字节数和归类后的原因，不记请求头、Cookie、令牌、认证信息和内容。

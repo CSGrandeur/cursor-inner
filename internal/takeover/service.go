@@ -3,6 +3,7 @@ package takeover
 import (
 	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,7 +118,7 @@ func (s *Service) Enable() error {
 		s.problem = i18n.Of(err)
 		return err
 	}
-	if err := Mark(s.dir); err != nil {
+	if err := MarkURL(s.dir, url); err != nil {
 		_ = restoreSettings(s.dir)
 		s.mitm.Stop()
 		s.problem = i18n.Of(err)
@@ -320,4 +321,76 @@ func writeSettings(edit func([]byte, string) ([]byte, error), proxyURL string) e
 		return err
 	}
 	return fsutil.WriteFile(path, next)
+}
+
+// StartKind 区分首次接管和已接管恢复。
+type StartKind string
+
+const (
+	StartEnabled StartKind = "enabled" // 首次写入设置，可能结束 Cursor
+	StartResumed StartKind = "resumed" // 在原地址恢复，不改设置、不结束 Cursor
+)
+
+// ClassifyStartup 判断冷启动应恢复已有接管，还是做首次 Enable。
+// 已有 takeover.on 时绝不返回 StartEnabled：回退到 Enable 会换新端口并结束 Cursor。
+func ClassifyStartup(dir string) (StartKind, string, error) {
+	if !Marked(dir) {
+		return StartEnabled, "", nil
+	}
+	addr := resumeAddr(dir)
+	if addr == "" {
+		return "", "", i18n.E("发现上次的接管标记，但无法确定原来的本机代理地址，已停止自动首次接管，以免结束 Cursor 或换端口", "A previous takeover mark was found, but the original local proxy address could not be determined; automatic first-time takeover was skipped so Cursor is not closed and the port is not changed")
+	}
+	return StartResumed, addr, nil
+}
+
+func resumeAddr(dir string) string {
+	if addr := loopbackHost(currentSettingsProxy()); addr != "" {
+		if marked := loopbackHost(MarkedProxy(dir)); marked != "" && marked != addr {
+			return ""
+		}
+		return addr
+	}
+	return loopbackHost(MarkedProxy(dir))
+}
+
+func loopbackHost(proxy string) string {
+	proxy = strings.TrimSpace(proxy)
+	if proxy == "" {
+		return ""
+	}
+	u, err := url.Parse(proxy)
+	if err != nil || u.Host == "" {
+		if strings.HasPrefix(proxy, "127.0.0.1:") || strings.HasPrefix(proxy, "localhost:") || strings.HasPrefix(proxy, "[::1]:") {
+			return proxy
+		}
+		return ""
+	}
+	if u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "" {
+		return ""
+	}
+	host := u.Hostname()
+	if host != "127.0.0.1" && !strings.EqualFold(host, "localhost") && host != "::1" {
+		return ""
+	}
+	return u.Host
+}
+
+// ResumeOrEnable 在已接管时于原地址 Adopt（不改 Cursor 设置、不结束 Cursor）；
+// 否则走首次 Enable。Adopt 失败不会回退到 Enable。
+func (s *Service) ResumeOrEnable() (StartKind, error) {
+	kind, addr, err := ClassifyStartup(s.dir)
+	if err != nil {
+		return "", err
+	}
+	if kind == StartResumed {
+		if err := s.Adopt(addr); err != nil {
+			return "", err
+		}
+		return StartResumed, nil
+	}
+	if err := s.Enable(); err != nil {
+		return "", err
+	}
+	return StartEnabled, nil
 }

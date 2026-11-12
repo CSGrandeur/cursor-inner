@@ -21,6 +21,9 @@ func TestQwenVariantLimits(t *testing.T) {
 		{"qwen3-max", 262144, 32768},
 		{"qwen3.5", 1000000, 65536},
 		{"qwen4-max", 1000000, 65536},
+		{"qwen4-max-preview", 1000000, 393216},
+		{"openai/qwen4-max-preview", 1000000, 393216},
+		{"qwen4-max-preview-2026-11-11", 1000000, 393216},
 		{"qwen-plus-latest", 1000000, 32768},
 		{"qwq-32b", 131072, 32768},
 		{"qwen2.5-coder:32b", 262144, 32768},
@@ -189,7 +192,7 @@ func TestDashscopeErrorClassification(t *testing.T) {
 		{"plain-429", 429, `{"message":"too many requests"}`, KindRateLimit, true, false},
 	}
 	for _, c := range cases {
-		err := statusError(c.code, []byte(c.body), "")
+		err := statusError(c.code, []byte(c.body), nil)
 		if k := kindOf(t, err); k != c.want {
 			t.Errorf("%s: kind=%d want %d", c.name, k, c.want)
 		}

@@ -130,6 +130,11 @@ func qwenVariantLimits(model string) (contextWindow, maxOut int) {
 		n = n[:i]
 	}
 	switch {
+	case n == "qwen4-max-preview" || strings.HasPrefix(n, "qwen4-max-preview-"):
+		// Ali Model Studio / Qwen Cloud text-generation docs (updated 2026-11-11):
+		// Token Plan only; context 1,000,000; max output 393,216 (thinking + output).
+		// Do not treat a hand-filled 256000 or the generic qwen4 64K as this model's official max.
+		return 1000000, 393216
 	case strings.HasPrefix(n, "qwen4"): // qwen-code: 1M is the forward default for qwen4
 		return 1000000, 65536
 	case strings.HasPrefix(n, "qwen3-coder-plus"), strings.HasPrefix(n, "qwen3-coder-flash"):

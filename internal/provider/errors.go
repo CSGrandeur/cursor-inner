@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 )
 
 // Kind 是模型接口错误的类别。可重试的是限流、服务端、传输、超时和空响应。
@@ -34,7 +33,10 @@ type APIError struct {
 	Status     int
 	RetryAfter time.Duration
 	Text       string
-	Detail     string // 上游 error.message（已脱敏、截断约 200 字）
+	Detail     string // 上游 error.message（已脱敏，按 rune 截断）
+	Code       string // 上游 error.code，如 InternalError.Algo.DataInspectionFailed
+	Type       string // 上游 error.type
+	RequestID  string // 供应商 request_id；空表示未知，不编造
 	// Large 表示空回复发生在带了很多图片的请求上，调用方可以省略一批旧图片后再试一次。
 	Large bool
 	// Compacted 表示已经省略旧图片重试过，仍然空回复。
@@ -83,48 +85,11 @@ func explainKind(err error) string {
 	}
 	var api *APIError
 	if errors.As(err, &api) {
-		base := ""
-		switch api.Kind {
-		case KindRateLimit:
-			base = "429 限流"
-		case KindServer:
-			if api.Status > 0 {
-				base = fmt.Sprintf("%d 服务端错误", api.Status)
-			} else {
-				base = "服务端错误"
-			}
-		case KindTimeout:
-			base = "连接超时"
-		case KindTransport:
-			base = "连接失败"
-		case KindEmpty:
-			base = "模型没有返回内容"
-			if api.Compacted {
-				base = "上游空回复，可能上下文过大，已尝试压缩"
-			}
-		case KindAuth:
-			base = "密钥被拒绝"
-		case KindContextOverflow:
-			base = "上下文放不下"
-		case KindBadRequest:
-			base = "请求被拒绝"
-		}
-		if base != "" {
-			if api.Detail != "" {
-				return base + "：" + api.Detail
-			}
-			return base
+		if s := formatAPIError(api); s != "" {
+			return s
 		}
 	}
-	text := err.Error()
-	if len(text) > 80 {
-		cut := 80
-		for cut > 0 && !utf8.RuneStart(text[cut]) {
-			cut--
-		}
-		text = text[:cut]
-	}
-	return text
+	return clipRunes(err.Error(), explainRuneLimit)
 }
 
 func (e *APIError) Error() string {
@@ -140,9 +105,34 @@ func Overflow(err error) bool {
 	return errors.As(err, &api) && api.Kind == KindContextOverflow
 }
 
+// inspectionPattern 识别供应商内容审核拒绝（含 DashScope DataInspection 的多种拼写）。
+// 与 Qwen Code 的永久失败码对齐，但不把鉴权/欠费/超长算进审核。
+var inspectionPattern = regexp.MustCompile(`(?i)data[_-]?inspection|content[_-]?filter|responsible[_-]?ai|inappropriate content|prohibited content|内容审核|不当内容`)
+
+// ContentInspection 判断错误是否为内容审核拒绝。取消、传输、超时不得算作审核。
+// 即使上游把 SSE 标成 server_error，只要 code/message 指向审核，也按审核处理。
+func ContentInspection(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var api *APIError
+	if !errors.As(err, &api) {
+		return inspectionPattern.MatchString(err.Error())
+	}
+	switch api.Kind {
+	case KindTransport, KindTimeout, KindRateLimit, KindContextOverflow, KindEmpty, KindAuth:
+		return false
+	}
+	s := strings.ToLower(strings.Join([]string{api.Code, api.Type, api.Text, api.Detail}, " "))
+	return inspectionPattern.MatchString(s)
+}
+
 func Retryable(err error) bool {
 	var api *APIError
 	if !errors.As(err, &api) {
+		return false
+	}
+	if ContentInspection(err) {
 		return false
 	}
 	switch api.Kind {
@@ -165,7 +155,7 @@ func wantsEffortFallback(err error) bool {
 	if api.Status != 400 && api.Kind != KindBadRequest {
 		return false
 	}
-	text := strings.ToLower(api.Text + " " + api.Detail)
+	text := strings.ToLower(api.Text + " " + api.Detail + " " + api.Code)
 	for _, token := range []string{"reasoning_effort", "reasoning effort", "reasoning level", "reasoning.effort"} {
 		at := strings.Index(text, token)
 		if at < 0 {
@@ -184,26 +174,9 @@ func wantsEffortFallback(err error) bool {
 	return false
 }
 
-func statusError(code int, body []byte, retryAfter string) error {
-	text := excerpt(body)
-	kind := KindBadRequest
-	switch {
-	case code == 429:
-		kind = KindRateLimit
-	case code >= 500:
-		kind = KindServer
-	case code == 401 || code == 403:
-		kind = KindAuth
-	case contextOverflow(body):
-		kind = KindContextOverflow
-	}
-	// DashScope 把限流、内容审核、欠费、超长等都塞在 body 的 code/message 里，
-	// 有时 HTTP 状态并不对应（例如 400 的 Throttling）。按 code 细分，纠正可重试性判断。
-	if k, ok := dashscopeKind(body); ok {
-		kind = k
-	}
-	return &APIError{Kind: kind, Status: code, RetryAfter: parseRetryAfter(retryAfter), Text: fmt.Sprintf("endpoint returned %d: %s", code, text), Detail: upstreamDetail(body)}
-}
+// DashScope 把限流、内容审核、欠费、超长等都塞在 body 的 code/message 里，
+// 有时 HTTP 状态并不对应（例如 400 的 Throttling）。按 code 细分，纠正可重试性判断。
+// statusError 见 upstream_error.go。
 
 func transportError(err error) error {
 	var netErr net.Error
@@ -293,7 +266,12 @@ func dashscopeKind(body []byte) (Kind, bool) {
 	if json.Unmarshal(body, &b) != nil {
 		return KindOther, false
 	}
-	s := strings.ToLower(firstNonEmpty(b.Code, b.Error.Code, b.Error.Type) + " " + firstNonEmpty(b.Message, b.Error.Message))
+	s := firstNonEmpty(b.Code, b.Error.Code, b.Error.Type) + " " + firstNonEmpty(b.Message, b.Error.Message)
+	return classifyDashscopeText(s)
+}
+
+func classifyDashscopeText(s string) (Kind, bool) {
+	s = strings.ToLower(s)
 	switch {
 	case anyContains(s, "throttl", "rate limit", "requests rate", "allocationquota", "flowcontrol", "too many requests", "limit_requests"):
 		return KindRateLimit, true
@@ -350,9 +328,5 @@ func upstreamDetail(body []byte) string {
 	}
 	msg = strings.Join(strings.Fields(msg), " ")
 	msg = redactSecrets(msg)
-	r := []rune(msg)
-	if len(r) > 200 {
-		return string(r[:200]) + "…"
-	}
-	return msg
+	return clipRunes(msg, detailRuneLimit)
 }

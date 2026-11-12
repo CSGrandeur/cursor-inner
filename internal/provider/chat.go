@@ -24,7 +24,8 @@ import (
 )
 
 // Message 是与接口无关的对话消息。Role 取 system、user、assistant、tool。
-// Reasoning 是助手的思考内容；ReasoningSignature 是 Anthropic thinking 块的签名。
+// Reasoning 是助手的思考内容。ReasoningSignature 对 Anthropic 是 thinking 块签名，
+// 对 OpenAI Responses 是可回放的加密推理信封（含上游 item id）；旧会话可能仍是原始密文。
 // Truncated 表示这次输出因长度被截断，调用方应让模型分步继续。
 type Message struct {
 	Role               string     `json:"role"`
@@ -71,6 +72,11 @@ type chatRequest struct {
 	Messages  []Message
 	Tools     []Tool
 	MaxTokens int
+	// 以下字段只由设置页探测填写；正式 Chat() 保持零值，请求体与原来一致。
+	ToolChoice      string
+	ReasoningEffort string
+	OmitInclude     bool
+	FlatTools       bool
 }
 
 // Chat 流式调用模型。文本增量交给 onText，思考增量交给 onThinking（可以为 nil）。
@@ -148,7 +154,10 @@ func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system str
 			return msg, nil
 		}
 		last = err
-		noteModel(ctx, modelError(attempt, time.Since(started), err))
+		nerr := modelError(attempt, time.Since(started), err)
+		nerr = mergeDigest(nerr, describeRequest(m, chatRequest{System: system, Messages: messages, Tools: tools}))
+		nerr = copyRequestDelta(ctx, nerr)
+		noteModel(ctx, nerr)
 		// 端点拒绝 Cursor 传来的 reasoning_effort 档位（闭集里没有这一档）时，去掉字段重试一次，
 		// 由端点用自己的默认档。只认错误里明确点名 reasoning_effort 的 400。
 		if !emitted && m.Effort != "" && wantsEffortFallback(err) {
@@ -293,11 +302,66 @@ func noteModel(ctx context.Context, n runlog.Note) {
 	runlog.Emit(n)
 }
 
+// requestDigest 记下同一回合上一次模型请求的结构计数，用于 error/request 日志里的差分。
+// 只按请求 id 保留一条，不保留正文。
+type requestDigest struct {
+	Messages, Chars, Bytes                int
+	DeltaMessages, DeltaRunes, DeltaBytes int
+}
+
+var lastRequestDigest sync.Map // string requestID -> requestDigest
+
+func digestFromNote(n runlog.Note) requestDigest {
+	return requestDigest{Messages: n.Messages, Chars: n.Chars, Bytes: n.Bytes}
+}
+
+func attachRequestDelta(ctx context.Context, n runlog.Note, store bool) runlog.Note {
+	id := runlog.RequestID(ctx)
+	if id == "" {
+		return n
+	}
+	if prev, ok := lastRequestDigest.Load(id); ok {
+		p := prev.(requestDigest)
+		n.DeltaMessages = n.Messages - p.Messages
+		n.DeltaRunes = n.Chars - p.Chars
+		n.DeltaBytes = n.Bytes - p.Bytes
+	}
+	if store {
+		lastRequestDigest.Store(id, digestFromNote(n))
+	}
+	return n
+}
+
+func copyRequestDelta(ctx context.Context, n runlog.Note) runlog.Note {
+	id := runlog.RequestID(ctx)
+	if id == "" {
+		return n
+	}
+	if prev, ok := lastRequestDigest.Load(id); ok {
+		p := prev.(requestDigest)
+		// 本步的 model_request 已写入当前绝对值；差分在写入前就算好，这里按“当前-上一笔”无法再取，
+		// 因此在 store 时把算好的差分一并保存。
+		n.DeltaMessages = p.DeltaMessages
+		n.DeltaRunes = p.DeltaRunes
+		n.DeltaBytes = p.DeltaBytes
+	}
+	return n
+}
+
+func storeRequestDigest(n runlog.Note) requestDigest {
+	d := digestFromNote(n)
+	d.DeltaMessages, d.DeltaRunes, d.DeltaBytes = n.DeltaMessages, n.DeltaRunes, n.DeltaBytes
+	return d
+}
+
 func modelError(attempt int, elapsed time.Duration, err error) runlog.Note {
 	n := runlog.Note{Kind: "model_error", Attempt: attempt, ElapsedMs: elapsed.Milliseconds(), Error: Explain(err)}
 	var api *APIError
 	if errors.As(err, &api) {
 		n.Status = api.Status
+		n.Code = api.Code
+		n.ErrorType = api.Type
+		n.VendorRequestID = api.RequestID
 	}
 	return n
 }
@@ -311,8 +375,13 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 	if maxTokens == 0 && (m.Type == "anthropic" || m.Type == "openai-responses") {
 		maxTokens = 8192
 	}
+	opts := probeOptsFrom(ctx)
 	var reqBytes int
-	resp, err := doSized(ctx, m, dial, chatRequest{System: system, Messages: messages, Tools: tools, MaxTokens: maxTokens}, &reqBytes)
+	resp, err := doSized(ctx, m, dial, chatRequest{
+		System: system, Messages: messages, Tools: tools, MaxTokens: maxTokens,
+		ToolChoice: opts.ToolChoice, ReasoningEffort: opts.ReasoningEffort,
+		OmitInclude: opts.OmitInclude, FlatTools: opts.FlatTools,
+	}, &reqBytes)
 	if err != nil {
 		return Message{}, transportError(err)
 	}
@@ -330,7 +399,7 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 	head, _ := reader.Peek(1)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(reader, 4096))
-		return Message{}, statusError(resp.StatusCode, body, resp.Header.Get("Retry-After"))
+		return Message{}, statusError(resp.StatusCode, body, resp.Header)
 	}
 	if len(head) == 1 && head[0] == '{' {
 		body, err := io.ReadAll(io.LimitReader(reader, 8<<20))
@@ -426,7 +495,11 @@ func doSized(ctx context.Context, m config.Model, dial dialer.Func, req chatRequ
 	if size != nil {
 		*size = len(payload)
 	}
-	noteModel(ctx, runlog.Note{Kind: "model_request", Bytes: len(payload)})
+	reqNote := attachRequestDelta(ctx, mergeDigest(runlog.Note{Kind: "model_request", Bytes: len(payload)}, describeRequest(m, req)), false)
+	if id := runlog.RequestID(ctx); id != "" {
+		lastRequestDigest.Store(id, storeRequestDigest(reqNote))
+	}
+	noteModel(ctx, reqNote)
 	asked := time.Now()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
@@ -513,10 +586,14 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 		ThinkingBudget     *int           `json:"thinking_budget,omitempty"`
 		ParallelToolCalls  *bool          `json:"parallel_tool_calls,omitempty"`
 		ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
+		ToolChoice         any            `json:"tool_choice,omitempty"`
 		StreamOptions      struct {
 			IncludeUsage bool `json:"include_usage"`
 		} `json:"stream_options"`
-	}{Model: m.Model, Stream: true, MaxTokens: req.MaxTokens, ReasoningEffort: m.Effort, PromptCacheKey: strings.TrimSpace(m.PromptCacheKey)}
+	}{Model: m.Model, Stream: true, MaxTokens: req.MaxTokens, ReasoningEffort: requestEffort(req, m), PromptCacheKey: strings.TrimSpace(m.PromptCacheKey)}
+	if req.ToolChoice != "" {
+		body.ToolChoice = req.ToolChoice
+	}
 	if m.Fast {
 		body.ServiceTier = "fast"
 		slog.Debug("service_tier", "value", "fast")
@@ -671,6 +748,7 @@ type accumulator struct {
 	seenID           map[int]string  // 每个槽位已见过的调用 id，用于识别 Ollama 不带 index 的多调用
 	itemSlot         map[string]int  // Responses 输出项 id 到槽位
 	streamedText     map[string]bool // Responses 已经按增量收到正文的输出项
+	reasoningReplay  []reasoningReplayItem
 	maxIndex         int
 	thinker          *inlineThink // 非空时剥离 content 里的 <think> 推理标签
 }
@@ -727,7 +805,7 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 		case "message_start":
 			a.addAnthropicUsage(event.Message.Usage)
 		case "error":
-			return piece{}, i18n.Ef("接口返回错误：%s", "Endpoint error: %s", event.Error.Message)
+			return piece{}, streamAPIError(data)
 		case "content_block_start":
 			if event.ContentBlock.Type == "tool_use" {
 				c, _ := a.call(event.Index)
@@ -801,7 +879,7 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 		a.cacheTokens = cached
 	}
 	if event.Error != nil && event.Error.Message != "" {
-		return piece{}, i18n.Ef("接口返回错误：%s", "Endpoint error: %s", event.Error.Message)
+		return piece{}, streamAPIError(data)
 	}
 	if len(event.Choices) == 0 {
 		return piece{}, nil
@@ -855,7 +933,11 @@ func (a *accumulator) message() Message {
 		a.text.WriteString(tx)
 		a.reasoning.WriteString(th)
 	}
-	msg := Message{Role: "assistant", Content: a.text.String(), Reasoning: a.reasoning.String(), ReasoningSignature: a.signature.String(), PromptTokens: a.promptTokens, CompletionTokens: a.completionTokens, CacheTokens: a.cacheTokens}
+	sig := a.signature.String()
+	if a.kind == "openai-responses" {
+		sig = encodeReasoningReplay(a.reasoningReplay)
+	}
+	msg := Message{Role: "assistant", Content: a.text.String(), Reasoning: a.reasoning.String(), ReasoningSignature: sig, PromptTokens: a.promptTokens, CompletionTokens: a.completionTokens, CacheTokens: a.cacheTokens}
 	indexes := make([]int, 0, len(a.calls))
 	for i := range a.calls {
 		indexes = append(indexes, i)
@@ -878,7 +960,7 @@ func (a *accumulator) message() Message {
 
 func truncated(finish string, calls []ToolCall) bool {
 	switch finish {
-	case "length", "max_tokens":
+	case "length", "max_tokens", "max_output_tokens", "incomplete":
 		return true
 	}
 	if finish == "" && len(calls) > 0 && !json.Valid([]byte(calls[len(calls)-1].Arguments)) {
