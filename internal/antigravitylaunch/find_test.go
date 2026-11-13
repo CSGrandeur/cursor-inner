@@ -45,3 +45,20 @@ func TestFindAntigravityReportsMissing(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestExeFromUninstallResolvesIconAndDir(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "Antigravity.exe")
+	if err := os.WriteFile(exe, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := exeFromUninstall("Antigravity 2.31.2", "", `"`+exe+`",0`); got != exe {
+		t.Fatalf("from icon got %q want %q", got, exe)
+	}
+	if got := exeFromUninstall("Antigravity 2.31.2", dir, ""); got != exe {
+		t.Fatalf("from dir got %q want %q", got, exe)
+	}
+	if got := exeFromUninstall("Other App", dir, exe); got != "" {
+		t.Fatalf("unexpected match for other app: %q", got)
+	}
+}

@@ -81,9 +81,8 @@ func ProxyEnv(proxyURL string, base []string) []string {
 		return out
 	}
 	for _, key := range []string{
-		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
-		"http_proxy", "https_proxy", "all_proxy",
-		"GRPC_PROXY", "grpc_proxy",
+		"http_proxy", "https_proxy", "all_proxy", "grpc_proxy",
+		"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "GRPC_PROXY",
 	} {
 		out = append(out, key+"="+proxyURL)
 	}
@@ -92,8 +91,8 @@ func ProxyEnv(proxyURL string, base []string) []string {
 		noProxy += "," + strings.TrimSpace(h)
 	}
 	out = append(out,
-		"NO_PROXY="+noProxy,
 		"no_proxy="+noProxy,
+		"NO_PROXY="+noProxy,
 		"NODE_USE_ENV_PROXY=1",
 	)
 	return out

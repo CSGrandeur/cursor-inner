@@ -19,7 +19,15 @@ type process struct {
 	CommandLine    string
 }
 
-var applyMu sync.Mutex
+var (
+	applyMu   sync.Mutex
+	lastState struct {
+		set         bool
+		running     bool
+		wantProxy   bool
+		needRestart bool
+	}
+)
 
 var (
 	listAnti  = running
@@ -27,8 +35,20 @@ var (
 	startAnti = start
 )
 
-// Apply 让正在运行的 Antigravity 改走 proxyURL（Chromium 参数 + HTTPS_PROXY）。
-// proxyURL 为空时去掉我们加上的参数并重新打开。没在运行就不动。不改系统 hosts / PAC。
+func logCheckState(running, wantProxy, needRestart bool) {
+	if lastState.set && lastState.running == running && lastState.wantProxy == wantProxy && lastState.needRestart == needRestart {
+		return
+	}
+	lastState.set = true
+	lastState.running = running
+	lastState.wantProxy = wantProxy
+	lastState.needRestart = needRestart
+	slog.Debug("antigravity takeover check", "running", running, "want_proxy", wantProxy, "need_restart", needRestart)
+}
+
+// Apply 让正在运行的 Antigravity 改走 proxyURL（Chromium 参数 + 进程内 HTTPS_PROXY/NO_PROXY/WSLENV），
+// 仅在 Antigravity.exe 进程环境块内无感覆盖 Electron、Go OAuth 与其拉起的 WSL language_server；
+// proxyURL 为空时去掉我们加上的参数并重新打开。没在运行就不动。不改系统 hosts / PAC / 全局环境变量，也不改 WSL 内任何文件。
 func Apply(proxyURL string) error {
 	applyMu.Lock()
 	defer applyMu.Unlock()
@@ -37,6 +57,7 @@ func Apply(proxyURL string) error {
 		return err
 	}
 	if len(procs) == 0 {
+		logCheckState(false, proxyURL != "", false)
 		return nil
 	}
 	exe := ""
@@ -49,27 +70,24 @@ func Apply(proxyURL string) error {
 	if exe == "" {
 		return nil
 	}
-	if proxyURL == "" {
-		if !grokbot.ShouldRestart(cmds(procs), "") {
-			_ = RestoreLanguageServer(exe)
-			return nil
-		}
-		if err := stopAll(); err != nil {
-			return err
-		}
-		_ = RestoreLanguageServer(exe)
-		slog.Info("已去掉 Antigravity 的代理参数并重新打开")
-		return startAnti(exe, "")
+	// 无条件自愈：若磁盘仍残留早期版本的 language_server.exe 包装，不重启宿主直接还原。
+	if rerr := RestoreLanguageServer(exe); rerr != nil {
+		slog.Debug("restore antigravity language_server skipped", "error", rerr.Error())
 	}
-	needRestart := grokbot.ShouldRestart(cmds(procs), proxyURL) || !LanguageServerProxyReady(exe, proxyURL)
+	needRestart := grokbot.ShouldRestart(cmds(procs), proxyURL)
+	logCheckState(true, proxyURL != "", needRestart)
 	if !needRestart {
 		return nil
 	}
+	if proxyURL == "" {
+		if err := stopAll(); err != nil {
+			return err
+		}
+		slog.Info("已去掉 Antigravity 的代理参数并重新打开")
+		return startAnti(exe, "")
+	}
 	if err := stopAll(); err != nil {
 		return err
-	}
-	if err := EnsureLanguageServerProxy(exe, proxyURL); err != nil {
-		slog.Warn("Antigravity language_server 代理包装失败：" + err.Error())
 	}
 	if err := startAnti(exe, proxyURL); err != nil {
 		slog.Warn("没能重新打开 Antigravity：" + err.Error())
@@ -121,21 +139,29 @@ func stop() error {
 	if err != nil {
 		return err
 	}
-	pids := make([]uint32, 0, len(procs))
+	// 只逐个结束 Antigravity.exe，严禁 KillTree（WSL 模式下会误杀 wsl.exe 并拖挂 WSLService）。
+	var firstErr error
 	for _, p := range procs {
-		pids = append(pids, p.PID)
+		if err := winproc.Kill(p.PID); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
-	return winproc.KillTree(pids...)
+	return firstErr
 }
 
 func start(exe, proxyURL string) error {
-	if proxyURL == "" {
-		_ = RestoreLanguageServer(exe)
-	} else if err := EnsureLanguageServerProxy(exe, proxyURL); err != nil {
-		slog.Warn("Antigravity language_server 代理包装失败：" + err.Error())
-	}
+	_ = RestoreLanguageServer(exe)
 	cmd := winproc.GUI(exe, Args(proxyURL)...)
 	cmd.Dir = filepath.Dir(exe)
 	cmd.Env = Env(proxyURL, os.Environ())
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		slog.Warn("启动 Antigravity 进程失败", "exe", exe, "error", err.Error())
+		return err
+	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
+	}
+	slog.Info("已拉起 Antigravity 进程", "exe", exe, "pid", pid)
+	return nil
 }

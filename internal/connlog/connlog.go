@@ -11,6 +11,7 @@ import (
 type Note struct {
 	mu    sync.Mutex
 	route string
+	why   string
 }
 
 type key struct{}
@@ -30,6 +31,15 @@ func Set(ctx context.Context, route string) {
 	}
 }
 
+// SetReason 记下分流判断的原因；ctx 上没有记录时什么也不做。
+func SetReason(ctx context.Context, why string) {
+	if n, ok := ctx.Value(key{}).(*Note); ok {
+		n.mu.Lock()
+		n.why = why
+		n.mu.Unlock()
+	}
+}
+
 // Route 返回记下的路；还没拨号时为空。
 func (n *Note) Route() string {
 	if n == nil {
@@ -38,4 +48,14 @@ func (n *Note) Route() string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	return n.route
+}
+
+// Reason 返回分流判断原因；没记录时为空。
+func (n *Note) Reason() string {
+	if n == nil {
+		return ""
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.why
 }

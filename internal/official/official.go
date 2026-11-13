@@ -30,14 +30,18 @@ var Suffixes = []string{
 	"oaistatic.com",
 	"oaiusercontent.com",
 	"oaistatsig.com",
-	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth 相关后缀。
+	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth + Remote WebRTC STUN/TURN 相关后缀。
 	// googleapis.com 盖住 oauth2 / businessaicode / aiplatform / discoveryengine /
 	// cloudcode-pa / daily-cloudcode-pa / aicode / play.googleapis.com 等。
+	// turn.goog 与 l.google.com 盖住 Remote Control WebRTC（stun.l.google.com / TURN）域名；
 	// 不收整站 google.com；登录主机单独收 accounts.google.com。
 	// Cloud Run 更新器（antigravity-hub-auto-updater-*.run.app）见 antigravityCloudRun。
 	"antigravity.google",
 	"antigravity.google.com",
 	"antigravity-unleash.goog",
+	"antigravity.goog",
+	"turn.goog",
+	"l.google.com",
 	"googleapis.com",
 	"googleusercontent.com",
 	"gstatic.com",

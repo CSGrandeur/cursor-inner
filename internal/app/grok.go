@@ -1,16 +1,18 @@
 package app
 
 import (
-	"cursor-inner/internal/takeover"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/takeover"
 )
 
 // grokApply 方便测试替换。生产路径就是 grokbot.Apply。
@@ -44,9 +46,13 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 			slog.Warn("Grok 代理桥没法用当前代理：" + err.Error())
 			return "", true
 		}
-		u, err := a.bridge.Ensure(spec, grokbot.DialFunc(d))
+		pref := a.preferredBridgePort("grok.managed", grokbot.ManagedRunning)
+		u, busy, err := a.bridge.EnsureAt(spec, pref, grokbot.DialFunc(d))
 		if err != nil {
 			slog.Warn("Grok 代理桥没能监听：" + err.Error())
+			return "", true
+		}
+		if busy {
 			return "", true
 		}
 		return u, false
@@ -111,7 +117,31 @@ func (a *App) keepMark(name, proxyURL string) {
 }
 
 // markProxy 读接管标记里记的代理地址；旧版标记内容是 "1"，返回空（退回旧判断）。
-func (a *App) markProxy(name string) string { return takeover.MarkProxy(a.store.Dir(), name) }
+func (a *App) markProxy(name string) string {
+	if a.store == nil {
+		return ""
+	}
+	return takeover.MarkProxy(a.store.Dir(), name)
+}
+
+func (a *App) preferredBridgePort(markName string, running func(string) bool) int {
+	m := a.markProxy(markName)
+	if m == "" {
+		return 0
+	}
+	u, err := url.Parse(m)
+	if err != nil || !strings.EqualFold(u.Scheme, "http") || u.Hostname() != "127.0.0.1" {
+		return 0
+	}
+	p, err := strconv.Atoi(u.Port())
+	if err != nil || p <= 0 || p > 65535 {
+		return 0
+	}
+	if running == nil || !running(m) {
+		return 0
+	}
+	return p
+}
 
 func (a *App) dropMark(name string) {
 	_ = os.Remove(filepath.Join(a.store.Dir(), name))

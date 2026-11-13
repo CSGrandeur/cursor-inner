@@ -60,8 +60,5 @@ if [ "$os" = windows ]; then
 	# 窗口子系统：点控制台的叉只会关掉窗口。控制台子系统会在关闭事件返回后结束进程。
 	ldflags="$ldflags -H windowsgui"
 fi
-if [ "$os" = windows ]; then
-	./scripts/build-lswrap.sh
-fi
 go build -trimpath -ldflags "$ldflags" -o "$out" ./cmd/cursor-inner
 echo "$out"

@@ -116,6 +116,29 @@ func envMap(entries []string) map[string]string {
 	return out
 }
 
+func TestProxyEnvUppercaseFollowsLowercaseForWindowsPEB(t *testing.T) {
+	got := ProxyEnv("http://127.0.0.1:1080", nil)
+	pos := make(map[string]int, len(got))
+	for i, entry := range got {
+		k, _, _ := strings.Cut(entry, "=")
+		pos[k] = i
+	}
+	pairs := [][2]string{
+		{"https_proxy", "HTTPS_PROXY"},
+		{"http_proxy", "HTTP_PROXY"},
+		{"all_proxy", "ALL_PROXY"},
+		{"grpc_proxy", "GRPC_PROXY"},
+		{"no_proxy", "NO_PROXY"},
+	}
+	for _, p := range pairs {
+		li, lok := pos[p[0]]
+		ui, uok := pos[p[1]]
+		if !lok || !uok || ui <= li {
+			t.Fatalf("expected %s (%d) after %s (%d)", p[1], ui, p[0], li)
+		}
+	}
+}
+
 func envValue(env []string, key string) (string, int) {
 	val, n := "", 0
 	for _, e := range env {

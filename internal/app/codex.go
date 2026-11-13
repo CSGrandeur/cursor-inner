@@ -38,9 +38,13 @@ func (a *App) codexProxy(cfg config.File) (proxyURL string, keep bool) {
 			slog.Warn("Codex 代理桥没法用当前代理：" + err.Error())
 			return "", true
 		}
-		u, err := a.codexBridge.Ensure("codex\n"+spec, grokbot.DialFunc(d))
+		pref := a.preferredBridgePort("codex.managed", codexbot.ManagedRunning)
+		u, busy, err := a.codexBridge.EnsureAt("codex\n"+spec, pref, grokbot.DialFunc(d))
 		if err != nil {
 			slog.Warn("Codex 代理桥没能监听：" + err.Error())
+			return "", true
+		}
+		if busy {
 			return "", true
 		}
 		return u, false

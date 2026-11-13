@@ -46,11 +46,13 @@ type Manager struct {
 
 // NewManager 用数据目录（存放 sing-box 可执行文件、配置、日志、pid）构造 Manager。
 func NewManager(dir string) *Manager {
-	st := StateOff
+	m := &Manager{dir: dir}
 	if runtime.GOOS != "windows" {
-		st = StateUnsupported
+		m.state = StateUnsupported
+		return m
 	}
-	return &Manager{dir: dir, state: st}
+	m.state = detectInitialState(m)
+	return m
 }
 
 // Status 返回当前状态和最近一次的说明文本。

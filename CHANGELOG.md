@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-13
+
+### Changed
+
+- Official-only proxy scope now includes Antigravity.
+- Taking over Antigravity also covers its WSL mode, without changing system or WSL settings. TUN mode can do the same when you turn it on.
+- Settings-page tips for these options were updated to match.
+
+### Fixed
+
+- Leftover changes that older builds made to Antigravity official files are restored automatically.
+- Turning on TUN no longer flashes a black console window.
+- The local proxy no longer treats itself as a remote target, which could disconnect Antigravity Remote.
+- Stopping Antigravity takeover no longer closes WSL by mistake.
+
 ## [0.6.0] - 2026-11-12
 
 ### Added
@@ -620,7 +635,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.29...v0.6.0
 [0.5.29]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.28...v0.5.29
 [0.5.28]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.27...v0.5.28

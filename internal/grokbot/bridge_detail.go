@@ -83,10 +83,12 @@ func (c *firstByteConn) firstAt() time.Time {
 	return time.Time{}
 }
 
-// closeClass 把一条连接的结束归成固定几类：ok / eof / reset / timeout / refused / grace / dial_fail / error。
+// closeClass 把一条连接的结束归成固定几类：ok / eof / reset / timeout / refused / grace / self_target / dial_fail / error。
 func closeClass(closedBy, reason string) string {
 	r := strings.ToLower(reason)
 	switch {
+	case r == "self target":
+		return "self_target"
 	case closedBy == "dial":
 		switch {
 		case strings.Contains(r, "timeout"), strings.Contains(r, "deadline"):
@@ -113,7 +115,7 @@ func closeClass(closedBy, reason string) string {
 
 func failedClass(c string) bool {
 	switch c {
-	case "reset", "timeout", "refused", "dial_fail", "dial_timeout", "dial_refused", "error":
+	case "reset", "timeout", "refused", "self_target", "dial_fail", "dial_timeout", "dial_refused", "error":
 		return true
 	}
 	return false
@@ -243,7 +245,7 @@ func (b *Bridge) reportDetail() {
 	for _, attrs := range hostLines(m) {
 		slog.Debug("bridge hosts", append([]any{"bridge", b.name(), "slow_ms", slowThreshold.Milliseconds()}, attrs...)...)
 	}
-	if b.name() == "grok" && probeTarget != "off" && b.probing.CompareAndSwap(false, true) {
+	if target := probeTargetFor(b.name()); probeTarget != "off" && target != "off" && target != "" && b.probing.CompareAndSwap(false, true) {
 		go func() {
 			defer b.probing.Store(false)
 			b.probe()

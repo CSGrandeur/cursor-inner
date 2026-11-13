@@ -233,6 +233,9 @@ func TestAntigravityFamily(t *testing.T) {
 	if !antigravityFamily("oauth2.googleapis.com") || !antigravityFamily("antigravity-unleash.goog") {
 		t.Fatal("expected google official hosts")
 	}
+	if !antigravityFamily("stun.l.google.com") || !antigravityFamily("turn.goog") {
+		t.Fatal("expected google webrtc stun/turn hosts")
+	}
 	if !antigravityFamily("antigravity-hub-auto-updater-1.us-central1.run.app") {
 		t.Fatal("expected cloud run updater")
 	}

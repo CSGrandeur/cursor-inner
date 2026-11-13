@@ -181,3 +181,80 @@ func TestBridgeNeverFallsBackToDirect(t *testing.T) {
 		t.Fatal("bridge dialed the target directly")
 	}
 }
+
+func TestBridgeRejectsSelfTargetLoop(t *testing.T) {
+	var dialed atomic.Int32
+	var b Bridge
+	defer b.Close()
+	u, err := b.Ensure("antigravity\nhttp://127.0.0.1:1080", func(context.Context, string, string) (net.Conn, error) {
+		dialed.Add(1)
+		return nil, errors.New("must not dial self")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := strings.TrimPrefix(u, "http://")
+
+	for _, rawReq := range []string{
+		"GET " + u + "/bind?foo=1 HTTP/1.1\r\nHost: " + addr + "\r\n\r\n",
+		"GET /bind?foo=1 HTTP/1.1\r\nHost: " + addr + "\r\n\r\n",
+		"CONNECT " + addr + " HTTP/1.1\r\nHost: " + addr + "\r\n\r\n",
+	} {
+		c, err := net.DialTimeout("tcp4", addr, 2*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = c.SetDeadline(time.Now().Add(2 * time.Second))
+		_, _ = io.WriteString(c, rawReq)
+		resp, rerr := http.ReadResponse(bufio.NewReader(c), nil)
+		c.Close()
+		if rerr != nil {
+			t.Fatalf("read response: %v", rerr)
+		}
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request, got %d", resp.StatusCode)
+		}
+	}
+	if dialed.Load() != 0 {
+		t.Fatalf("expected 0 dial calls on self target, got %d", dialed.Load())
+	}
+}
+
+func TestBridgeEnsureAtPrefersManagedPortAndReportsBusy(t *testing.T) {
+	extLn, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefPort := extLn.Addr().(*net.TCPAddr).Port
+	extDone := make(chan struct{})
+	go func() {
+		defer close(extDone)
+		for {
+			c, err := extLn.Accept()
+			if err != nil {
+				return
+			}
+			_ = c.Close()
+		}
+	}()
+
+	var b Bridge
+	defer b.Close()
+	dial := func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("unused") }
+
+	u, busy, err := b.EnsureAt("antigravity\nhttp://127.0.0.1:1080", prefPort, dial)
+	if err != nil || !busy || u != "" {
+		t.Fatalf("while preferred port held: u=%q busy=%v err=%v", u, busy, err)
+	}
+
+	_ = extLn.Close()
+	<-extDone
+
+	u, busy, err = b.EnsureAt("antigravity\nhttp://127.0.0.1:1080", prefPort, dial)
+	if err != nil || busy {
+		t.Fatalf("after preferred port freed: u=%q busy=%v err=%v", u, busy, err)
+	}
+	if u != "http://"+extLn.Addr().String() {
+		t.Fatalf("expected reclaimed preferred port %s, got %s", extLn.Addr().String(), u)
+	}
+}

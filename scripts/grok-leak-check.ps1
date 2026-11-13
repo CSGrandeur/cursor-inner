@@ -41,7 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'antigravity.google.com', 'antigravity-unleash.goog', 'googleapis.com', 'googleusercontent.com', 'gstatic.com', 'accounts.google.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'antigravity.google.com', 'antigravity-unleash.goog', 'antigravity.goog', 'turn.goog', 'l.google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com', 'accounts.google.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',

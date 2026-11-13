@@ -1,10 +1,13 @@
 package app
 
 import (
+	"context"
+	"net"
 	"strings"
 	"testing"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/grokbot"
 )
 
 func TestSyncGrokOffLeavesAnotherInstancesBotAlone(t *testing.T) {
@@ -57,5 +60,49 @@ func TestGrokProxyBridgesCredentialsAndNeverGoesDirect(t *testing.T) {
 	}
 	if u, keep = a.grokProxy(config.File{Proxy: config.Proxy{Enabled: false, Address: "127.0.0.1:1080"}}); keep || u != "" {
 		t.Fatalf("proxy switched off by the user: %q keep=%v", u, keep)
+	}
+}
+
+func TestReleaseAndReclaimAllBridges(t *testing.T) {
+	var a App
+	dial := grokbot.DialFunc(func(context.Context, string, string) (net.Conn, error) { return nil, nil })
+	u1, err := a.bridge.Ensure("grok-release-test", dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.bridge.Close()
+	u2, err := a.codexBridge.Ensure("codex\ncodex-release-test", dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.codexBridge.Close()
+	u3, err := a.antiBridge.Ensure("antigravity\nanti-release-test", dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.antiBridge.Close()
+
+	if err := a.ReleaseBridge(); err != nil {
+		t.Fatalf("ReleaseBridge: %v", err)
+	}
+	// Released ports should all be bindable.
+	for _, u := range []string{u1, u2, u3} {
+		addr := strings.TrimPrefix(u, "http://")
+		ln, lerr := net.Listen("tcp4", addr)
+		if lerr != nil {
+			t.Fatalf("port %s not released: %v", addr, lerr)
+		}
+		_ = ln.Close()
+	}
+	if err := a.ReclaimBridge(); err != nil {
+		t.Fatalf("ReclaimBridge: %v", err)
+	}
+	// Reclaimed ports should now be bound again.
+	for _, u := range []string{u1, u2, u3} {
+		addr := strings.TrimPrefix(u, "http://")
+		if ln, lerr := net.Listen("tcp4", addr); lerr == nil {
+			_ = ln.Close()
+			t.Fatalf("port %s was not reclaimed", addr)
+		}
 	}
 }

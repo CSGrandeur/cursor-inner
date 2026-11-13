@@ -38,9 +38,13 @@ func (a *App) antigravityProxy(cfg config.File) (proxyURL string, keep bool) {
 			slog.Warn("Antigravity 代理桥没法用当前代理：" + err.Error())
 			return "", true
 		}
-		u, err := a.antiBridge.Ensure("antigravity\n"+spec, grokbot.DialFunc(d))
+		pref := a.preferredBridgePort("antigravity.managed", antigravitylaunch.ManagedRunning)
+		u, busy, err := a.antiBridge.EnsureAt("antigravity\n"+spec, pref, grokbot.DialFunc(d))
 		if err != nil {
 			slog.Warn("Antigravity 代理桥没能监听：" + err.Error())
+			return "", true
+		}
+		if busy {
 			return "", true
 		}
 		return u, false
@@ -90,18 +94,24 @@ func (a *App) SyncAntigravity() {
 // OpenAntigravity 冷启动反重力。接管开着却给不出可靠代理时报错，不以直连方式启动。
 func (a *App) OpenAntigravity() error {
 	cfg := a.store.Get()
+	var err error
 	if !cfg.TakeoverAntigravity {
 		slog.Info("启动 Antigravity", "takeover", false)
-		return antigravitylaunch.Launch("")
+		err = antigravitylaunch.Launch("")
+	} else {
+		proxyURL, keep := a.antigravityProxy(cfg)
+		if keep && !a.proxyReady() {
+			return i18n.E("代理软件还没启动，等它启动后再打开反重力（不会以直连方式启动）", "Your proxy software is not running yet. Start it, then open Antigravity (it is never started without the proxy)")
+		}
+		if keep {
+			slog.Warn("没有启动 Antigravity：拿不到可靠代理，不会改成直连")
+			return i18n.E("代理地址无效或代理桥起不来，没有启动反重力（不会以直连方式启动）", "The proxy address is invalid or the proxy bridge could not start, so Antigravity was not started (it is never started without the proxy)")
+		}
+		slog.Info("启动 Antigravity", "takeover", true, "proxy", proxyHostOnly(proxyURL))
+		err = antigravitylaunch.Launch(proxyURL)
 	}
-	proxyURL, keep := a.antigravityProxy(cfg)
-	if keep && !a.proxyReady() {
-		return i18n.E("代理软件还没启动，等它启动后再打开反重力（不会以直连方式启动）", "Your proxy software is not running yet. Start it, then open Antigravity (it is never started without the proxy)")
+	if err != nil {
+		slog.Warn("启动 Antigravity 失败", "error", err.Error())
 	}
-	if keep {
-		slog.Warn("没有启动 Antigravity：拿不到可靠代理，不会改成直连")
-		return i18n.E("代理地址无效或代理桥起不来，没有启动反重力（不会以直连方式启动）", "The proxy address is invalid or the proxy bridge could not start, so Antigravity was not started (it is never started without the proxy)")
-	}
-	slog.Info("启动 Antigravity", "takeover", true, "proxy", proxyHostOnly(proxyURL))
-	return antigravitylaunch.Launch(proxyURL)
+	return err
 }

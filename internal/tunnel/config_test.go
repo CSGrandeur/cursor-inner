@@ -137,3 +137,30 @@ func TestRouteAddressFakeIPNotPrivate(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeDNSSkipsLoopbackFromServers(t *testing.T) {
+	b, err := Config(Options{
+		ProxyHost:    "127.0.0.1",
+		ProxyPort:    1080,
+		ProxyType:    "socks",
+		DNSUpstreams: []string{"127.0.0.1", "::1", "0.0.0.0", "192.0.2.1"},
+	})
+	if err != nil {
+		t.Fatalf("Config: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	servers := m["dns"].(map[string]any)["servers"].([]any)
+	var locals []string
+	for _, raw := range servers {
+		srv := raw.(map[string]any)
+		if tag, _ := srv["tag"].(string); strings.HasPrefix(tag, "dns-local-") {
+			locals = append(locals, srv["server"].(string))
+		}
+	}
+	if len(locals) != 1 || locals[0] != "192.0.2.1" {
+		t.Fatalf("expected dns-local-0 to be 192.0.2.1 without loopback, got %v", locals)
+	}
+}

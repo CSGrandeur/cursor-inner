@@ -9,7 +9,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,28 +54,127 @@ type Bridge struct {
 	probing  atomic.Bool
 }
 
+var (
+	bridgePortsMu     sync.Mutex
+	activeBridgePorts = map[int]int{}
+)
+
+func registerBridgePort(port int) {
+	if port <= 0 {
+		return
+	}
+	bridgePortsMu.Lock()
+	activeBridgePorts[port]++
+	bridgePortsMu.Unlock()
+}
+
+func unregisterBridgePort(port int) {
+	if port <= 0 {
+		return
+	}
+	bridgePortsMu.Lock()
+	if n := activeBridgePorts[port]; n <= 1 {
+		delete(activeBridgePorts, port)
+	} else {
+		activeBridgePorts[port] = n - 1
+	}
+	bridgePortsMu.Unlock()
+}
+
+func isActiveBridgePort(port int) bool {
+	if port <= 0 {
+		return false
+	}
+	bridgePortsMu.Lock()
+	n := activeBridgePorts[port]
+	bridgePortsMu.Unlock()
+	return n > 0
+}
+
+func addrPort(addr net.Addr) int {
+	ta, ok := addr.(*net.TCPAddr)
+	if !ok || ta == nil {
+		return 0
+	}
+	return ta.Port
+}
+
+func rebindLoopback(port int, wait time.Duration) (net.Listener, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
+	defer cancel()
+	var ln net.Listener
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	err := selfupdate.Rebind(ctx, func() error {
+		l, lerr := net.Listen("tcp4", addr)
+		if lerr == nil {
+			ln = l
+		}
+		return lerr
+	})
+	return ln, err
+}
+
+func portListening(port int) bool {
+	if port <= 0 {
+		return false
+	}
+	c, err := net.DialTimeout("tcp4", fmt.Sprintf("127.0.0.1:%d", port), 150*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
 // Ensure 让桥按 key（代理地址）和 dial 运行，返回给 Grok Bot 用的 http://127.0.0.1:端口。
 func (b *Bridge) Ensure(key string, dial DialFunc) (string, error) {
+	u, _, err := b.EnsureAt(key, 0, dial)
+	return u, err
+}
+
+// EnsureAt 让桥按 key 和 dial 运行；preferredPort > 0 时优先复用或抢占该回环端口。
+// 若 preferredPort 仍在被其他进程（如正在排空的旧实例）服务，返回 preferredBusy=true 且不改现有监听，
+// 让调用方保持现状，等旧进程释放后再原地接手。
+func (b *Bridge) EnsureAt(key string, preferredPort int, dial DialFunc) (url string, preferredBusy bool, err error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.dial = dial
 	if b.ln != nil && b.key == key {
-		return "http://" + b.ln.Addr().String(), nil
+		if preferredPort <= 0 || addrPort(b.ln.Addr()) == preferredPort {
+			return "http://" + b.ln.Addr().String(), false, nil
+		}
+	}
+	if preferredPort > 0 {
+		if ln, rerr := rebindLoopback(preferredPort, 300*time.Millisecond); rerr == nil {
+			b.swapListenerLocked(ln, key)
+			return "http://" + ln.Addr().String(), false, nil
+		}
+		if portListening(preferredPort) {
+			return "", true, nil
+		}
 	}
 	if b.ln != nil {
 		_ = b.ln.Close()
 		b.ln = nil
 	}
-	ln, err := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", stablePort(key)))
+	ln, err := rebindLoopback(stablePort(key), 300*time.Millisecond)
 	if err != nil {
 		ln, err = net.Listen("tcp4", "127.0.0.1:0")
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 	}
+	b.swapListenerLocked(ln, key)
+	return "http://" + ln.Addr().String(), false, nil
+}
+
+func (b *Bridge) swapListenerLocked(ln net.Listener, key string) {
+	if b.ln != nil {
+		_ = b.ln.Close()
+	}
 	b.ln, b.key = ln, key
+	registerBridgePort(addrPort(ln.Addr()))
 	go b.serve(ln)
-	return "http://" + ln.Addr().String(), nil
 }
 
 // Retarget 只换桥的出站拨号，不动监听。Grok Bot 改用别的代理地址、但还没重开时，
@@ -129,6 +230,7 @@ func (b *Bridge) Reclaim() error {
 		return err
 	}
 	b.ln, b.released = ln, ""
+	registerBridgePort(addrPort(ln.Addr()))
 	go b.serve(ln)
 	return nil
 }
@@ -140,6 +242,7 @@ func stablePort(key string) int {
 }
 
 func (b *Bridge) serve(ln net.Listener) {
+	defer unregisterBridgePort(addrPort(ln.Addr()))
 	b.startReporter()
 	for {
 		c, err := ln.Accept()
@@ -150,6 +253,43 @@ func (b *Bridge) serve(ln net.Listener) {
 	}
 }
 
+func (b *Bridge) listenPort() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.ln == nil {
+		return 0
+	}
+	return addrPort(b.ln.Addr())
+}
+
+func isLoopbackHost(host string) bool {
+	h := strings.Trim(strings.TrimSpace(host), "[]")
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(h)
+	if err != nil {
+		return false
+	}
+	ip = ip.Unmap()
+	return ip.IsLoopback() || ip.IsUnspecified()
+}
+
+func (b *Bridge) isSelfTarget(target string) bool {
+	host, portStr, err := net.SplitHostPort(target)
+	if err != nil {
+		return false
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port <= 0 || !isLoopbackHost(host) {
+		return false
+	}
+	if lp := b.listenPort(); lp > 0 && lp == port {
+		return true
+	}
+	return isActiveBridgePort(port)
+}
+
 func (b *Bridge) currentDial() (DialFunc, string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -158,13 +298,13 @@ func (b *Bridge) currentDial() (DialFunc, string) {
 
 // connRec 是一条桥连接的调试记录，结束时写成一行。
 type connRec struct {
-	id, client, target, kind, closedBy, reason string
-	note                                       *connlog.Note
-	start                                      time.Time
-	dial                                       time.Duration
-	toUp, toClient                             int64
-	tunnelAt, firstAt                          time.Time // 隧道建立、上游首字节（详细日志）
-	status                                     int       // 明文 HTTP 的响应状态（详细日志）
+	id, client, target, targetSrc, method, kind, closedBy, reason string
+	note                                                          *connlog.Note
+	start                                                         time.Time
+	dial                                                          time.Duration
+	toUp, toClient                                                int64
+	tunnelAt, firstAt                                             time.Time // 隧道建立、上游首字节（详细日志）
+	status                                                        int       // 明文 HTTP 的响应状态（详细日志）
 }
 
 func (b *Bridge) handle(c net.Conn) {
@@ -191,18 +331,30 @@ func (b *Bridge) handle(c net.Conn) {
 	dial, key := b.currentDial()
 	rec.kind = proxyKind(key)
 	if dial == nil {
+		rec.status = http.StatusBadGateway
 		rec.closedBy, rec.reason = "bridge", "no dialer"
 		_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
 		return
 	}
-	target := req.Host
-	if req.Method != http.MethodConnect {
-		target = req.URL.Host
-		if req.URL.Port() == "" {
-			target = net.JoinHostPort(req.URL.Hostname(), "80")
-		}
-	}
+	target, src, ok := proxyDialTarget(req)
+	rec.method = safeHTTPMethod(req.Method)
+	rec.targetSrc = src
 	rec.target = target
+	if !ok {
+		rec.status = http.StatusBadRequest
+		rec.closedBy, rec.reason = "client", "empty target"
+		if src != "" && src != "empty" {
+			rec.reason = "empty target (" + src + ")"
+		}
+		_, _ = io.WriteString(c, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
+		return
+	}
+	if b.isSelfTarget(target) {
+		rec.status = http.StatusBadRequest
+		rec.closedBy, rec.reason = "client", "self target"
+		_, _ = io.WriteString(c, "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	ctx, rec.note = connlog.With(ctx)
 	t0 := time.Now()
@@ -211,6 +363,7 @@ func (b *Bridge) handle(c net.Conn) {
 	cancel()
 	if err != nil {
 		b.stats.dialFailed(target, err)
+		rec.status = http.StatusBadGateway
 		rec.closedBy, rec.reason = "dial", sanitizeErr(err)
 		slog.Warn(b.name()+" 代理桥没能经代理连上目标，已拒绝（不会直连）", "target", target, "error", sanitizeErr(err))
 		_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
@@ -222,6 +375,7 @@ func (b *Bridge) handle(c net.Conn) {
 			rec.closedBy, rec.reason = "client", sanitizeErr(err)
 			return
 		}
+		rec.status = http.StatusOK
 		if n := br.Buffered(); n > 0 {
 			rest, _ := br.Peek(n)
 			if _, err := up.Write(rest); err != nil {
@@ -276,9 +430,16 @@ func (b *Bridge) logConn(r *connRec) {
 	}
 	attrs := []any{"bridge", b.name(), "id", r.id, "client", r.client, "target", r.target, "route", route,
 		"dial_ms", r.dial.Milliseconds(), "dur_ms", time.Since(r.start).Milliseconds(),
-		"up", r.toUp, "down", r.toClient, "closed_by", r.closedBy}
+		"up", r.toUp, "down", r.toClient, "closed_by", r.closedBy,
+		"method", r.method, "target_src", r.targetSrc, "target_empty", hostOf(r.target) == ""}
 	if r.reason != "" {
 		attrs = append(attrs, "reason", r.reason)
+	}
+	if why := r.note.Reason(); why != "" {
+		attrs = append(attrs, "route_why", why)
+	}
+	if r.status > 0 {
+		attrs = append(attrs, "status", r.status)
 	}
 	if host := hostOf(r.target); host != "" {
 		if official.MustProxy(host) {
@@ -295,9 +456,6 @@ func (b *Bridge) logConn(r *connRec) {
 		}
 		class := closeClass(r.closedBy, r.reason)
 		attrs = append(attrs, "start", r.start.Format("15:04:05.000"), "ttfb_ms", ttfbMS(r, ttfb), "close", class)
-		if r.status > 0 {
-			attrs = append(attrs, "status", r.status)
-		}
 		if r.target != "" {
 			b.hosts.add(hostOf(r.target), r.dial, ttfb, class)
 		}
@@ -389,6 +547,9 @@ func antigravityFamily(host string) bool {
 		strings.HasSuffix(h, ".antigravity.google"), h == "antigravity.google",
 		strings.HasSuffix(h, ".antigravity.google.com"), h == "antigravity.google.com",
 		strings.HasSuffix(h, ".antigravity-unleash.goog"), h == "antigravity-unleash.goog",
+		strings.HasSuffix(h, ".antigravity.goog"), h == "antigravity.goog",
+		strings.HasSuffix(h, ".turn.goog"), h == "turn.goog",
+		strings.HasSuffix(h, ".l.google.com"), h == "l.google.com",
 		strings.HasSuffix(h, ".run.app") && strings.HasPrefix(strings.SplitN(h, ".", 2)[0], "antigravity-"):
 		return true
 	}

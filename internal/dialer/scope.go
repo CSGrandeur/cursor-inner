@@ -26,12 +26,12 @@ func Scoped(p config.Proxy) (Func, error) {
 	}
 	_, on, _ := EffectiveAddress(p)
 	if !on {
-		return marked(via, "direct"), nil
+		return markedWhy(via, "direct", "proxy_off"), nil
 	}
 	via = marked(via, "proxy")
 	direct := marked(directDial(), "direct")
 	if !p.OfficialOnly() {
-		return reservedFirst(via, direct), nil
+		return reservedFirst(markedWhy(via, "proxy", "global"), direct), nil
 	}
 	return reservedFirst(split(via, direct), direct), nil
 }
@@ -39,6 +39,14 @@ func Scoped(p config.Proxy) (Func, error) {
 // marked 在拨号时把实际走的路记到 ctx 上（connlog），供代理桥的调试日志使用。
 func marked(d Func, route string) Func {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		connlog.Set(ctx, route)
+		return d(ctx, network, addr)
+	}
+}
+
+func markedWhy(d Func, route, why string) Func {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		connlog.SetReason(ctx, why)
 		connlog.Set(ctx, route)
 		return d(ctx, network, addr)
 	}
@@ -60,13 +68,16 @@ func reservedFirst(next, direct Func) Func {
 			return next(ctx, network, addr)
 		}
 		if official.MustProxy(host) {
+			connlog.SetReason(ctx, "official_must_proxy")
 			return next(ctx, network, addr)
 		}
 		if ip, err := netip.ParseAddr(strings.Trim(host, "[]")); err == nil {
 			if official.Reserved(ip) {
 				slog.Debug("内网预留地址：直连", "target", addr)
+				connlog.SetReason(ctx, "reserved_ip")
 				return direct(ctx, network, addr)
 			}
+			connlog.SetReason(ctx, "public_ip")
 			return next(ctx, network, addr)
 		}
 		lctx, cancel := context.WithTimeout(ctx, lookupWait)
@@ -82,6 +93,7 @@ func reservedFirst(next, direct Func) Func {
 		}
 		target := net.JoinHostPort(ips[0].Unmap().String(), port)
 		slog.Debug("主机名解析到内网预留段：直连", "target", addr, "ip", target)
+		connlog.SetReason(ctx, "reserved_dns")
 		return direct(ctx, network, target)
 	}
 }
@@ -102,9 +114,11 @@ func split(via, direct Func) Func {
 		switch route := official.ForHost(host); route {
 		case official.Direct:
 			slog.Debug("代理范围仅官方：直连", "target", addr, "why", "loopback/private")
+			connlog.SetReason(ctx, "loopback_or_private")
 			return direct(ctx, network, addr)
 		case official.Proxy:
 			slog.Debug("代理范围仅官方：走代理", "target", addr)
+			connlog.SetReason(ctx, "official_host")
 			return via(ctx, network, addr)
 		}
 		return newInspectConn(ctx, network, addr, via, direct), nil
@@ -185,6 +199,7 @@ func (c *inspectConn) decide(route official.Route, name, why string) {
 	if route == official.Direct {
 		dial, label = c.direct, "direct"
 	}
+	connlog.SetReason(c.ctx, why)
 	slog.Debug("代理范围仅官方：按首包分流", "target", c.addr, "route", label, "name", name, "why", why)
 	if label == "direct" && antigravityRelated(name) {
 		slog.Warn("反重力相关主机被按直连分流（可能漏接）", "target", c.addr, "name", name, "why", why)

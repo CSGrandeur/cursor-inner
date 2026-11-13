@@ -95,7 +95,7 @@ func Config(o Options) ([]byte, error) {
 		"dns": map[string]any{
 			"servers": dnsServers,
 			"rules": []any{
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater"}, "server": "dns-fake"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater", "antigravity-ide-auto-updater"}, "server": "dns-fake"},
 			},
 			"final":    localTag,
 			"strategy": "prefer_ipv4",
@@ -121,7 +121,7 @@ func Config(o Options) ([]byte, error) {
 				map[string]any{"action": "sniff"},
 				map[string]any{"protocol": "dns", "action": "hijack-dns"},
 				map[string]any{"inbound": "tun-in", "ip_cidr": []string{fake4, fake6}, "outbound": "proxy"},
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater"}, "outbound": "proxy"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater", "antigravity-ide-auto-updater"}, "outbound": "proxy"},
 			},
 			"final":                   "direct",
 			"auto_detect_interface":   true,
@@ -139,20 +139,17 @@ func logBlock(path string) map[string]any {
 	return b
 }
 
-// normalizeDNS 去重、剔除回环与无效项，并给每个上游算出要放进 route_address 的单主机网段。
-// 回环 DNS（127/::1，常是本机 DoH 代理）不加进 route_address：它本来就不进 TUN，加了反而可能成环。
+// normalizeDNS 去重、剔除回环/未指定与无效项，并给每个上游算出要放进 route_address 的单主机网段。
+// 回环 DNS（127/::1）既不放进 route_address，也不放进 servers：否则 sort.Strings 会把 127.0.0.1 排成 dns-local-0 导致域名解析成环或失败。
 func normalizeDNS(in []string) (servers []string, routes []string) {
 	seen := map[string]bool{}
 	for _, raw := range in {
 		ip := net.ParseIP(strings.TrimSpace(raw))
-		if ip == nil || seen[ip.String()] {
+		if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || seen[ip.String()] {
 			continue
 		}
 		seen[ip.String()] = true
 		servers = append(servers, ip.String())
-		if ip.IsLoopback() {
-			continue
-		}
 		if ip.To4() != nil {
 			routes = append(routes, ip.String()+"/32")
 		} else {

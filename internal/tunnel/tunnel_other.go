@@ -12,3 +12,5 @@ func stopTunnel(m *Manager) error { return nil }
 
 // DetectDNS 在非 Windows 上不可用，返回空；调用方据此回退。
 func DetectDNS() []string { return nil }
+
+func detectInitialState(*Manager) State { return StateUnsupported }

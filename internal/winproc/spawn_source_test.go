@@ -14,8 +14,7 @@ var bareSpawn = regexp.MustCompile(`exec\.Command(Context)?\(|os\.StartProcess\(
 
 // spawnAllowed 是确实要自己带控制台或自己设标志的少数位置，每条写明理由。
 var spawnAllowed = map[string]string{
-	"program/window_windows.go":           "经典控制台模式本来就要一个可见的 conhost 窗口",
-	"antigravitylaunch/lswrapcmd/main.go": "独立包装放进 Antigravity 安装目录，职责是拉起官方 language_server，不能依赖 winproc",
+	"program/window_windows.go": "经典控制台模式本来就要一个可见的 conhost 窗口",
 }
 
 // Windows 构建里所有起子进程的地方都必须走 winproc（Quiet / QuietContext / GUI / Detached），

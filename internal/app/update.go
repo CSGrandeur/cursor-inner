@@ -1,16 +1,16 @@
 package app
 
 import (
-	"log/slog"
-
 	"context"
-	"cursor-inner/internal/logx"
-	"cursor-inner/internal/takeover"
 	"errors"
+	"log/slog"
 	"time"
 
 	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/grokbot"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/selfupdate"
+	"cursor-inner/internal/takeover"
 )
 
 // SetUpdater 挂上自更新。没挂时配置页不显示更新区。
@@ -40,9 +40,29 @@ func (a *App) Freeze(on bool) {
 	}
 }
 
-// ReleaseBridge / ReclaimBridge 交出、收回 Grok 代理桥的监听。
-func (a *App) ReleaseBridge() error { return a.bridge.Release() }
-func (a *App) ReclaimBridge() error { return a.bridge.Reclaim() }
+// ReleaseBridge / ReclaimBridge 交出、收回 Grok / Codex / Antigravity 代理桥的监听。
+func (a *App) ReleaseBridge() error {
+	bridges := []*grokbot.Bridge{&a.bridge, &a.codexBridge, &a.antiBridge}
+	for i, br := range bridges {
+		if err := br.Release(); err != nil {
+			for j := i - 1; j >= 0; j-- {
+				_ = bridges[j].Reclaim()
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *App) ReclaimBridge() error {
+	var firstErr error
+	for _, br := range []*grokbot.Bridge{&a.bridge, &a.codexBridge, &a.antiBridge} {
+		if err := br.Reclaim(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
 
 var errNoUpdater = errors.New("这个版本没有启用自动更新")
 

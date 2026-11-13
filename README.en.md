@@ -45,7 +45,7 @@ The model APIs you connect may charge for usage. cursor-inner is an independent 
 - **Agent work.** Read and edit files, run commands, search, call MCP tools and subagents from the current chat; edits show a diff and are written after you accept them. The context usage bar is the same one built-in models get.
 - **Long tasks keep going.** A model can leave a background command on this machine and is woken to continue when it ends, or when a matching line of output appears.
 - **Stops that make sense.** Stop shows a stopped notice; an upstream rejection or error explains itself and keeps completed steps and the checkpoint. After a hot update or restart, finished chats resume normally.
-- **Your proxy.** Take over Cursor, Grok, Codex and Antigravity with one address, or send only official hosts through the proxy and connect directly to everything else. Each custom model chooses whether to use the proxy. If a connection still bypasses takeover, TUN mode or Strict mode covers official hosts only and leaves other programs alone.
+- **Your proxy.** Take over Cursor, Grok, Codex and Antigravity with one address, or send only official hosts through the proxy (Antigravity included) and connect directly to everything else. Taking over Antigravity also covers its WSL mode, without changing system or WSL settings. Each custom model chooses whether to use the proxy. If a connection still bypasses takeover, TUN mode or Strict mode covers official hosts only (TUN can also cover Antigravity, including WSL) and leaves other programs alone.
 - **Update and quit.** Update in one click; Cursor and Grok keep running, and only signed releases are installed. Quitting, or an unexpected exit, restores Cursor's proxy settings; on Windows the close button only hides cursor-inner to the notification area.
 
 ## Installation
@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.6.0`.
+The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.6.1`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -120,7 +120,7 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 The settings page has four tabs: **Models**, **Network**, **General** and **Update**. A URL ending in `#models`, `#network`, `#general` or `#update` opens that tab.
 
 - **Models**: Cursor only. Add, discover and test; the key in the list carries a Key label and copies on click; Copy fills the add form including the key, masked until you reveal it. Groups appear as sections; click a group header to collapse or expand it, leaving only the summary, and add models to the group, edit it or delete it right from the header. A member's endpoint column reads "follows group", and fields that differ from the group are marked custom, with a hover listing which ones. When a group holds several plans, the group header shows a plan selector; switching it makes the members use the new plan's URL, type and key at once. In the group editor, the plans section adds a set with **Add plan**, each with a plan name, type, URL and key; leaving the key blank while editing keeps the stored one. The group selector at the top of the form picks an existing group, standalone, or a new group; with a group selected, leaving the URL, type or key blank follows the group. Fields you leave unset use the group's settings; changing one makes it this model's own value. Context window, max output, max images, image total (MB), reasoning, Fast, cache key and fallback can be left empty; images are shrunk when read, and a request over the limits drops the oldest tool images first, keeping the newest few. Fallback takes the names of other added models, comma-separated, used before any text has been shown when authentication fails or the endpoint is rate-limited. The ? next to Context window and Max output opens a small help card. With reasoning on, Cursor's effort list follows the model's documented levels.
-- **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, Take over Antigravity, TUN mode and Strict mode. An empty proxy means a direct connection; a bare `host:port` is detected as socks5 or http. If cursor-inner starts before your proxy software, the status bar shows "Waiting for proxy…" and connects automatically once it is up; official traffic never goes direct.
+- **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, Take over Antigravity, TUN mode and Strict mode. An empty proxy means a direct connection; a bare `host:port` is detected as socks5 or http. Official only includes Antigravity addresses. Taking over Antigravity also covers its WSL mode, without changing system or WSL settings. TUN mode can likewise cover Antigravity official traffic, including WSL. If cursor-inner starts before your proxy software, the status bar shows "Waiting for proxy…" and connects automatically once it is up; official traffic never goes direct.
 - **Update**: the buttons are Check for updates and Update. Only signed releases are installed; Cursor and Grok keep running, and a version that fails its check leaves the current one in place.
 - **General**: image generation and start at login. On Windows there is also **Run in background** and **Notifications**. To let Agent generate images, fill in an OpenAI-compatible endpoint under Images.
 
@@ -223,7 +223,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.6.0 ./build.sh linux
+VERSION=v0.6.1 ./build.sh linux
 ```
 
 ## Acknowledgements
