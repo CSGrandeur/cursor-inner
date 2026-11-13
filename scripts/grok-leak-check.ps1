@@ -7,7 +7,7 @@
     1. 运行时经代理用 DoH 解析官方域名清单（并上本地 DNS 结果），IP 命中即官方；
     2. 443 端口的远端再取一次 TLS 证书，证书名属于官方域名即官方（能认出 usNN.cursorvm.com 这类动态主机）；
     3. 反向解析名属于官方域名即官方。
-  官方端点直连标 FAIL（退出码 1）；GitHub、Google 等第三方直连标 INFO，不算失败。
+  官方端点直连标 FAIL（退出码 1）；GitHub、Microsoft 等第三方直连标 INFO，不算失败。
   证书检查会由本脚本直连对方 443 一次，只握手不发数据；不想要可加 -NoTlsCheck。
 
   二、路由实测：经 Grok Bot / Cursor 实际使用的本机代理地址（Grok 的 --proxy-server、Cursor 的 http.proxy，
@@ -41,7 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'antigravity.google.com', 'antigravity-unleash.goog', 'antigravity.goog', 'turn.goog', 'l.google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com', 'accounts.google.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'goog', 'google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',

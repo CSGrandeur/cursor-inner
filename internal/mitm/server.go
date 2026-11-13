@@ -754,7 +754,7 @@ func noteUnauthorized(r *http.Request, status int) {
 	if status != http.StatusUnauthorized {
 		return
 	}
-	slog.Info("官方返回未登录", "path", r.URL.Path, "request", r.Header.Get("x-request-id"))
+	slog.Debug("官方返回未登录", "path", r.URL.Path, "request", r.Header.Get("x-request-id"))
 }
 
 func (s *Server) forward(w http.ResponseWriter, r *http.Request) {

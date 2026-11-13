@@ -30,22 +30,20 @@ var Suffixes = []string{
 	"oaistatic.com",
 	"oaiusercontent.com",
 	"oaistatsig.com",
-	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth + Remote WebRTC STUN/TURN 相关后缀。
+	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth + 品牌顶级域 .goog + google.com。
 	// googleapis.com 盖住 oauth2 / businessaicode / aiplatform / discoveryengine /
-	// cloudcode-pa / daily-cloudcode-pa / aicode / play.googleapis.com 等。
-	// turn.goog 与 l.google.com 盖住 Remote Control WebRTC（stun.l.google.com / TURN）域名；
-	// 不收整站 google.com；登录主机单独收 accounts.google.com。
+	// cloudcode-pa / daily-cloudcode-pa / aicode / play.googleapis.com 等；
+	// goog 盖住全部 *.goog（antigravity.static.usercontent.goog / antigravity-unleash.goog /
+	// antigravity.goog / turn.goog / turns.goog 等）；
+	// google.com 盖住 accounts / policies / www / clients* / antigravity / stun.l.google.com 等
+	// （反重力内置浏览器继承整进程 --proxy-server、不走系统 PAC，仅收少数子域会导致打开 Google 页面直连超时）。
 	// Cloud Run 更新器（antigravity-hub-auto-updater-*.run.app）见 antigravityCloudRun。
 	"antigravity.google",
-	"antigravity.google.com",
-	"antigravity-unleash.goog",
-	"antigravity.goog",
-	"turn.goog",
-	"l.google.com",
+	"goog",
+	"google.com",
 	"googleapis.com",
 	"googleusercontent.com",
 	"gstatic.com",
-	"accounts.google.com",
 }
 
 // Hosts 是只按完整主机名匹配的官方端点：它们的上级域名是公共云或第三方，不能按后缀收。

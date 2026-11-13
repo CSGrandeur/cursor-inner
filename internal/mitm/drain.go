@@ -187,7 +187,7 @@ func (s *Server) DrainIdle() int {
 	s.drain.on.Store(true)
 	n := s.drain.sweep(time.Now())
 	if n > 0 {
-		slog.Info("交接后关掉空闲的 Agents 连接，下一轮会连到新进程", "count", n)
+		slog.Debug("交接后关掉空闲的 Agents 连接，下一轮会连到新进程", "count", n)
 	}
 	return n
 }

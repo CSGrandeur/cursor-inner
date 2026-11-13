@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"cursor-inner/internal/catalog"
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 )
 
 // 实测（17F 缓存 workbench.experiments.statsigBootstrap，2026-10-21）：hash_used=djb2，
@@ -170,5 +172,27 @@ func TestBootstrapStatsigForceEnvTurnsGateOn(t *testing.T) {
 	}
 	if fg["262893686"]["value"] != true {
 		t.Fatal("other gates untouched")
+	}
+}
+
+func TestBootstrapStatsigRewriteStaysOffConsole(t *testing.T) {
+	prev := slog.Default()
+	var console, file bytes.Buffer
+	logx.Setup(&console, &file, false)
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	s := New(func() config.Proxy { return config.Proxy{} },
+		func() []catalog.Entry { return nil },
+		func(string) (config.Model, bool) { return config.Model{}, false }, nil)
+	s.client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/proto"}}, Body: io.NopCloser(bytes.NewReader(bootstrapProto(sampleStatsig)))}, nil
+	})}
+	rec := httptest.NewRecorder()
+	s.route(rec, httptest.NewRequest(http.MethodPost, "https://api2.cursor.sh"+bootstrapStatsigPath, strings.NewReader("")))
+	if console.Len() != 0 {
+		t.Fatalf("console must not show internal statsig rewrite: %q", console.String())
+	}
+	if !strings.Contains(file.String(), "已在 statsig 下发里改写门") {
+		t.Fatalf("file log must still record rewrite: %q", file.String())
 	}
 }

@@ -230,10 +230,13 @@ func TestBridgeNameAntigravity(t *testing.T) {
 }
 
 func TestAntigravityFamily(t *testing.T) {
-	if !antigravityFamily("oauth2.googleapis.com") || !antigravityFamily("antigravity-unleash.goog") {
+	if !antigravityFamily("oauth2.googleapis.com") || !antigravityFamily("antigravity-unleash.goog") || !antigravityFamily("antigravity.static.usercontent.goog") {
 		t.Fatal("expected google official hosts")
 	}
-	if !antigravityFamily("stun.l.google.com") || !antigravityFamily("turn.goog") {
+	if !antigravityFamily("policies.google.com") || !antigravityFamily("www.google.com") || !antigravityFamily("accounts.google.com") {
+		t.Fatal("expected google.com family hosts")
+	}
+	if !antigravityFamily("stun.l.google.com") || !antigravityFamily("turn.goog") || !antigravityFamily("workspace.turns.goog") {
 		t.Fatal("expected google webrtc stun/turn hosts")
 	}
 	if !antigravityFamily("antigravity-hub-auto-updater-1.us-central1.run.app") {

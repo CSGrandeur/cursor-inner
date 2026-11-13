@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDebugStaysOffTheConsole(t *testing.T) {
@@ -111,5 +112,26 @@ func TestFileOnlySkipsConsoleAndAttr(t *testing.T) {
 	got := file.String()
 	if !strings.Contains(got, "检查更新 latest=v1.2.3") || !strings.Contains(got, "更新失败：x") || strings.Contains(got, "_file_only") {
 		t.Fatal(got)
+	}
+}
+
+func TestFileOnlyWarnNeverCoalescesToConsole(t *testing.T) {
+	var console, file bytes.Buffer
+	h := &split{console: &console, file: &file, warns: map[string]*warnState{}}
+	logger := slog.New(h)
+	logger.Warn("内部诊断", "k", "1", FileOnly)
+	logger.Warn("内部诊断", "k", "2", FileOnly)
+	if len(h.warns) != 0 {
+		t.Fatalf("FileOnly warn must not enter warns map: %+v", h.warns)
+	}
+	// 即使手动写入旧时间戳再触发一次带 FileOnly 的警告，也不得打印「又出现」到控制台。
+	h.warns["内部诊断"] = &warnState{last: time.Now().Add(-11 * time.Minute), extra: 3}
+	logger.Warn("内部诊断", "k", "3", FileOnly)
+	if console.Len() != 0 {
+		t.Fatalf("console must stay empty for FileOnly warn, got %q", console.String())
+	}
+	got := file.String()
+	if strings.Count(got, "内部诊断") != 3 || strings.Contains(got, "_file_only") {
+		t.Fatalf("file=%q", got)
 	}
 }

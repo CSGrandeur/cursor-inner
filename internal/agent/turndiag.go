@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"cursor-inner/internal/cursorpb"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/provider"
 )
 
@@ -159,5 +160,6 @@ func (d turnDiag) log() {
 		"fallback", strings.Join(d.Fallback, "；"),
 		"fields", strings.Join(d.Fields, ","),
 		"ids", strings.Join(d.IDs, ","),
+		logx.FileOnly,
 	)
 }

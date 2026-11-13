@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 )
 
 // 通用思考档：未知模型保持与旧目录兼容。id 会原样发给上游。
@@ -54,7 +55,7 @@ func ResolveEffort(m config.Model, selected string) string {
 	}
 	if def != "" && def != sel {
 		slog.Info("reasoning_effort_unsupported 客户端选了该模型不支持的思考档，改用默认档",
-			"model", m.Model, "requested", sel, "using", def)
+			"model", m.Model, "requested", sel, "using", def, logx.FileOnly)
 		return def
 	}
 	return ""

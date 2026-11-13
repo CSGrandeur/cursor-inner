@@ -20,6 +20,7 @@ import (
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/runlog"
 )
 
@@ -184,7 +185,7 @@ func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system str
 		}
 		if IsEmpty(err) {
 			empties++
-			slog.Warn("upstream_empty 上游正常结束但没有内容和工具调用", "model", m.Model, "attempt", attempt+1, "elapsed_ms", time.Since(started).Milliseconds())
+			slog.Warn("upstream_empty 上游正常结束但没有内容和工具调用", "model", m.Model, "attempt", attempt+1, "elapsed_ms", time.Since(started).Milliseconds(), logx.FileOnly)
 			if empties >= maxEmptyAttempts {
 				return Message{}, withRetries(err, attempt)
 			}
@@ -192,7 +193,7 @@ func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system str
 		if isTimeout(err) {
 			timeouts++
 			if timeouts >= maxTimeoutAttempts {
-				slog.Warn("upstream_timeout 上游空闲超时次数到上限，向客户端报错", "model", m.Model, "attempts", attempt+1, "error", Explain(err))
+				slog.Warn("upstream_timeout 上游空闲超时次数到上限，向客户端报错", "model", m.Model, "attempts", attempt+1, "error", Explain(err), logx.FileOnly)
 				return Message{}, withRetries(err, attempt)
 			}
 		}
@@ -229,7 +230,7 @@ func uniqueTools(tools []Tool) []Tool {
 		out = append(out, tool)
 	}
 	if len(dropped) > 0 {
-		slog.Warn("tools_duplicate 工具重名，已丢弃重复定义", "dropped", strings.Join(dropped, ","), "kept", len(out))
+		slog.Warn("tools_duplicate 工具重名，已丢弃重复定义", "dropped", strings.Join(dropped, ","), "kept", len(out), logx.FileOnly)
 	}
 	return out
 }
@@ -433,7 +434,7 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		if !strings.HasPrefix(line, "data:") {
 			skipped++
 			if waited := time.Since(lastData); waited >= dataIdle {
-				slog.Warn("upstream_data_idle 上游只发 keepalive、长时间没有数据帧，判定超时", "model", m.Model, "waited_s", int(waited.Seconds()), "non_data_lines", skipped)
+				slog.Warn("upstream_data_idle 上游只发 keepalive、长时间没有数据帧，判定超时", "model", m.Model, "waited_s", int(waited.Seconds()), "non_data_lines", skipped, logx.FileOnly)
 				return Message{}, dataIdleError()
 			}
 			continue

@@ -28,7 +28,7 @@ type warnState struct {
 }
 
 // FileOnly 加在一条日志的属性里，表示它只写进 inner.log、不上控制台：
-// 控制台上已经有更合适的显示（例如自更新的进度条和阶段行），再打一遍就重复了。
+// 控制台上已经有更合适的显示（例如自更新的进度条和阶段行），或是内部诊断与协议细节，再打一遍就重复或刷屏了。
 var FileOnly = slog.Bool(fileOnlyKey, true)
 
 const fileOnlyKey = "_file_only"
@@ -60,8 +60,8 @@ func (s *split) Handle(_ context.Context, r slog.Record) error {
 	}
 	emitSinks(r)
 	show := (r.Level >= slog.LevelInfo || s.verbose) && !fileOnly(r)
-	if r.Level == slog.LevelWarn {
-		show = s.admitWarn(r.Message, show)
+	if show && r.Level == slog.LevelWarn {
+		show = s.admitWarn(r.Message)
 	}
 	if show && s.console != nil {
 		text := line
@@ -76,13 +76,13 @@ func (s *split) Handle(_ context.Context, r slog.Record) error {
 func (s *split) WithAttrs([]slog.Attr) slog.Handler { return s }
 func (s *split) WithGroup(string) slog.Handler      { return s }
 
-func (s *split) admitWarn(key string, show bool) bool {
+func (s *split) admitWarn(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.warns[key]
 	if st == nil {
 		s.warns[key] = &warnState{last: time.Now()}
-		return show
+		return true
 	}
 	if time.Since(st.last) > 10*time.Minute {
 		extra := st.extra
@@ -91,7 +91,7 @@ func (s *split) admitWarn(key string, show bool) bool {
 		if extra > 0 && s.console != nil {
 			fmt.Fprintf(s.console, "%s  ! %s 又出现 %d 次\n", time.Now().Format("15:04:05"), key, extra)
 		}
-		return show
+		return true
 	}
 	st.extra++
 	return false

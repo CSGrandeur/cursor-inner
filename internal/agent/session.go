@@ -15,6 +15,7 @@ import (
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/provider"
 	"cursor-inner/internal/runlog"
 	"cursor-inner/internal/tools"
@@ -610,18 +611,18 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 		// 菜单里不再给出超限档位，但旧客户端仍会带 200k 这类固定值。记下请求值和实际窗口，
 		// 下次用户说“选了没生效”时能直接分辨是选择器没传过来，还是被模型上限截断了。
 		slog.Info("context_clamped 请求的上下文超过模型上限，按模型上限处理",
-			"conversation", short, "requested", requested, "configured", configured, "window", model.ContextWindow)
+			"conversation", short, "requested", requested, "configured", configured, "window", model.ContextWindow, logx.FileOnly)
 	}
 	slog.Info("▶ "+name, "conversation", short, "turn", userTurns(messages), "window", model.ContextWindow)
 	newTurnDiag(s.run, reqCtx, len(s.mcp), len(catalog), messages).log()
 	if skipReason != "" && s.HasQueuedInput() {
 		// 后台任务完成这类输入是在上一轮结束之后送进这条 run 的，动作本身还是“继续运行”，
 		// 但确实有新的输入要交给模型。下一轮循环开头的 drainSteer 会把它并进历史。
-		slog.Info("turn_continue 有新的输入，接着跑一轮", "conversation", short, "action", plan.kind, "reason", skipReason)
+		slog.Info("turn_continue 有新的输入，接着跑一轮", "conversation", short, "action", plan.kind, "reason", skipReason, logx.FileOnly)
 		skipReason = ""
 	}
 	if skipReason != "" {
-		slog.Info("turn_skip 本次不调用模型", "conversation", short, "action", plan.kind, "reason", skipReason)
+		slog.Info("turn_skip 本次不调用模型", "conversation", short, "action", plan.kind, "reason", skipReason, logx.FileOnly)
 		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
 	}
 	runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "start", Messages: userTurns(messages)})

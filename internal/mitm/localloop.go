@@ -5,6 +5,7 @@ import (
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/inference"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/provider"
 	"encoding/base64"
 	"encoding/json"
@@ -109,7 +110,7 @@ func (s *Server) runInferenceSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if run := s.runs.Get(id); run != nil {
-		slog.Info("RunInferenceSSE 由本地模型回答", "request", id, "model", run.Model.DisplayName)
+		slog.Debug("RunInferenceSSE 由本地模型回答", "request", id, "model", run.Model.DisplayName)
 		s.countLocal()
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -184,7 +185,7 @@ func (s *Server) startLocalLoop(reqID string, client, plain []byte) bool {
 	seq, hasSeq := appendSeq(plain)
 	s.runs.Start(reqID, *m.Run, model, seq, hasSeq)
 	s.localLoop.mark(reqID)
-	slog.Info("Cursor 用本地循环发起了自定义模型的回合，由 cursor-inner 原生回答", "request", reqID, "model", model.DisplayName)
+	slog.Debug("Cursor 用本地循环发起了自定义模型的回合，由 cursor-inner 原生回答", "request", reqID, "model", model.DisplayName)
 	return true
 }
 
@@ -206,7 +207,7 @@ func (s *Server) localLoopAppend(w http.ResponseWriter, plain []byte) bool {
 	}
 	m, err := inference.DecodeClient(client)
 	if err != nil {
-		slog.Warn("本地循环消息读不懂，已忽略", "request", reqID, "error", err)
+		slog.Warn("本地循环消息读不懂，已忽略", "request", reqID, "error", err, logx.FileOnly)
 	} else {
 		seq, hasSeq := appendSeq(plain)
 		run.Append(m, seq, hasSeq)

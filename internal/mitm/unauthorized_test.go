@@ -10,6 +10,7 @@ import (
 
 	"cursor-inner/internal/catalog"
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 )
 
 func TestForwardLogsOfficialUnauthorized(t *testing.T) {
@@ -17,9 +18,9 @@ func TestForwardLogsOfficialUnauthorized(t *testing.T) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
 	defer upstream.Close()
-	var logs bytes.Buffer
+	var console, file bytes.Buffer
 	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	logx.Setup(&console, &file, false)
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	s := New(func() config.Proxy { return config.Proxy{} }, func() []catalog.Entry { return nil }, nil, nil)
@@ -32,8 +33,11 @@ func TestForwardLogsOfficialUnauthorized(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d", rec.Code)
 	}
-	out := logs.String()
+	if console.Len() != 0 {
+		t.Fatalf("console must stay empty for 401 log: %q", console.String())
+	}
+	out := file.String()
 	if !strings.Contains(out, "官方返回未登录") || !strings.Contains(out, "SubmitSpans") || !strings.Contains(out, "req-401") {
-		t.Fatalf("log=%q", out)
+		t.Fatalf("file=%q", out)
 	}
 }

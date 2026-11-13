@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 )
 
 // emptyRawHead 是空回复时记录的上游原始响应前缀长度。
@@ -65,6 +66,7 @@ func emptyReply(m config.Model, messages []Message, reqBytes int, finish string,
 		"images", images,
 		"image_bytes", imageBytes,
 		"raw_head", redactSecret(string(raw), m.APIKey),
+		logx.FileOnly,
 	)
 	err := emptyError().(*APIError)
 	err.Large = large

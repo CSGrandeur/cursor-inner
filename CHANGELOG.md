@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-14
+
+### Fixed
+
+- Official-only proxy scope now covers all `*.goog` and `*.google.com` hosts so Antigravity Remote and Google pages in Antigravity's built-in browser load instead of timing out.
+- Internal protocol and diagnostic notes stay in `inner.log` instead of cluttering the console window.
+
 ## [0.6.1] - 2026-11-13
 
 ### Changed
@@ -635,7 +642,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.29...v0.6.0
 [0.5.29]: https://github.com/CSGrandeur/cursor-inner/compare/v0.5.28...v0.5.29

@@ -95,7 +95,7 @@ eq("update untrusted manifest", updateLevel({state: "available", latest: "v1", e
 eq("no updater key", updateLevel({state: "idle", error_code: "no_key"}), "warn");
 console.log(fails.join("\n"));
 `
-	out, err := exec.Command(node, "-e", script).CombinedOutput()
+	out, err := exec.Command(node, "--no-warnings", "-e", script).CombinedOutput()
 	if err != nil {
 		t.Fatalf("node: %v\n%s", err, out)
 	}

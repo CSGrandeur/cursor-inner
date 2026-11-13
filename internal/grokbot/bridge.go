@@ -543,13 +543,9 @@ func antigravityFamily(host string) bool {
 	case strings.HasSuffix(h, ".googleapis.com"), h == "googleapis.com",
 		strings.HasSuffix(h, ".googleusercontent.com"), h == "googleusercontent.com",
 		strings.HasSuffix(h, ".gstatic.com"), h == "gstatic.com",
-		h == "accounts.google.com",
+		strings.HasSuffix(h, ".google.com"), h == "google.com",
 		strings.HasSuffix(h, ".antigravity.google"), h == "antigravity.google",
-		strings.HasSuffix(h, ".antigravity.google.com"), h == "antigravity.google.com",
-		strings.HasSuffix(h, ".antigravity-unleash.goog"), h == "antigravity-unleash.goog",
-		strings.HasSuffix(h, ".antigravity.goog"), h == "antigravity.goog",
-		strings.HasSuffix(h, ".turn.goog"), h == "turn.goog",
-		strings.HasSuffix(h, ".l.google.com"), h == "l.google.com",
+		strings.HasSuffix(h, ".goog"), h == "goog",
 		strings.HasSuffix(h, ".run.app") && strings.HasPrefix(strings.SplitN(h, ".", 2)[0], "antigravity-"):
 		return true
 	}

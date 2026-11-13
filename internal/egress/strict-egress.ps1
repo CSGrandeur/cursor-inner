@@ -3,7 +3,7 @@
   可选的严格模式：Windows 防火墙禁止 Grok Bot / Cursor 直连官方端点（Grok、x.ai、Cursor、OpenAI）。
 
 .DESCRIPTION
-  只针对官方端点：GitHub、Google 等第三方直连不受影响。做法：
+  只针对官方端点：GitHub、Microsoft 等第三方直连不受影响。做法：
     - 运行时经代理用 DoH 解析官方域名清单（并上本地 DNS 结果），得到官方 IP；
     - 为 Grok Bot.exe 和 Cursor.exe 各建一条出站阻止规则，远端为这些 IP；
     - 计划任务（SYSTEM）开机时和每隔 -RefreshMinutes 分钟重新解析并更新规则。解析失败时保留旧规则。
@@ -39,7 +39,7 @@ $home2 = Join-Path $env:ProgramData 'cursor-inner'
 $stateFile = Join-Path $home2 'strict-egress.json'
 $installed = Join-Path $home2 'strict-egress.ps1'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'antigravity.google.com', 'antigravity-unleash.goog', 'antigravity.goog', 'turn.goog', 'l.google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com', 'accounts.google.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'goog', 'google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',

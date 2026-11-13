@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"cursor-inner/internal/cursorpb"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/provider"
 )
 
@@ -157,7 +158,7 @@ func completionText(items []*cursorpb.BackgroundTaskCompletion, logIt bool) stri
 		reason := taskEnum(c.GetReason().String(), "BACKGROUND_TASK_COMPLETION_REASON_")
 		status := taskEnum(c.GetStatus().String(), "BACKGROUND_TASK_STATUS_")
 		if logIt {
-			slog.Info("background_completion 后台任务通知", "kind", kind, "reason", reason, "status", status, "task_id", truncID(c.GetTaskId()))
+			slog.Info("background_completion 后台任务通知", "kind", kind, "reason", reason, "status", status, "task_id", truncID(c.GetTaskId()), logx.FileOnly)
 		}
 		if !wakes(c) {
 			continue

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"cursor-inner/internal/grokbot"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/winproc"
 )
 
@@ -162,6 +163,6 @@ func start(exe, proxyURL string) error {
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
 	}
-	slog.Info("已拉起 Antigravity 进程", "exe", exe, "pid", pid)
+	slog.Info("已拉起 Antigravity 进程", "exe", exe, "pid", pid, logx.FileOnly)
 	return nil
 }

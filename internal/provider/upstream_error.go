@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/runlog"
 )
 
@@ -413,5 +414,5 @@ func eventParseHint(err error) string {
 func logEventParseError(data []byte, err error) {
 	hint := eventParseHint(err)
 	slog.Info("responses_event_ignored 事件无法按既有结构解析，已跳过（不记录正文）",
-		"event_type", peekEventType(data), "reason", hint)
+		"event_type", peekEventType(data), "reason", hint, logx.FileOnly)
 }

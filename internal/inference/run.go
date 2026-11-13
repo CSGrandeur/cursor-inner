@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/protox"
 	"cursor-inner/internal/provider"
 )
@@ -295,7 +296,7 @@ func (r *Runs) invoke(ctx context.Context, run *Run, inv *Invoke, send func([]by
 		func(s string) error { return send(Response(id, Thinking(s, "", issuer))) })
 	if err != nil {
 		if ctx.Err() != nil {
-			slog.Info("本地循环：模型调用已取消，上游连接已断开", "request", run.ID, "invocation", id, "model", run.Model.DisplayName, "ms", time.Since(started).Milliseconds())
+			slog.Info("本地循环：模型调用已取消，上游连接已断开", "request", run.ID, "invocation", id, "model", run.Model.DisplayName, "ms", time.Since(started).Milliseconds(), logx.FileOnly)
 			_ = send(End(id, codeCanceled, "canceled"))
 			return
 		}
@@ -329,7 +330,7 @@ func (r *Runs) invoke(ctx context.Context, run *Run, inv *Invoke, send func([]by
 	_ = send(Response(id, ResponseInfo(id, run.Req.ModelID, started.UnixMilli(), reply, issuer)))
 	_ = send(Response(id, TextFinal()))
 	_ = send(End(id, 0, ""))
-	slog.Info("本地循环一步已由本地模型回答", "request", run.ID, "model", run.Model.DisplayName, "tools", len(reply.ToolCalls), "ms", time.Since(started).Milliseconds())
+	slog.Debug("本地循环一步已由本地模型回答", "request", run.ID, "model", run.Model.DisplayName, "tools", len(reply.ToolCalls), "ms", time.Since(started).Milliseconds())
 }
 
 func modelName(run *Run) string {

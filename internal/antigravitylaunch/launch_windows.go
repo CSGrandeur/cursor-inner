@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"cursor-inner/internal/grokbot"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/winproc"
 	"golang.org/x/sys/windows/registry"
 )
@@ -33,12 +34,12 @@ func Launch(proxyURL string) error {
 		return err
 	}
 	if len(procs) > 0 && grokbot.ShouldRestart(cmds(procs), proxyURL) {
-		slog.Info("已有未接管的 Antigravity，先结束再以代理重启", "exe", path, "running", len(procs))
+		slog.Info("已有未接管的 Antigravity，先结束再以代理重启", "exe", path, "running", len(procs), logx.FileOnly)
 		if err := stopAll(); err != nil {
 			return err
 		}
 	} else {
-		slog.Info("准备启动 Antigravity", "exe", path, "running", len(procs))
+		slog.Info("准备启动 Antigravity", "exe", path, "running", len(procs), logx.FileOnly)
 	}
 	return start(path, proxyURL)
 }

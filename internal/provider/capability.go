@@ -12,6 +12,7 @@ import (
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/i18n"
+	"cursor-inner/internal/logx"
 )
 
 // 能力探测的阶段名。页面按 Plan 画进度，各阶段再按 Stage 更新。
@@ -374,7 +375,7 @@ func (p *probeRun) maybeDropEffort(err error) bool {
 	if errors.As(err, &api) && (api.Kind == KindBadRequest || api.Status == 400) {
 		p.dropEffort = true
 		slog.Warn("capability_probe 接口拒绝探测用的 reasoning.effort，后续改为不带该参数",
-			"model", p.m.Model, "type", p.m.Type, "host", probeEndpointHost(p.m.BaseURL), "error", Explain(err))
+			"model", p.m.Model, "type", p.m.Type, "host", probeEndpointHost(p.m.BaseURL), "error", Explain(err), logx.FileOnly)
 		return true
 	}
 	return false
@@ -404,7 +405,7 @@ func (p *probeRun) probeGenerate(ctx context.Context, caps *config.Capabilities)
 		caps.Generate = false
 		slog.Warn("capability_probe 基本生成未完成",
 			"model", p.m.Model, "type", p.m.Type, "host", probeEndpointHost(p.m.BaseURL),
-			"elapsed_ms", elapsed.Milliseconds(), "error", Explain(err))
+			"elapsed_ms", elapsed.Milliseconds(), "error", Explain(err), logx.FileOnly)
 		p.report(Progress{Stage: StageGenerate, State: "done", OK: false, Info: note})
 		return false, err
 	}
@@ -463,7 +464,7 @@ func (p *probeRun) probeTools(ctx context.Context, caps *config.Capabilities) {
 		caps.ToolsStatus, caps.Tools, caps.ToolsNote = st, false, note
 		slog.Warn("capability_probe 工具探测请求失败",
 			"model", p.m.Model, "type", p.m.Type, "host", probeEndpointHost(p.m.BaseURL),
-			"elapsed_ms", elapsed.Milliseconds(), "error", Explain(err))
+			"elapsed_ms", elapsed.Milliseconds(), "error", Explain(err), logx.FileOnly)
 		p.report(Progress{Stage: StageTools, State: "done", OK: false, Info: note})
 		return
 	}

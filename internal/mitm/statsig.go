@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/protowire"
+
+	"cursor-inner/internal/logx"
 )
 
 // Cursor 3.26 通过 AnalyticsService/BootstrapStatsig 下发 statsig 初始化结果：
@@ -177,10 +179,10 @@ func (s *Server) bootstrapStatsig(w http.ResponseWriter, r *http.Request) {
 	// CURSOR_INNER_KEEP_LOCAL_LOOP=1 仅供测试：保留官方下发的门，让 Cursor 走本地循环，验证原生回答。
 	if resp.StatusCode == http.StatusOK && (os.Getenv("CURSOR_INNER_KEEP_LOCAL_LOOP") != "1" || forcedGateValue() == "true") {
 		if next, changed, err := rewriteStatsig(raw, enc, resp.Header.Get("Content-Type")); err != nil {
-			slog.Warn("statsig 下发读不懂，原样转交", "err", err)
+			slog.Warn("statsig 下发读不懂，原样转交", "err", err, logx.FileOnly)
 		} else if len(changed) > 0 {
 			out, enc = next, ""
-			slog.Info("已在 statsig 下发里改写门", "gates", strings.Join(changed, ","), "value", forcedGateValue())
+			slog.Debug("已在 statsig 下发里改写门", "gates", strings.Join(changed, ","), "value", forcedGateValue())
 		}
 	}
 	copyHeaders(w.Header(), resp.Header)
