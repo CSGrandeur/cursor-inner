@@ -30,17 +30,21 @@ var Suffixes = []string{
 	"oaistatic.com",
 	"oaiusercontent.com",
 	"oaistatsig.com",
-	// Google Antigravity（谷歌反重力）：产品域 + API/OAuth + 品牌顶级域 .goog + google.com。
-	// googleapis.com 盖住 oauth2 / businessaicode / aiplatform / discoveryengine /
-	// cloudcode-pa / daily-cloudcode-pa / aicode / play.googleapis.com 等；
+	// Google Antigravity（谷歌反重力）：Google 自有品牌顶级域（.google / .goog）与官方整站后缀。
+	// google 盖住全部 *.google（antigravity.google / auth.cloud.google / dns.google / blog.google 等）；
 	// goog 盖住全部 *.goog（antigravity.static.usercontent.goog / antigravity-unleash.goog /
 	// antigravity.goog / turn.goog / turns.goog 等）；
 	// google.com 盖住 accounts / policies / www / clients* / antigravity / stun.l.google.com 等
-	// （反重力内置浏览器继承整进程 --proxy-server、不走系统 PAC，仅收少数子域会导致打开 Google 页面直连超时）。
-	// Cloud Run 更新器（antigravity-hub-auto-updater-*.run.app）见 antigravityCloudRun。
-	"antigravity.google",
+	// （反重力内置浏览器继承整进程 --proxy-server、不走系统 PAC，仅收少数子域会导致打开 Google 页面直连超时）；
+	// google.dev 盖住 ai.google.dev 等开发者站点；withgoogle.com 盖住 csp.withgoogle.com 等；
+	// googleapis.com 盖住 oauth2 / businessaicode / aiplatform / discoveryengine /
+	// cloudcode-pa / daily-cloudcode-pa / aicode / play / storage.googleapis.com 等。
+	// Cloud Run 更新器（antigravity-*-auto-updater-*.run.app）见 antigravityCloudRun。
+	"google",
 	"goog",
 	"google.com",
+	"google.dev",
+	"withgoogle.com",
 	"googleapis.com",
 	"googleusercontent.com",
 	"gstatic.com",

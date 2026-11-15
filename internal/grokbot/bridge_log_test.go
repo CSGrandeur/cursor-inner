@@ -236,10 +236,13 @@ func TestAntigravityFamily(t *testing.T) {
 	if !antigravityFamily("policies.google.com") || !antigravityFamily("www.google.com") || !antigravityFamily("accounts.google.com") {
 		t.Fatal("expected google.com family hosts")
 	}
+	if !antigravityFamily("antigravity.google") || !antigravityFamily("auth.cloud.google") || !antigravityFamily("ai.google.dev") || !antigravityFamily("csp.withgoogle.com") {
+		t.Fatal("expected .google / google.dev / withgoogle.com family hosts")
+	}
 	if !antigravityFamily("stun.l.google.com") || !antigravityFamily("turn.goog") || !antigravityFamily("workspace.turns.goog") {
 		t.Fatal("expected google webrtc stun/turn hosts")
 	}
-	if !antigravityFamily("antigravity-hub-auto-updater-1.us-central1.run.app") {
+	if !antigravityFamily("antigravity-hub-auto-updater-1.us-central1.run.app") || !antigravityFamily("antigravity-ide-auto-updater-1.us-central1.run.app") {
 		t.Fatal("expected cloud run updater")
 	}
 	if antigravityFamily("api2.cursor.sh") || antigravityFamily("api.x.ai") || antigravityFamily("example.com") {

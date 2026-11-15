@@ -48,6 +48,8 @@ func TestForHost(t *testing.T) {
 		"play.googleapis.com":                  Proxy,
 		"businessaicode.us.rep.googleapis.com": Proxy,
 		"antigravity.google":                   Proxy,
+		"auth.cloud.google":                    Proxy,
+		"blog.google":                          Proxy,
 		"antigravity.static.usercontent.goog":  Proxy,
 		"workspace.turns.goog":                 Proxy,
 		"notgoog.com":                          Inspect,
@@ -58,8 +60,14 @@ func TestForHost(t *testing.T) {
 		"clients2.google.com":                  Proxy,
 		"stun.l.google.com":                    Proxy,
 		"notgoogle.com":                        Inspect,
+		"google.dev":                           Proxy,
+		"ai.google.dev":                        Proxy,
+		"notgoogle.dev":                        Inspect,
+		"csp.withgoogle.com":                   Proxy,
+		"notwithgoogle.com":                    Inspect,
 		"www.gstatic.com":                      Proxy,
 		"antigravity-hub-auto-updater-974169037036.us-central1.run.app": Proxy,
+		"antigravity-ide-auto-updater-974169037036.us-central1.run.app": Proxy,
 		"other-service-123.us-central1.run.app":                         Inspect,
 	}
 	for host, want := range cases {
@@ -105,9 +113,13 @@ func TestInspectTLS(t *testing.T) {
 		"antigravity-hub-auto-updater-974169037036.us-central1.run.app": Proxy,
 		"antigravity.static.usercontent.goog":                           Proxy,
 		"workspace.turns.goog":                                          Proxy,
+		"auth.cloud.google":                                             Proxy,
 		"policies.google.com":                                           Proxy,
+		"ai.google.dev":                                                 Proxy,
+		"csp.withgoogle.com":                                            Proxy,
 		"notgoog.com":                                                   Direct,
 		"notgoogle.com":                                                 Direct,
+		"notgoogle.dev":                                                 Direct,
 		"random-123.us-central1.run.app":                                Direct,
 	} {
 		hello := clientHello(t, sni)

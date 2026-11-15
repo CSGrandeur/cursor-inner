@@ -41,7 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'antigravity.google', 'goog', 'google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
+$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'google', 'goog', 'google.com', 'google.dev', 'withgoogle.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
   'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
@@ -52,7 +52,7 @@ $OfficialHosts = @(
   'marketplace.cursorapi.com', 'cursor-cdn.com', 'anysphere.co',
   'openai.com', 'api.openai.com', 'auth.openai.com', 'chatgpt.com', 'ab.chatgpt.com', 'chat.openai.com',
   'oaistatic.com', 'cdn.oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com',
-  'antigravity.google', 'antigravity.google.com', 'googleapis.com', 'oauth2.googleapis.com', 'accounts.google.com', 'gstatic.com'
+  'antigravity.google', 'auth.cloud.google', 'antigravity.google.com', 'ai.google.dev', 'googleapis.com', 'oauth2.googleapis.com', 'accounts.google.com', 'gstatic.com'
 )
 foreach ($region in 'us', 'eu', 'ap') { foreach ($n in 1..30) { $OfficialHosts += "$region$n.cursorvm.com" } }
 $OfficialHosts += $OfficialExactHosts
