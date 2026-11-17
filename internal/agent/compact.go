@@ -116,13 +116,16 @@ func (s *Session) chatOrCompactSession(ctx context.Context, model config.Model, 
 		return next, used, reply, err
 	}
 	if !provider.Overflow(err) {
-		if used.ID != model.ID {
+		if err == nil && used.ID != model.ID {
 			s.fallbackUsed = append(s.fallbackUsed, used.DisplayName)
 		}
 		return messages, used, reply, err
 	}
 	messages = forceCompact(messages)
 	used, reply, err = chatWithFallback(ctx, used, catalog, dialFor, system, messages, tools, onText, onThinking)
+	if err == nil && used.ID != model.ID {
+		s.fallbackUsed = append(s.fallbackUsed, used.DisplayName)
+	}
 	return messages, used, reply, err
 }
 

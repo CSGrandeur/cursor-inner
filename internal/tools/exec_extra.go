@@ -390,8 +390,9 @@ func mcpText(r *cursorpb.McpResult) (string, []provider.Image, bool) {
 				continue
 			}
 			if mime := imageMIME(image.GetData()); mime != "" {
-				images = append(images, provider.Image{MIME: mime, Data: append([]byte(nil), image.GetData()...)})
-				lines = append(lines, "MCP image: "+mime)
+				label, fitted := readImage("MCP image: "+mime, image.GetData(), mime)
+				images = append(images, fitted...)
+				lines = append(lines, label)
 				continue
 			}
 			mime := image.GetMimeType()

@@ -2,11 +2,6 @@ package mitm
 
 import (
 	"context"
-	"cursor-inner/internal/config"
-	"cursor-inner/internal/dialer"
-	"cursor-inner/internal/inference"
-	"cursor-inner/internal/logx"
-	"cursor-inner/internal/provider"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -16,6 +11,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/config"
+	"cursor-inner/internal/dialer"
+	"cursor-inner/internal/inference"
+	"cursor-inner/internal/logx"
+	"cursor-inner/internal/provider"
 
 	"cursor-inner/internal/i18n"
 	"cursor-inner/internal/protox"

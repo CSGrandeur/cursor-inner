@@ -12,6 +12,7 @@ import (
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/connlog"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/official"
 )
 
@@ -46,7 +47,7 @@ func marked(d Func, route string) Func {
 
 func markedWhy(d Func, route, why string) Func {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		connlog.SetReason(ctx, why)
+		connlog.SetReasonDefault(ctx, why)
 		connlog.Set(ctx, route)
 		return d(ctx, network, addr)
 	}
@@ -77,7 +78,11 @@ func reservedFirst(next, direct Func) Func {
 				connlog.SetReason(ctx, "reserved_ip")
 				return direct(ctx, network, addr)
 			}
-			connlog.SetReason(ctx, "public_ip")
+			if official.IsFakeIP(ip) {
+				connlog.SetReason(ctx, "fake_ip")
+			} else {
+				connlog.SetReason(ctx, "public_ip")
+			}
 			return next(ctx, network, addr)
 		}
 		lctx, cancel := context.WithTimeout(ctx, lookupWait)
@@ -118,7 +123,7 @@ func split(via, direct Func) Func {
 			return direct(ctx, network, addr)
 		case official.Proxy:
 			slog.Debug("代理范围仅官方：走代理", "target", addr)
-			connlog.SetReason(ctx, "official_host")
+			connlog.SetReasonDefault(ctx, "official_host")
 			return via(ctx, network, addr)
 		}
 		return newInspectConn(ctx, network, addr, via, direct), nil
@@ -202,7 +207,7 @@ func (c *inspectConn) decide(route official.Route, name, why string) {
 	connlog.SetReason(c.ctx, why)
 	slog.Debug("代理范围仅官方：按首包分流", "target", c.addr, "route", label, "name", name, "why", why)
 	if label == "direct" && antigravityRelated(name) {
-		slog.Warn("反重力相关主机被按直连分流（可能漏接）", "target", c.addr, "name", name, "why", why)
+		slog.Warn("反重力相关主机被按直连分流（可能漏接）", "target", c.addr, "name", name, "why", why, logx.FileOnly)
 	}
 	ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 	conn, err := dial(ctx, c.network, c.addr)

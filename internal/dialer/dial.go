@@ -144,18 +144,18 @@ func FromProxy(p config.Proxy) (Func, error) {
 	fwd := &proxyForward{base: base}
 	switch u.Scheme {
 	case "http", "https":
-		return reportFailures(httpProxy(u, fwd)), nil
+		return marked(reportFailures(httpProxy(u, fwd)), "proxy"), nil
 	}
 	d, err := proxy.FromURL(u, fwd)
 	if err != nil {
 		return nil, i18n.Wrap("代理不可用：", "Proxy unavailable: ", err)
 	}
 	if cd, ok := d.(proxy.ContextDialer); ok {
-		return reportFailures(cd.DialContext), nil
+		return marked(reportFailures(cd.DialContext), "proxy"), nil
 	}
-	return reportFailures(func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return marked(reportFailures(func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return d.Dial(network, addr)
-	}), nil
+	}), "proxy"), nil
 }
 
 var proxyFailHook atomic.Pointer[func()]

@@ -162,6 +162,7 @@ func start(exe, proxyURL string) error {
 	pid := 0
 	if cmd.Process != nil {
 		pid = cmd.Process.Pid
+		_ = cmd.Process.Release()
 	}
 	slog.Info("已拉起 Antigravity 进程", "exe", exe, "pid", pid, logx.FileOnly)
 	return nil

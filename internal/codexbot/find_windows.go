@@ -8,8 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"cursor-inner/internal/winproc"
 	"golang.org/x/sys/windows/registry"
+
+	"cursor-inner/internal/winproc"
 )
 
 func desktopCandidates() []string {

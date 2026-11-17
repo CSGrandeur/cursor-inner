@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -57,9 +58,10 @@ type Image struct {
 
 // ToolCall 的 Arguments 是模型给出的 JSON 文本。
 type ToolCall struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Arguments        string `json:"arguments"`
+	ThoughtSignature string `json:"thought_signature,omitempty"`
 }
 
 type Tool struct {
@@ -85,10 +87,57 @@ type chatRequest struct {
 func Chat(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
 	messages = StripForeignReasoning(m, messages)
 	msg, err := chatRetry(ctx, m, dial, system, messages, tools, onText, onThinking)
-	if err == nil && (msg.Reasoning != "" || msg.ReasoningSignature != "") {
-		msg.ReasoningBy = ReasoningIssuer(m)
+	if err == nil {
+		if len(msg.ToolCalls) > 0 {
+			msg.ToolCalls = ensureUniqueToolCallIDs(messages, msg.ToolCalls)
+		}
+		if msg.Reasoning != "" || msg.ReasoningSignature != "" || hasThoughtSignature(msg.ToolCalls) {
+			msg.ReasoningBy = ReasoningIssuer(m)
+		}
 	}
 	return msg, err
+}
+
+// ensureUniqueToolCallIDs 补齐缺失的工具调用 ID，并对与本会话更早步骤重复的 ID 加序号后缀，
+// 避免空 ID 被丢弃结果，也避免重复 ID（如救援解析的 rescue-1 或兼容端每步从 call_0 起算）触发 Anthropic / Responses 400。
+func ensureUniqueToolCallIDs(history []Message, calls []ToolCall) []ToolCall {
+	used := make(map[string]bool, len(history)+len(calls))
+	for _, m := range history {
+		if m.ToolCallID != "" {
+			used[m.ToolCallID] = true
+		}
+		for _, tc := range m.ToolCalls {
+			if tc.ID != "" {
+				used[tc.ID] = true
+			}
+		}
+	}
+	out := append([]ToolCall(nil), calls...)
+	seq := 1
+	for i := range out {
+		id := strings.TrimSpace(out[i].ID)
+		if id == "" {
+			for {
+				cand := fmt.Sprintf("call_%d", seq)
+				seq++
+				if !used[cand] {
+					id = cand
+					break
+				}
+			}
+		} else if used[id] {
+			for n := 2; ; n++ {
+				cand := fmt.Sprintf("%s_%d", id, n)
+				if !used[cand] {
+					id = cand
+					break
+				}
+			}
+		}
+		used[id] = true
+		out[i].ID = id
+	}
+	return out
 }
 
 func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system string, messages []Message, tools []Tool, onText func(string) error, onThinking func(string) error) (Message, error) {
@@ -167,6 +216,15 @@ func chatRetry(ctx context.Context, m config.Model, dial dialer.Func, system str
 			noteModel(ctx, runlog.Note{Kind: "model_reasoning_effort_dropped", Attempt: attempt, Error: Explain(err)})
 			immediate = true
 			continue
+		}
+		// 历史里的 thinking 签名或加密推理块因前文裁剪、切模式或换网关失效报 400 时，剥掉签名立即重试一次。
+		if !emitted && wantsReasoningSignatureFallback(err) {
+			if stripped, changed := stripAllReasoningSignatures(messages); changed {
+				messages = stripped
+				noteModel(ctx, runlog.Note{Kind: "model_reasoning_signature_dropped", Attempt: attempt, Error: Explain(err)})
+				immediate = true
+				continue
+			}
 		}
 		// vLLM 没配工具解析器时，带 tools 会被 400 拒绝（报 enable-auto-tool-choice / tool-call-parser）。
 		// 记下该端点+模型，改走文本工具协议，并立刻重试一次（不计退避）。
@@ -414,6 +472,11 @@ func chatOnce(ctx context.Context, m config.Model, dial dialer.Func, system stri
 		if msg.Content == "" && len(msg.ToolCalls) == 0 && !msg.Truncated && msg.Reasoning == "" {
 			return Message{}, empty(staticFinish(body), msg)
 		}
+		if msg.Reasoning != "" && onThinking != nil {
+			if err := onThinking(msg.Reasoning); err != nil && !errors.Is(err, ErrStopStream) {
+				return Message{}, err
+			}
+		}
 		if msg.Content != "" {
 			if err := onText(msg.Content); err != nil {
 				if errors.Is(err, ErrStopStream) {
@@ -517,6 +580,7 @@ func doSized(ctx context.Context, m config.Model, dial dialer.Func, req chatRequ
 	client := &http.Client{Transport: &http.Transport{
 		DialContext:           dial,
 		Proxy:                 nil,
+		DisableKeepAlives:     true,
 		ForceAttemptHTTP2:     false,
 		TLSNextProto:          map[string]func(string, *tls.Conn) http.RoundTripper{},
 		ResponseHeaderTimeout: responseHeaderTimeout,
@@ -559,9 +623,10 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 		Arguments   *string         `json:"arguments,omitempty"`
 	}
 	type call struct {
-		ID       string   `json:"id"`
-		Type     string   `json:"type"`
-		Function function `json:"function"`
+		ID           string         `json:"id"`
+		Type         string         `json:"type"`
+		Function     function       `json:"function"`
+		ExtraContent map[string]any `json:"extra_content,omitempty"`
 	}
 	type msg struct {
 		Role             string  `json:"role"`
@@ -623,7 +688,11 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 			if args == "" {
 				args = "{}"
 			}
-			out.ToolCalls = append(out.ToolCalls, call{ID: c.ID, Type: "function", Function: function{Name: c.Name, Arguments: &args}})
+			var extra map[string]any
+			if c.ThoughtSignature != "" {
+				extra = map[string]any{"google": map[string]string{"thought_signature": c.ThoughtSignature}}
+			}
+			out.ToolCalls = append(out.ToolCalls, call{ID: c.ID, Type: "function", Function: function{Name: c.Name, Arguments: &args}, ExtraContent: extra})
 		}
 		if message.Role == "assistant" && message.Content == "" && len(message.Images) == 0 && len(out.ToolCalls) > 0 {
 			out.Content = nil
@@ -690,6 +759,7 @@ func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
 		}
 		body.Messages = append(body.Messages, msg{Role: role, Content: []block{b}})
 	}
+	toolless := len(req.Tools) == 0
 	for _, message := range req.Messages {
 		switch message.Role {
 		case "assistant":
@@ -700,6 +770,16 @@ func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
 				push("assistant", block{Type: "text", Text: message.Content})
 			}
 			for _, c := range message.ToolCalls {
+				if toolless {
+					// Anthropic 要求出现 tool_use / tool_result 块时顶层必须带 tools；
+					// 自动压缩、/summarize 或文本工具模式不传 tools，需把历史工具记录降级为文本块。
+					args := c.Arguments
+					if args == "" {
+						args = "{}"
+					}
+					push("assistant", block{Type: "text", Text: fmt.Sprintf("[Tool call %s(%s): %s]", c.Name, c.ID, args)})
+					continue
+				}
 				input := json.RawMessage(c.Arguments)
 				if !json.Valid(input) {
 					input = json.RawMessage("{}")
@@ -707,6 +787,13 @@ func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
 				push("assistant", block{Type: "tool_use", ID: c.ID, Name: c.Name, Input: input})
 			}
 		case "tool":
+			if toolless {
+				push("user", block{Type: "text", Text: fmt.Sprintf("[Tool result (%s): %s]", message.ToolCallID, message.Content)})
+				for _, image := range message.Images {
+					push("user", block{Type: "image", Source: &imageSource{Type: "base64", MediaType: image.MIME, Data: base64.StdEncoding.EncodeToString(image.Data)}})
+				}
+				continue
+			}
 			push("user", block{Type: "tool_result", ToolUseID: message.ToolCallID, Content: anthropicToolContent(message), IsError: message.IsError})
 		default:
 			push("user", block{Type: "text", Text: message.Content})
@@ -842,11 +929,21 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 				ReasoningContent string `json:"reasoning_content"`
 				Reasoning        string `json:"reasoning"`
 				ToolCalls        []struct {
-					Index    int    `json:"index"`
-					ID       string `json:"id"`
+					Index                 int    `json:"index"`
+					ID                    string `json:"id"`
+					ThoughtSignature      string `json:"thought_signature"`
+					ThoughtSignatureCamel string `json:"thoughtSignature"`
+					ExtraContent          struct {
+						Google struct {
+							ThoughtSignature      string `json:"thought_signature"`
+							ThoughtSignatureCamel string `json:"thoughtSignature"`
+						} `json:"google"`
+					} `json:"extra_content"`
 					Function struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
+						Name                  string `json:"name"`
+						Arguments             string `json:"arguments"`
+						ThoughtSignature      string `json:"thought_signature"`
+						ThoughtSignatureCamel string `json:"thoughtSignature"`
 					} `json:"function"`
 				} `json:"tool_calls"`
 			} `json:"delta"`
@@ -910,6 +1007,16 @@ func (a *accumulator) feed(data []byte) (piece, error) {
 		}
 		if tc.Function.Name != "" {
 			c.Name += tc.Function.Name
+		}
+		if sig := firstNonEmpty(
+			tc.ExtraContent.Google.ThoughtSignature,
+			tc.ExtraContent.Google.ThoughtSignatureCamel,
+			tc.ThoughtSignature,
+			tc.ThoughtSignatureCamel,
+			tc.Function.ThoughtSignature,
+			tc.Function.ThoughtSignatureCamel,
+		); sig != "" {
+			c.ThoughtSignature = sig
 		}
 		args.WriteString(tc.Function.Arguments)
 	}
@@ -981,7 +1088,8 @@ func staticMessage(raw []byte, kind string) (Message, error) {
 	msg := Message{Role: "assistant"}
 	if kind == "anthropic" {
 		var body struct {
-			Content []struct {
+			StopReason string `json:"stop_reason"`
+			Content    []struct {
 				Type      string          `json:"type"`
 				Text      string          `json:"text"`
 				Thinking  string          `json:"thinking"`
@@ -990,16 +1098,26 @@ func staticMessage(raw []byte, kind string) (Message, error) {
 				Name      string          `json:"name"`
 				Input     json.RawMessage `json:"input"`
 			} `json:"content"`
-			Error struct {
+			Usage struct {
+				InputTokens              int `json:"input_tokens"`
+				OutputTokens             int `json:"output_tokens"`
+				CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+				CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			} `json:"usage"`
+			Error *struct {
 				Message string `json:"message"`
+				Type    string `json:"type"`
 			} `json:"error"`
 		}
 		if err := json.Unmarshal(raw, &body); err != nil {
 			return msg, err
 		}
-		if body.Error.Message != "" {
-			return msg, errors.New(body.Error.Message)
+		if body.Error != nil && (body.Error.Message != "" || body.Error.Type != "") {
+			return msg, streamAPIError(raw)
 		}
+		msg.PromptTokens = body.Usage.InputTokens + body.Usage.CacheReadInputTokens + body.Usage.CacheCreationInputTokens
+		msg.CompletionTokens = body.Usage.OutputTokens
+		msg.CacheTokens = body.Usage.CacheReadInputTokens
 		for _, part := range body.Content {
 			switch part.Type {
 			case "text":
@@ -1013,37 +1131,164 @@ func staticMessage(raw []byte, kind string) (Message, error) {
 				msg.ToolCalls = append(msg.ToolCalls, ToolCall{ID: part.ID, Name: part.Name, Arguments: string(part.Input)})
 			}
 		}
+		if truncated(body.StopReason, msg.ToolCalls) {
+			msg.Truncated = true
+			msg.ToolCalls = dropIncompleteTail(msg.ToolCalls)
+		}
+		return msg, nil
+	}
+	if kind == "openai-responses" {
+		var body struct {
+			Status            string `json:"status"`
+			IncompleteDetails struct {
+				Reason string `json:"reason"`
+			} `json:"incomplete_details"`
+			Output []struct {
+				Type             string `json:"type"`
+				ID               string `json:"id"`
+				CallID           string `json:"call_id"`
+				Name             string `json:"name"`
+				Arguments        string `json:"arguments"`
+				EncryptedContent string `json:"encrypted_content"`
+				Summary          []struct {
+					Text string `json:"text"`
+				} `json:"summary"`
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"output"`
+			Usage struct {
+				InputTokens        int `json:"input_tokens"`
+				OutputTokens       int `json:"output_tokens"`
+				InputTokensDetails struct {
+					CachedTokens int `json:"cached_tokens"`
+				} `json:"input_tokens_details"`
+			} `json:"usage"`
+			Error *struct {
+				Code    string `json:"code"`
+				Type    string `json:"type"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return msg, err
+		}
+		if body.Error != nil && (body.Error.Message != "" || body.Error.Code != "" || body.Error.Type != "") {
+			return msg, streamAPIError(raw)
+		}
+		msg.PromptTokens = body.Usage.InputTokens
+		msg.CompletionTokens = body.Usage.OutputTokens
+		msg.CacheTokens = body.Usage.InputTokensDetails.CachedTokens
+		var replay []reasoningReplayItem
+		for _, item := range body.Output {
+			switch item.Type {
+			case "message":
+				for _, part := range item.Content {
+					if part.Type == "output_text" {
+						msg.Content += part.Text
+					}
+				}
+			case "reasoning":
+				var sum strings.Builder
+				for _, s := range item.Summary {
+					sum.WriteString(s.Text)
+				}
+				msg.Reasoning += sum.String()
+				if item.ID != "" || item.EncryptedContent != "" {
+					replay = append(replay, reasoningReplayItem{ID: item.ID, Summary: sum.String(), Enc: item.EncryptedContent})
+				}
+			case "function_call":
+				cid := item.CallID
+				if cid == "" {
+					cid = item.ID
+				}
+				msg.ToolCalls = append(msg.ToolCalls, ToolCall{ID: cid, Name: item.Name, Arguments: item.Arguments})
+			}
+		}
+		msg.ReasoningSignature = encodeReasoningReplay(replay)
+		finish := body.IncompleteDetails.Reason
+		if finish == "" && body.Status == "incomplete" {
+			finish = "incomplete"
+		}
+		if truncated(finish, msg.ToolCalls) {
+			msg.Truncated = true
+			msg.ToolCalls = dropIncompleteTail(msg.ToolCalls)
+		}
 		return msg, nil
 	}
 	var body struct {
 		Choices []struct {
-			Message struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
 				Content          string `json:"content"`
 				ReasoningContent string `json:"reasoning_content"`
+				Reasoning        string `json:"reasoning"`
 				ToolCalls        []struct {
-					ID       string `json:"id"`
+					ID                    string `json:"id"`
+					ThoughtSignature      string `json:"thought_signature"`
+					ThoughtSignatureCamel string `json:"thoughtSignature"`
+					ExtraContent          struct {
+						Google struct {
+							ThoughtSignature      string `json:"thought_signature"`
+							ThoughtSignatureCamel string `json:"thoughtSignature"`
+						} `json:"google"`
+					} `json:"extra_content"`
 					Function struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
+						Name                  string `json:"name"`
+						Arguments             string `json:"arguments"`
+						ThoughtSignature      string `json:"thought_signature"`
+						ThoughtSignatureCamel string `json:"thoughtSignature"`
 					} `json:"function"`
 				} `json:"tool_calls"`
 			} `json:"message"`
 		} `json:"choices"`
-		Error struct {
+		Usage struct {
+			PromptTokens         int `json:"prompt_tokens"`
+			CompletionTokens     int `json:"completion_tokens"`
+			PromptCacheHitTokens int `json:"prompt_cache_hit_tokens"`
+			PromptTokensDetails  struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+		} `json:"usage"`
+		Error *struct {
+			Code    string `json:"code"`
+			Type    string `json:"type"`
 			Message string `json:"message"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return msg, err
 	}
-	if body.Error.Message != "" {
-		return msg, errors.New(body.Error.Message)
+	if body.Error != nil && (body.Error.Message != "" || body.Error.Code != "" || body.Error.Type != "") {
+		return msg, streamAPIError(raw)
 	}
+	msg.PromptTokens = body.Usage.PromptTokens
+	msg.CompletionTokens = body.Usage.CompletionTokens
+	msg.CacheTokens = max(body.Usage.PromptCacheHitTokens, body.Usage.PromptTokensDetails.CachedTokens)
 	if len(body.Choices) > 0 {
-		msg.Content = body.Choices[0].Message.Content
-		msg.Reasoning = body.Choices[0].Message.ReasoningContent
-		for _, tc := range body.Choices[0].Message.ToolCalls {
-			msg.ToolCalls = append(msg.ToolCalls, ToolCall{ID: tc.ID, Name: tc.Function.Name, Arguments: tc.Function.Arguments})
+		ch := body.Choices[0]
+		msg.Content = ch.Message.Content
+		msg.Reasoning = firstNonEmpty(ch.Message.ReasoningContent, ch.Message.Reasoning)
+		for _, tc := range ch.Message.ToolCalls {
+			sig := firstNonEmpty(
+				tc.ExtraContent.Google.ThoughtSignature,
+				tc.ExtraContent.Google.ThoughtSignatureCamel,
+				tc.ThoughtSignature,
+				tc.ThoughtSignatureCamel,
+				tc.Function.ThoughtSignature,
+				tc.Function.ThoughtSignatureCamel,
+			)
+			msg.ToolCalls = append(msg.ToolCalls, ToolCall{
+				ID:               tc.ID,
+				Name:             tc.Function.Name,
+				Arguments:        tc.Function.Arguments,
+				ThoughtSignature: sig,
+			})
+		}
+		if truncated(ch.FinishReason, msg.ToolCalls) {
+			msg.Truncated = true
+			msg.ToolCalls = dropIncompleteTail(msg.ToolCalls)
 		}
 	}
 	return msg, nil

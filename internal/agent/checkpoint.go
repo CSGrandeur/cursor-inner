@@ -206,7 +206,18 @@ func wireMessage(message provider.Message, index int, names map[string]string) w
 			doc.Content = append(doc.Content, wirePart{Type: "text", Text: message.Content})
 		}
 		for _, call := range message.ToolCalls {
-			doc.Content = append(doc.Content, wirePart{Type: "tool-call", ToolCallID: call.ID, ToolName: call.Name, Args: rawArgs(call.Arguments)})
+			signedBy := ""
+			if call.ThoughtSignature != "" && message.Reasoning == "" && message.ReasoningSignature == "" {
+				signedBy = message.ReasoningBy
+			}
+			doc.Content = append(doc.Content, wirePart{
+				Type:       "tool-call",
+				ToolCallID: call.ID,
+				ToolName:   call.Name,
+				Args:       rawArgs(call.Arguments),
+				Signature:  call.ThoughtSignature,
+				SignedBy:   signedBy,
+			})
 		}
 	case "tool":
 		name := names[message.ToolCallID]
@@ -660,7 +671,15 @@ func decodeRoot(raw []byte) (provider.Message, int, error) {
 					message.ReasoningBy = part.SignedBy
 				}
 			case "tool-call":
-				message.ToolCalls = append(message.ToolCalls, provider.ToolCall{ID: part.ToolCallID, Name: part.ToolName, Arguments: argsText(part.Args)})
+				if part.SignedBy != "" && message.ReasoningBy == "" {
+					message.ReasoningBy = part.SignedBy
+				}
+				message.ToolCalls = append(message.ToolCalls, provider.ToolCall{
+					ID:               part.ToolCallID,
+					Name:             part.ToolName,
+					Arguments:        argsText(part.Args),
+					ThoughtSignature: part.Signature,
+				})
 			}
 		}
 		message.Content = text.String()
@@ -782,7 +801,7 @@ func sameMessage(a, b provider.Message) bool {
 		return false
 	}
 	for i := range a.ToolCalls {
-		if a.ToolCalls[i].ID != b.ToolCalls[i].ID || a.ToolCalls[i].Name != b.ToolCalls[i].Name || a.ToolCalls[i].Arguments != b.ToolCalls[i].Arguments {
+		if a.ToolCalls[i].ID != b.ToolCalls[i].ID || a.ToolCalls[i].Name != b.ToolCalls[i].Name || a.ToolCalls[i].Arguments != b.ToolCalls[i].Arguments || a.ToolCalls[i].ThoughtSignature != b.ToolCalls[i].ThoughtSignature {
 			return false
 		}
 	}

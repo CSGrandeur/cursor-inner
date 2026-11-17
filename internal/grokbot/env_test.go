@@ -1,6 +1,7 @@
 package grokbot
 
 import (
+	"net"
 	"strings"
 	"testing"
 )
@@ -148,4 +149,100 @@ func envValue(env []string, key string) (string, int) {
 		}
 	}
 	return val, n
+}
+
+func mustCIDRAddr(t *testing.T, s string) net.Addr {
+	t.Helper()
+	ip, ipnet, err := net.ParseCIDR(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ipnet.IP = ip
+	return ipnet
+}
+
+func TestLoopbackBypassAndNoProxyCoverLocalHostsAndIPv6(t *testing.T) {
+	bypassTokens := map[string]bool{}
+	for _, tok := range strings.Split(LoopbackBypass, ";") {
+		bypassTokens[tok] = true
+	}
+	for _, want := range []string{
+		"localhost", "*.localhost", "127.0.0.1", "[::1]", "<local>", "*.local", "wsl.localhost",
+		"host.docker.internal", "gateway.docker.internal", "kubernetes.docker.internal",
+	} {
+		if !bypassTokens[want] {
+			t.Fatalf("LoopbackBypass missing %q: %s", want, LoopbackBypass)
+		}
+	}
+	if bypassTokens["*"] || strings.Contains(LoopbackBypass, "198.18.") {
+		t.Fatalf("LoopbackBypass must not contain wildcard or fake-ip: %s", LoopbackBypass)
+	}
+
+	noProxyTokens := map[string]bool{}
+	for _, tok := range strings.Split(LoopbackNoProxy, ",") {
+		noProxyTokens[tok] = true
+	}
+	for _, want := range []string{
+		"localhost", ".localhost", "127.0.0.1", "::1", "[::1]", ".local", "wsl.localhost",
+		"host.docker.internal", "gateway.docker.internal", "kubernetes.docker.internal",
+	} {
+		if !noProxyTokens[want] {
+			t.Fatalf("LoopbackNoProxy missing %q: %s", want, LoopbackNoProxy)
+		}
+	}
+}
+
+func TestProxyEnvInjectsReservedInterfaceLiteralsWithoutMutatingProxyArgs(t *testing.T) {
+	old := interfaceAddrs
+	t.Cleanup(func() { interfaceAddrs = old })
+
+	argsBefore := ProxyArgs("http://127.0.0.1:1080")
+	interfaceAddrs = func() ([]net.Addr, error) {
+		return []net.Addr{
+			mustCIDRAddr(t, "127.0.0.1/8"),
+			mustCIDRAddr(t, "::1/128"),
+			mustCIDRAddr(t, "172.20.10.5/24"),
+			mustCIDRAddr(t, "192.168.50.8/24"),
+			mustCIDRAddr(t, "100.88.1.2/32"),
+			mustCIDRAddr(t, "172.17.0.1/16"),
+			mustCIDRAddr(t, "fd12:3456::9/64"),
+			mustCIDRAddr(t, "fe80::1234/64"),
+			mustCIDRAddr(t, "198.18.0.1/15"),
+			mustCIDRAddr(t, "fc00::1/18"),
+			mustCIDRAddr(t, "192.0.2.1/30"),
+			mustCIDRAddr(t, "fdfe:dcba:9876::1/126"),
+			mustCIDRAddr(t, "8.8.8.8/32"),
+			mustCIDRAddr(t, "2001:4860:4860::8888/128"),
+		}, nil
+	}
+	argsAfter := ProxyArgs("http://127.0.0.1:1080")
+	if strings.Join(argsBefore, "\x00") != strings.Join(argsAfter, "\x00") {
+		t.Fatalf("ProxyArgs must stay static across interface changes: %v vs %v", argsBefore, argsAfter)
+	}
+
+	env := ProxyEnv("http://127.0.0.1:1080", nil)
+	noProxy, _ := envValue(env, "NO_PROXY")
+	counts := map[string]int{}
+	for _, tok := range strings.Split(noProxy, ",") {
+		counts[tok]++
+	}
+	for _, want := range []string{
+		"172.20.10.5", "192.168.50.8", "100.88.1.2",
+		"10.255.255.254", "172.17.0.1",
+		"fd12:3456::9", "[fd12:3456::9]",
+	} {
+		if counts[want] != 1 {
+			t.Fatalf("expected %q once in NO_PROXY, got count=%d (%s)", want, counts[want], noProxy)
+		}
+	}
+	for _, forbidden := range []string{
+		"fe80::1234", "[fe80::1234]",
+		"198.18.0.1", "fc00::1", "[fc00::1]",
+		"192.0.2.1", "fdfe:dcba:9876::1", "[fdfe:dcba:9876::1]",
+		"8.8.8.8", "2001:4860:4860::8888", "[2001:4860:4860::8888]",
+	} {
+		if counts[forbidden] != 0 {
+			t.Fatalf("forbidden address %q leaked into NO_PROXY: %s", forbidden, noProxy)
+		}
+	}
 }

@@ -2,7 +2,9 @@ package grokbot
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"io"
@@ -18,6 +20,7 @@ import (
 	"time"
 
 	"cursor-inner/internal/connlog"
+	"cursor-inner/internal/logx"
 	"cursor-inner/internal/official"
 	"cursor-inner/internal/selfupdate"
 )
@@ -40,8 +43,8 @@ func NeedsBridge(spec string) bool {
 	return u.User != nil || strings.HasPrefix(strings.ToLower(u.Scheme), "socks")
 }
 
-// Bridge 是只监听 127.0.0.1 的 HTTP 代理。所有出站都走 dial；dial 失败就回 502，绝不直连。
-// 端口按代理地址算出一个固定值优先绑定，cursor-inner 重启后 Grok Bot 的启动参数仍然有效。
+// Bridge 是只监听 127.0.0.1 的 HTTP 代理桥。所有出站都交由注入的 dial 决定（全局走代理，“仅官方”按规则分流代理或直连）；
+// 拨号失败回 502，代理目标绝不回退直连。端口按代理地址算出一个固定值优先绑定，cursor-inner 重启后启动参数仍然有效。
 type Bridge struct {
 	mu   sync.Mutex
 	ln   net.Listener
@@ -365,7 +368,12 @@ func (b *Bridge) handle(c net.Conn) {
 		b.stats.dialFailed(target, err)
 		rec.status = http.StatusBadGateway
 		rec.closedBy, rec.reason = "dial", sanitizeErr(err)
-		slog.Warn(b.name()+" 代理桥没能经代理连上目标，已拒绝（不会直连）", "target", target, "error", sanitizeErr(err))
+		route := rec.note.Route()
+		if route == "direct" {
+			slog.Warn(b.name()+" 代理桥直连目标失败", "target", target, "route_why", rec.note.Reason(), "error", sanitizeErr(err), logx.FileOnly)
+		} else {
+			slog.Warn(b.name()+" 代理桥没能经代理连上目标，已拒绝（不会直连）", "target", target, "route", route, "route_why", rec.note.Reason(), "error", sanitizeErr(err), logx.FileOnly)
+		}
 		_, _ = io.WriteString(c, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
 		return
 	}
@@ -397,23 +405,204 @@ func (b *Bridge) handle(c net.Conn) {
 		rec.reason = sanitizeErr(r.err)
 		return
 	}
+	if isUpgradeRequest(req) {
+		b.handleUpgrade(c, br, req, up, rec)
+		return
+	}
 	req.RequestURI = ""
 	req.Header.Del("Proxy-Authorization")
 	req.Header.Del("Proxy-Connection")
 	req.Close = true
-	if err := req.Write(up); err != nil {
-		rec.closedBy, rec.reason = "upstream", sanitizeErr(err)
+	upw := &countWriter{w: up}
+	werr := req.Write(upw)
+	rec.toUp += upw.n
+	rec.tunnelAt = time.Now()
+	if werr != nil && upw.n == 0 {
+		rec.status = http.StatusBadGateway
+		rec.closedBy, rec.reason = "upstream", sanitizeErr(werr)
+		writeBadGateway(c)
 		return
 	}
-	rec.tunnelAt = time.Now()
 	ubr := bufio.NewReader(up)
-	if line, _ := ubr.Peek(12); len(line) > 0 {
-		rec.firstAt = time.Now()
-		rec.status = parseStatus(line)
+	peek, perr := ubr.Peek(12)
+	if len(peek) == 0 {
+		rec.status = http.StatusBadGateway
+		rec.closedBy = "upstream"
+		errForLog := perr
+		if werr != nil {
+			errForLog = werr
+		}
+		if s := sanitizeErr(ioErr(errForLog)); s != "" {
+			rec.reason = s
+		} else {
+			rec.reason = "unexpected eof"
+		}
+		writeBadGateway(c)
+		return
 	}
+	if isTLSAlertRecord(peek) {
+		rec.status = http.StatusBadGateway
+		rec.closedBy, rec.reason = "upstream", "tls alert on plain http"
+		writeBadGateway(c)
+		return
+	}
+	rec.firstAt = time.Now()
+	rec.status = parseStatus(peek)
 	n, err := io.Copy(c, ubr)
 	rec.toClient = n
 	rec.closedBy, rec.reason = "upstream", sanitizeErr(ioErr(err))
+}
+
+func writeBadGateway(w io.Writer) {
+	_, _ = io.WriteString(w, "HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")
+}
+
+// isTLSAlertRecord 识别对明文 HTTP 请求返回 TLS Alert 记录（0x15 0x03）的场景，
+// 例如把 http:// 误发给本机或内网的 HTTPS 端口。
+func isTLSAlertRecord(b []byte) bool {
+	return len(b) >= 2 && b[0] == 0x15 && b[1] == 0x03
+}
+
+func isUpgradeRequest(req *http.Request) bool {
+	if strings.TrimSpace(req.Header.Get("Upgrade")) == "" {
+		return false
+	}
+	return headerHasToken(req.Header, "Connection", "upgrade") ||
+		headerHasToken(req.Header, "Proxy-Connection", "upgrade")
+}
+
+func headerHasToken(h http.Header, key, want string) bool {
+	for _, v := range h.Values(key) {
+		for _, part := range strings.Split(v, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func readHTTPHeaderBlock(r *bufio.Reader, maxBytes int) ([]byte, error) {
+	var buf []byte
+	for {
+		line, err := r.ReadSlice('\n')
+		if len(line) > 0 {
+			if len(buf)+len(line) > maxBytes {
+				return buf, errors.New("response header too large")
+			}
+			buf = append(buf, line...)
+			if err == nil && (bytes.Equal(line, []byte("\r\n")) || bytes.Equal(line, []byte("\n"))) {
+				return buf, nil
+			}
+		}
+		if err != nil {
+			if errors.Is(err, bufio.ErrBufferFull) {
+				if len(buf) > maxBytes {
+					return buf, errors.New("response header too large")
+				}
+				continue
+			}
+			return buf, err
+		}
+	}
+}
+
+func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, up net.Conn, rec *connRec) {
+	req.RequestURI = ""
+	req.Header.Del("Proxy-Authorization")
+	req.Header.Del("Proxy-Connection")
+	if !headerHasToken(req.Header, "Connection", "upgrade") {
+		req.Header.Set("Connection", "Upgrade")
+	}
+	req.Close = false
+	upw := &countWriter{w: up}
+	werr := req.Write(upw)
+	if werr == nil && br.Buffered() > 0 {
+		rest, _ := br.Peek(br.Buffered())
+		_, werr = upw.Write(rest)
+		_, _ = br.Discard(len(rest))
+	}
+	rec.toUp += upw.n
+	rec.tunnelAt = time.Now()
+	if werr != nil && upw.n == 0 {
+		rec.status = http.StatusBadGateway
+		rec.closedBy, rec.reason = "upstream", sanitizeErr(werr)
+		writeBadGateway(c)
+		return
+	}
+	ubr := bufio.NewReader(up)
+	hdr, herr := readHTTPHeaderBlock(ubr, 64<<10)
+	if len(hdr) == 0 {
+		rec.status = http.StatusBadGateway
+		rec.closedBy = "upstream"
+		errForLog := herr
+		if werr != nil {
+			errForLog = werr
+		}
+		if s := sanitizeErr(ioErr(errForLog)); s != "" {
+			rec.reason = s
+		} else {
+			rec.reason = "unexpected eof"
+		}
+		writeBadGateway(c)
+		return
+	}
+	if isTLSAlertRecord(hdr) {
+		rec.status = http.StatusBadGateway
+		rec.closedBy, rec.reason = "upstream", "tls alert on plain http"
+		writeBadGateway(c)
+		return
+	}
+	status := parseStatus(hdr)
+	if status == 0 || herr != nil {
+		rec.status = http.StatusBadGateway
+		rec.closedBy, rec.reason = "upstream", "bad upstream response"
+		writeBadGateway(c)
+		return
+	}
+	rec.firstAt = time.Now()
+	rec.status = status
+	if status != http.StatusSwitchingProtocols {
+		resp, err := http.ReadResponse(bufio.NewReader(io.MultiReader(bytes.NewReader(hdr), ubr)), req)
+		if err != nil {
+			rec.status = http.StatusBadGateway
+			rec.closedBy, rec.reason = "upstream", "bad upstream response"
+			writeBadGateway(c)
+			return
+		}
+		defer resp.Body.Close()
+		resp.Close = true
+		cw := &countWriter{w: c}
+		err = resp.Write(cw)
+		rec.toClient += cw.n
+		rec.closedBy, rec.reason = "upstream", sanitizeErr(ioErr(err))
+		return
+	}
+	nw, err := c.Write(hdr)
+	rec.toClient += int64(nw)
+	if err != nil {
+		rec.closedBy, rec.reason = "client", sanitizeErr(err)
+		return
+	}
+	if n := ubr.Buffered(); n > 0 {
+		rest, _ := ubr.Peek(n)
+		nw, err := c.Write(rest)
+		rec.toClient += int64(nw)
+		if err != nil {
+			rec.closedBy, rec.reason = "client", sanitizeErr(err)
+			return
+		}
+	}
+	fb := &firstByteConn{Conn: up}
+	fb.first.Store(rec.firstAt.UnixNano())
+	r := b.pipe(c, fb)
+	rec.toUp += r.toUp
+	rec.toClient += r.toClient
+	rec.closedBy = r.first
+	if r.forced {
+		rec.closedBy += "+grace_timeout"
+	}
+	rec.reason = sanitizeErr(r.err)
 }
 
 func (b *Bridge) logConn(r *connRec) {
@@ -478,20 +667,51 @@ func setPipeGrace(d time.Duration) func() {
 	return func() { pipeGraceNS.Store(old) }
 }
 
+type countWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (cw *countWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.n += int64(n)
+	return n, err
+}
+
+type onlyReader struct{ r io.Reader }
+
+func (or onlyReader) Read(p []byte) (int, error) { return or.r.Read(p) }
+
+type writeTracker struct {
+	w      io.Writer
+	failed bool
+}
+
+func (wt *writeTracker) Write(p []byte) (int, error) {
+	n, err := wt.w.Write(p)
+	if err != nil {
+		wt.failed = true
+	}
+	return n, err
+}
+
 // pipe 双向转发 client 与 up。一方结束后最多再等 pipeGrace，然后关两头。
 func (br *Bridge) pipe(client, up net.Conn) pipeResult {
 	type side struct {
-		name string
-		n    int64
-		err  error
+		name     string
+		n        int64
+		err      error
+		writeErr bool
 	}
 	done := make(chan side, 2)
 	cp := func(name string, dst, src net.Conn) {
-		n, err := io.Copy(dst, src)
+		wt := &writeTracker{w: dst}
+		n, err := io.Copy(wt, onlyReader{r: src})
 		if tcp, ok := dst.(interface{ CloseWrite() error }); ok {
 			_ = tcp.CloseWrite()
 		}
-		done <- side{name, n, ioErr(err)}
+		wfail := err != nil && wt.failed
+		done <- side{name, n, ioErr(err), wfail}
 	}
 	go cp("upstream", client, up) // 上游 → 客户端，结束说明上游先断
 	go cp("client", up, client)
@@ -512,6 +732,11 @@ func (br *Bridge) pipe(client, up net.Conn) pipeResult {
 	br.stats.grace.Add(1)
 	select {
 	case s := <-done:
+		if first.err == nil && s.writeErr {
+			// 先结束的一方已正常发完并关闭（EOF），另一方只是把收尾字节（如 TLS close_notify）
+			// 写向已关对端时碰到写入中断，不记成上游或代理重置失败。
+			s.err = nil
+		}
 		record(s)
 	case <-time.After(pipeGrace()):
 		res.forced = true

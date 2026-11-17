@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-17
+
+### Changed
+
+- Model family detection now checks model names before shared gateway domains and adds GLM-5 / GLM-5.2 context and output defaults.
+
+### Fixed
+
+- Official-only proxy scope now covers `grok.bot`, and TUN mode routes Antigravity Remote WebRTC TURN media subnets through the proxy.
+- `openai-responses` models now receive user and tool images instead of dropping them.
+- Anthropic models no longer fail with HTTP 400 when summarizing conversations that contain tool calls, and Gemini OpenAI-compatible endpoints preserve `thought_signature` across multi-step tool turns.
+- Conversations automatically recover when a gateway rejects stale reasoning signatures, deduplicate repeated tool call IDs across turns, and keep their configured model when background tasks finish after a hot update or restart.
+- Clipping large multi-byte UTF-8 tool outputs no longer splits characters, and unreachable LAN or non-official direct targets are no longer misreported as proxy failures on the console.
+- Local IPv6 (`[::1]`), `*.localhost`, Docker host aliases, and active private LAN/WSL addresses now bypass the local proxy reliably in Node, Playwright, and Python tools launched from Antigravity or WSL.
+- Plain-HTTP WebSocket (`ws://`) connections now upgrade properly when routed through the local proxy, and unreachable or non-HTTP local targets return `502 Bad Gateway` instead of an empty reset.
+
 ## [0.6.3] - 2026-11-15
 
 ### Fixed
@@ -648,7 +664,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.0...v0.6.1

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/provider"
@@ -370,13 +371,22 @@ func ReadOnly(name string) bool {
 const modelTextLimit = 32 * 1024
 
 // ClipForModel 把交给模型的工具结果限制在大约 32KB，界面卡片仍用原文。
+// 按 UTF-8 rune 边界截断，避免劈碎多字节字符导致检查点 proto.Marshal 报 invalid UTF-8。
 func ClipForModel(text string) string {
 	if len(text) <= modelTextLimit {
 		return text
 	}
 	const head, tail = 24 * 1024, 4 * 1024
+	h := head
+	for h > 0 && !utf8.RuneStart(text[h]) {
+		h--
+	}
+	t := len(text) - tail
+	for t < len(text) && !utf8.RuneStart(text[t]) {
+		t++
+	}
 	note := "\n\n[... truncated; use offset and limit to read the rest ...]\n\n"
-	return text[:head] + note + text[len(text)-tail:]
+	return text[:h] + note + text[t:]
 }
 
 // SchemaHint 在参数错误时附上该工具的参数定义。

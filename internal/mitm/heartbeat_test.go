@@ -3,9 +3,10 @@ package mitm
 import (
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/protox"
-	"google.golang.org/protobuf/proto"
 )
 
 // 客户端每 5 秒发一次 ClientHeartbeat BidiAppend（带 request id、没有 run/exec 消息）。

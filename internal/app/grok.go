@@ -31,6 +31,7 @@ func (a *App) grokProxy(cfg config.File) (proxyURL string, keep bool) {
 		return "", true
 	}
 	if !on {
+		a.bridge.Close()
 		return "", false
 	}
 	// 代理软件还没开始监听（例如开机时比代理软件先启动）：先不动，等它就绪后由 proxyWait 补做，
@@ -163,7 +164,13 @@ func (a *App) OpenGrok() error {
 		return i18n.E("代理地址无效或代理桥起不来，没有启动 Grok（不会以直连方式启动）", "The proxy address is invalid or the proxy bridge could not start, so Grok was not started (it is never started without the proxy)")
 	}
 	slog.Info("启动 Grok Bot", "takeover", true, "proxy", proxyHostOnly(proxyURL))
-	return grokbot.Launch(proxyURL)
+	if err := grokbot.Launch(proxyURL); err != nil {
+		return err
+	}
+	if !a.isolated.Load() {
+		a.keepMark("grok.managed", proxyURL)
+	}
+	return nil
 }
 
 // proxyHostOnly 只保留代理的协议和主机，丢掉可能带着的账号口令，避免写进日志。

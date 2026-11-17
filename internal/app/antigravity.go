@@ -109,6 +109,9 @@ func (a *App) OpenAntigravity() error {
 		}
 		slog.Info("启动 Antigravity", "takeover", true, "proxy", proxyHostOnly(proxyURL))
 		err = antigravitylaunch.Launch(proxyURL)
+		if err == nil && !a.isolated.Load() {
+			a.keepMark("antigravity.managed", proxyURL)
+		}
 	}
 	if err != nil {
 		slog.Warn("启动 Antigravity 失败", "error", err.Error())

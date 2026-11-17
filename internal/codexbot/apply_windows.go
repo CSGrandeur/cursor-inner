@@ -105,5 +105,11 @@ func start(exe, proxyURL string) error {
 	cmd := winproc.GUI(exe, Args(proxyURL)...)
 	cmd.Dir = filepath.Dir(exe)
 	cmd.Env = Env(proxyURL, os.Environ())
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
+	return nil
 }

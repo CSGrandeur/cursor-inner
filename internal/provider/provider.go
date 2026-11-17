@@ -210,6 +210,10 @@ func Test(ctx context.Context, m config.Model, dial dialer.Func, onTokens func(u
 		sc.Buffer(make([]byte, 0, 64*1024), 2<<20)
 		for sc.Scan() {
 			event := parseSSE(sc.Text(), m.Type)
+			if event.err != "" {
+				result.Error = i18n.T(event.err, event.err)
+				return finish()
+			}
 			if event.textOK {
 				record(event.text)
 			}
@@ -244,6 +248,7 @@ type sseEvent struct {
 	textOK  bool
 	usage   uint64
 	usageOK bool
+	err     string
 }
 
 func parseSSE(line, kind string) sseEvent {
@@ -257,15 +262,22 @@ func parseSSE(line, kind string) sseEvent {
 	}
 	if kind == "anthropic" {
 		var event struct {
+			Type  string `json:"type"`
 			Delta struct {
 				Text string `json:"text"`
 			} `json:"delta"`
 			Usage *struct {
 				OutputTokens uint64 `json:"output_tokens"`
 			} `json:"usage"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal([]byte(data), &event) != nil {
 			return sseEvent{}
+		}
+		if event.Type == "error" && event.Error != nil && event.Error.Message != "" {
+			return sseEvent{err: event.Error.Message}
 		}
 		out := sseEvent{text: event.Delta.Text, textOK: event.Delta.Text != ""}
 		if event.Usage != nil && event.Usage.OutputTokens > 0 {
@@ -282,16 +294,28 @@ func parseSSE(line, kind string) sseEvent {
 				Usage struct {
 					OutputTokens uint64 `json:"output_tokens"`
 				} `json:"usage"`
+				Error *struct {
+					Message string `json:"message"`
+				} `json:"error"`
 			} `json:"response"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
 		}
 		if json.Unmarshal([]byte(data), &event) != nil {
 			return sseEvent{}
+		}
+		if event.Error != nil && event.Error.Message != "" {
+			return sseEvent{err: event.Error.Message}
+		}
+		if (event.Type == "response.failed" || event.Type == "error") && event.Response.Error != nil && event.Response.Error.Message != "" {
+			return sseEvent{err: event.Response.Error.Message}
 		}
 		out := sseEvent{}
 		switch event.Type {
 		case "response.output_text.delta", "response.text.delta":
 			out.text, out.textOK = event.Delta, event.Delta != ""
-		case "response.completed":
+		case "response.completed", "response.incomplete":
 			if tokens := event.Response.Usage.OutputTokens; tokens > 0 {
 				out.usage, out.usageOK = tokens, true
 			}
@@ -308,9 +332,15 @@ func parseSSE(line, kind string) sseEvent {
 			CompletionTokens uint64 `json:"completion_tokens"`
 			OutputTokens     uint64 `json:"output_tokens"`
 		} `json:"usage"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 	if json.Unmarshal([]byte(data), &event) != nil {
 		return sseEvent{}
+	}
+	if event.Error != nil && event.Error.Message != "" {
+		return sseEvent{err: event.Error.Message}
 	}
 	out := sseEvent{}
 	if len(event.Choices) > 0 {

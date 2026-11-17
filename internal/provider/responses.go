@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 
@@ -14,6 +15,7 @@ func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
 	type part struct {
 		Type             string `json:"type"`
 		Text             string `json:"text,omitempty"`
+		ImageURL         string `json:"image_url,omitempty"`
 		CallID           string `json:"call_id,omitempty"`
 		Name             string `json:"name,omitempty"`
 		Arguments        string `json:"arguments,omitempty"`
@@ -74,10 +76,36 @@ func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
 	if req.System != "" {
 		body.Input = append(body.Input, item{Type: "message", Role: "system", Content: []part{{Type: "input_text", Text: req.System}}})
 	}
+	imageDataURL := func(img Image) string {
+		mime := strings.TrimSpace(img.MIME)
+		if mime == "" {
+			mime = "image/png"
+		}
+		return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(img.Data)
+	}
+	var pendingToolImages []Image
+	flushToolImages := func() {
+		if len(pendingToolImages) == 0 {
+			return
+		}
+		parts := make([]part, 0, len(pendingToolImages)+1)
+		parts = append(parts, part{Type: "input_text", Text: "(attached image from tool result)"})
+		for _, img := range pendingToolImages {
+			parts = append(parts, part{Type: "input_image", ImageURL: imageDataURL(img)})
+		}
+		body.Input = append(body.Input, item{Type: "message", Role: "user", Content: parts})
+		pendingToolImages = nil
+	}
 	for _, message := range req.Messages {
+		if message.Role != "tool" {
+			flushToolImages()
+		}
 		switch message.Role {
 		case "tool":
 			body.Input = append(body.Input, item{Type: "function_call_output", CallID: message.ToolCallID, Output: message.Content})
+			if len(message.Images) > 0 {
+				pendingToolImages = append(pendingToolImages, message.Images...)
+			}
 		case "assistant":
 			replay := decodeReasoningReplay(message.ReasoningSignature)
 			for _, it := range replay {
@@ -107,9 +135,17 @@ func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
 				body.Input = append(body.Input, item{Type: "message", Role: "assistant", Content: []part{{Type: "output_text", Text: message.Content}}})
 			}
 		default:
-			body.Input = append(body.Input, item{Type: "message", Role: "user", Content: []part{{Type: "input_text", Text: message.Content}}})
+			parts := make([]part, 0, 1+len(message.Images))
+			if message.Content != "" || len(message.Images) == 0 {
+				parts = append(parts, part{Type: "input_text", Text: message.Content})
+			}
+			for _, img := range message.Images {
+				parts = append(parts, part{Type: "input_image", ImageURL: imageDataURL(img)})
+			}
+			body.Input = append(body.Input, item{Type: "message", Role: "user", Content: parts})
 		}
 	}
+	flushToolImages()
 	for _, t := range req.Tools {
 		params := t.Parameters
 		if len(params) == 0 {

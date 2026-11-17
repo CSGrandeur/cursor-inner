@@ -41,10 +41,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'google', 'goog', 'google.com', 'google.dev', 'withgoogle.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
+$OfficialSuffixes = @('grok.com', 'grok.bot', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'google', 'goog', 'google.com', 'google.dev', 'withgoogle.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
-  'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
+  'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com', 'pages.grok.bot',
   'x.ai', 'www.x.ai', 'api.x.ai', 'accounts.x.ai', 'auth.x.ai', 'console.x.ai', 'docs.x.ai', 'grok.x.ai', 'cdn.x.ai',
   'spacexai.com', 'www.spacexai.com',
   'cursor.com', 'www.cursor.com', 'api.cursor.com', 'downloads.cursor.com', 'docs.cursor.com', 'forum.cursor.com', 'authenticator.cursor.sh',
@@ -62,7 +62,14 @@ function Test-OfficialName([string]$name) {
   $name = $name.TrimEnd('.').ToLower()
   foreach ($s in $OfficialSuffixes) { if ($name -eq $s -or $name.EndsWith('.' + $s)) { return $true } }
   if ($OfficialExactHosts -contains $name) { return $true }
+  if ($name.EndsWith('.run.app') -and ($name.Split('.')[0]).StartsWith('antigravity-')) { return $true }
   return $false
+}
+
+function Test-OfficialTurnIp([string]$ip) {
+  if (-not $ip) { return $false }
+  $s = $ip.ToLower()
+  return $s.StartsWith('74.125.247.') -or $s.StartsWith('74.125.250.') -or $s.StartsWith('142.250.82.') -or $s.StartsWith('2001:4860:4864:')
 }
 
 function Find-ProxyArg {
@@ -264,6 +271,7 @@ foreach ($r in $remotes.Values | Sort-Object App, Ip) {
   $why = ''
   $ptr = ''
   if ($official.ContainsKey($r.Ip)) { $why = "官方 IP（$($official[$r.Ip])）" }
+  elseif (Test-OfficialTurnIp $r.Ip) { $why = '官方 TURN 媒体网段' }
   if (-not $why) {
     try { $ptr = (Resolve-DnsName $r.Ip -Type PTR -DnsOnly -ErrorAction Stop | Select-Object -First 1).NameHost } catch { }
     if (Test-OfficialName $ptr) { $why = "反向解析 $ptr" }

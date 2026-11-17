@@ -41,7 +41,7 @@ var profiles = map[Family]Profile{
 	FamilyDeepSeek: {Family: FamilyDeepSeek, ReasoningEcho: true, EmptyReasoning: " ", SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 128000, DefaultMaxOut: 8192},
 	FamilyQwen:     {Family: FamilyQwen, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 262144, DefaultMaxOut: 32768, ParallelToolCalls: true, ThinkTagSplit: true},
 	FamilyKimi:     {Family: FamilyKimi, ReasoningEcho: true, EmptyReasoning: " ", SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 262144, DefaultMaxOut: 8192},
-	FamilyGLM:      {Family: FamilyGLM, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: false, DefaultContext: 128000, DefaultMaxOut: 4096},
+	FamilyGLM:      {Family: FamilyGLM, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: false, DefaultContext: 128000, DefaultMaxOut: 16384},
 	FamilyGemini:   {Family: FamilyGemini, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 1000000, DefaultMaxOut: 8192},
 	FamilyGPT:      {Family: FamilyGPT, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 128000, DefaultMaxOut: 16384},
 	FamilyClaude:   {Family: FamilyClaude, ReasoningEcho: false, SupportsTools: true, SupportsImages: true, SupportsCache: true, DefaultContext: 200000, DefaultMaxOut: 8192},
@@ -49,26 +49,43 @@ var profiles = map[Family]Profile{
 	FamilyOther:    {Family: FamilyOther, SupportsTools: true, SupportsImages: false, SupportsCache: false, DefaultContext: 128000, DefaultMaxOut: 4096},
 }
 
-// DetectFamily 按模型名与 BaseURL 主机判定家族。
+// DetectFamily 按模型名优先、BaseURL 主机兜底判定家族。
+// 百炼等聚合网关可同时托管 Qwen、Kimi、GLM、DeepSeek，必须先认模型名，避免被共享域名一律归为 Qwen。
 func DetectFamily(m config.Model) Family {
 	blob := strings.ToLower(m.Model + " " + m.DisplayName)
 	host := requestHost(m.BaseURL)
 	switch {
-	case strings.Contains(blob, "deepseek") || hostMatches(host, "api.deepseek.com"):
+	case strings.Contains(blob, "deepseek"):
 		return FamilyDeepSeek
-	case strings.Contains(blob, "qwen") || strings.Contains(blob, "qwq") || hostMatches(host, "dashscope.aliyuncs.com") || hostMatches(host, "dashscope-intl.aliyuncs.com"):
+	case strings.Contains(blob, "qwen") || strings.Contains(blob, "qwq"):
 		return FamilyQwen
-	case strings.Contains(blob, "kimi") || hostMatches(host, "api.kimi.com") || hostMatches(host, "moonshot.ai") || hostMatches(host, "moonshot.cn"):
+	case strings.Contains(blob, "kimi") || strings.Contains(blob, "moonshot"):
 		return FamilyKimi
-	case strings.Contains(blob, "glm") || strings.Contains(blob, "chatglm") || hostMatches(host, "open.bigmodel.cn"):
+	case strings.Contains(blob, "glm") || strings.Contains(blob, "chatglm"):
 		return FamilyGLM
-	case strings.Contains(blob, "gemini") || hostMatches(host, "generativelanguage.googleapis.com"):
+	case strings.Contains(blob, "gemini"):
 		return FamilyGemini
-	case strings.Contains(blob, "claude") || hostMatches(host, "api.anthropic.com") || m.Type == "anthropic":
+	case strings.Contains(blob, "claude"):
 		return FamilyClaude
-	case strings.Contains(blob, "gpt") || strings.Contains(blob, "o1") || strings.Contains(blob, "o3") || strings.Contains(blob, "o4") || hostMatches(host, "api.openai.com"):
+	case strings.Contains(blob, "gpt") || strings.Contains(blob, "o1") || strings.Contains(blob, "o3") || strings.Contains(blob, "o4"):
 		return FamilyGPT
-	case strings.Contains(blob, "mimo") || hostMatches(host, "xiaomimimo.com"):
+	case strings.Contains(blob, "mimo"):
+		return FamilyMiMo
+	case hostMatches(host, "api.deepseek.com"):
+		return FamilyDeepSeek
+	case hostMatches(host, "dashscope.aliyuncs.com") || hostMatches(host, "dashscope-intl.aliyuncs.com") || hostMatches(host, "qianwenaiapi.com") || hostMatches(host, "qwencloudapi.com"):
+		return FamilyQwen
+	case hostMatches(host, "api.kimi.com") || hostMatches(host, "moonshot.ai") || hostMatches(host, "moonshot.cn"):
+		return FamilyKimi
+	case hostMatches(host, "open.bigmodel.cn"):
+		return FamilyGLM
+	case hostMatches(host, "generativelanguage.googleapis.com"):
+		return FamilyGemini
+	case hostMatches(host, "api.anthropic.com") || m.Type == "anthropic":
+		return FamilyClaude
+	case hostMatches(host, "api.openai.com"):
+		return FamilyGPT
+	case hostMatches(host, "xiaomimimo.com"):
 		return FamilyMiMo
 	default:
 		return FamilyOther
@@ -177,6 +194,26 @@ func kimiVariantLimits(model string) (contextWindow, maxOut int) {
 		return 262144, 32768
 	case strings.HasPrefix(n, "kimi") || strings.HasPrefix(n, "moonshot"):
 		return 262144, 8192
+	}
+	return 0, 0
+}
+
+// glmVariantLimits 按模型名给出 GLM 各变体的输入上下文与单次输出上限（参考 qwen-code tokenLimits）。
+func glmVariantLimits(model string) (contextWindow, maxOut int) {
+	n := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(n, "/"); i >= 0 {
+		n = n[i+1:]
+	}
+	if i := strings.Index(n, ":"); i >= 0 {
+		n = n[:i]
+	}
+	switch {
+	case strings.HasPrefix(n, "glm-5.2") || strings.HasPrefix(n, "glm-5.3") || strings.HasPrefix(n, "glm-5.4"):
+		return 1000000, 131072
+	case strings.HasPrefix(n, "glm-5"):
+		return 202752, 131072
+	case strings.HasPrefix(n, "glm-4.7") || strings.HasPrefix(n, "glm-4.6") || strings.HasPrefix(n, "glm-4.5"):
+		return 202752, 16384
 	}
 	return 0, 0
 }

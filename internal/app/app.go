@@ -77,8 +77,15 @@ func (a *App) Quit() error {
 }
 
 func New(store *config.Store, life *takeover.Service, boot starter, exe string) *App {
+	dir := ""
+	if store != nil {
+		dir = store.Dir()
+	}
+	if dir == "" {
+		dir = config.DefaultDir()
+	}
 	return &App{store: store, life: life, boot: boot, exe: exe,
-		tun: tunnel.NewManager(filepath.Join(config.DefaultDir(), "tun"))}
+		tun: tunnel.NewManager(filepath.Join(dir, "tun"))}
 }
 
 // tracker 是接管三态的判定器（见 takeover.Tracker）；没有显式创建时按默认参数惰性创建。
@@ -602,7 +609,11 @@ func (a *App) probe(ctx context.Context, model config.Model, progress func(provi
 	ctx, cancel := context.WithTimeout(ctx, provider.ProbeTotalBudget())
 	defer cancel()
 	defCtx, defCancel := context.WithTimeout(ctx, 5*time.Second)
-	model = provider.ApplyModelsDevDefaults(defCtx, model, d, config.DefaultDir())
+	cacheDir := config.DefaultDir()
+	if a.store != nil && a.store.Dir() != "" {
+		cacheDir = a.store.Dir()
+	}
+	model = provider.ApplyModelsDevDefaults(defCtx, model, d, cacheDir)
 	defCancel()
 	result, updated := provider.Probe(ctx, model, d, progress)
 	if result.OK {

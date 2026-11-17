@@ -12,6 +12,7 @@ import (
 // Suffixes 是必须经代理的官方域名后缀，与 scripts/grok-leak-check.ps1、strict-egress.ps1 保持一致。
 var Suffixes = []string{
 	"grok.com",
+	"grok.bot",
 	"x.ai",
 	"spacexai.com",
 	"cursor.com",
@@ -71,9 +72,28 @@ const (
 	FakeIP6 = "fc00::/18"
 )
 
+// TURNMedia 是 Antigravity Remote Control 的 WebRTC TURN/媒体专用公网前缀。
+// 来源：Google Workspace Help 1279090，以及 2026-11-13 实测 Remote Control 控制面
+// TCP 74.125.247.128:3478；与 MyPythonLearningCode a8b9aade 的 PAC proxy_cidrs 一致。
+// 只匹配裸 IP 字面量，不把整个 Google 或其它云地址空间收进官方名单。
+// 供仅官方 TUN 的 route_address 与 ip_cidr→proxy 使用。未开启 TUN 时，
+// 单进程 HTTP(S)/gRPC 环境变量拦不住这些 STUN/TURN 端口。
+var TURNMedia = []string{
+	"74.125.247.0/24",
+	"74.125.250.0/24",
+	"142.250.82.0/24",
+	"2001:4860:4864::/48",
+}
+
 var (
-	fake4 = netip.MustParsePrefix(FakeIP4)
-	fake6 = netip.MustParsePrefix(FakeIP6)
+	fake4     = netip.MustParsePrefix(FakeIP4)
+	fake6     = netip.MustParsePrefix(FakeIP6)
+	turnMedia = []netip.Prefix{
+		netip.MustParsePrefix("74.125.247.0/24"),
+		netip.MustParsePrefix("74.125.250.0/24"),
+		netip.MustParsePrefix("142.250.82.0/24"),
+		netip.MustParsePrefix("2001:4860:4864::/48"),
+	}
 	// 与 grokbot 的回环/私网绕过一致：IPv4 内网预留段（不含 fake-ip 段）、LAN、WSL、链路本地。
 	private = []netip.Prefix{
 		netip.MustParsePrefix("0.0.0.0/8"),
@@ -177,6 +197,26 @@ func Reserved(ip netip.Addr) bool {
 		return true
 	}
 	for _, p := range private {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsFakeIP 报告 ip 是否落在 TUN 的 fake-ip 网段。
+func IsFakeIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	return ip.IsValid() && (fake4.Contains(ip) || fake6.Contains(ip))
+}
+
+// IsTURNMedia 报告 ip 是否属于 Antigravity Remote Control 的已知 Google WebRTC TURN/媒体网段。
+func IsTURNMedia(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	if !ip.IsValid() {
+		return false
+	}
+	for _, p := range turnMedia {
 		if p.Contains(ip) {
 			return true
 		}

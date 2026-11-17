@@ -83,12 +83,22 @@ func TestEnvSetsHTTPSProxyForGoOAuthAndDropsElectronNode(t *testing.T) {
 	if strings.Contains(m["NO_PROXY"], "*") || !strings.Contains(m["NO_PROXY"], "127.0.0.1") {
 		t.Fatal(m["NO_PROXY"])
 	}
+	for _, want := range []string{"[::1]", ".localhost", "host.docker.internal", "10.255.255.254", "172.17.0.1"} {
+		if !strings.Contains(m["NO_PROXY"], want) {
+			t.Fatalf("NO_PROXY missing %q: %s", want, m["NO_PROXY"])
+		}
+	}
 	if Args("") != nil {
 		t.Fatal("empty proxy has no args")
 	}
 	joined := strings.Join(Args("http://127.0.0.1:20378"), " ")
 	if !strings.Contains(joined, "--proxy-server=http://127.0.0.1:20378") || !strings.Contains(joined, "--disable-quic") || !strings.Contains(joined, "--use-env-proxy") {
 		t.Fatal(joined)
+	}
+	for _, want := range []string{"*.localhost", "host.docker.internal"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Args missing %q: %s", want, joined)
+		}
 	}
 	if strings.Contains(joined, "--proxy_server_url") {
 		t.Fatalf("Args must not contain --proxy_server_url: %q", joined)

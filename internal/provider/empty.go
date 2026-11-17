@@ -68,6 +68,15 @@ func emptyReply(m config.Model, messages []Message, reqBytes int, finish string,
 		"raw_head", redactSecret(string(raw), m.APIKey),
 		logx.FileOnly,
 	)
+	if strings.EqualFold(finish, "content_filter") || strings.EqualFold(finish, "refusal") {
+		reason := strings.ToLower(strings.TrimSpace(finish))
+		return &APIError{
+			Kind:   KindBadRequest,
+			Code:   reason,
+			Text:   "endpoint stopped due to " + reason,
+			Detail: "finish_reason=" + finish,
+		}
+	}
 	err := emptyError().(*APIError)
 	err.Large = large
 	return err

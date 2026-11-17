@@ -8,17 +8,25 @@ import (
 	"runtime"
 )
 
-// Launch 在非 Windows 上冷启动 Antigravity。proxyURL 暂未注入（接管链路目前以 Windows 为主）。
+// Launch 在非 Windows 上冷启动 Antigravity；Linux 带上代理参数与进程环境。
 func Launch(proxyURL string) error {
-	_ = proxyURL
 	if runtime.GOOS == "darwin" {
-		return exec.Command("open", "-a", "Antigravity").Start()
+		cmd := exec.Command("open", "-a", "Antigravity")
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		go func() { _ = cmd.Wait() }()
+		return nil
 	}
 	path, err := findAntigravity(nil, func() (string, error) { return exec.LookPath("antigravity") })
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, Args(proxyURL)...)
 	cmd.Env = Env(proxyURL, os.Environ())
-	return cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }

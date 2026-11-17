@@ -50,7 +50,7 @@ func TestEmptyReplyLogsDiagnosticsWithoutSecrets(t *testing.T) {
 	t.Cleanup(srv.Close)
 	m := config.Model{Type: "openai-chat", BaseURL: srv.URL, APIKey: key, Model: "m"}
 	_, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "request-body-marker"}}, nil, func(string) error { return nil }, nil)
-	if !IsEmpty(err) {
+	if !ContentInspection(err) {
 		t.Fatalf("err=%v", err)
 	}
 	out := logs.String()

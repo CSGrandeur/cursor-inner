@@ -102,10 +102,19 @@ func (a *App) OpenCodex() error {
 		return codexbot.Launch("")
 	}
 	proxyURL, keep := a.codexProxy(cfg)
+	if keep && !a.proxyReady() {
+		return i18n.E("代理软件还没启动，等它启动后再打开 Codex（不会以直连方式启动）", "Your proxy software is not running yet. Start it, then open Codex (it is never started without the proxy)")
+	}
 	if keep {
 		slog.Warn("没有启动 Codex：拿不到可靠代理，不会改成直连")
 		return i18n.E("代理地址无效或代理桥起不来，没有启动 Codex（不会以直连方式启动）", "The proxy address is invalid or the proxy bridge could not start, so Codex was not started (it is never started without the proxy)")
 	}
 	slog.Info("启动 Codex", "takeover", true, "proxy", proxyHostOnly(proxyURL))
-	return codexbot.Launch(proxyURL)
+	if err := codexbot.Launch(proxyURL); err != nil {
+		return err
+	}
+	if !a.isolated.Load() {
+		a.keepMark("codex.managed", proxyURL)
+	}
+	return nil
 }

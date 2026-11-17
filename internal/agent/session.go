@@ -1334,6 +1334,7 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 			continue
 		}
 		s.argFails[call.Name] = 0
+		s.noteTool(call.Name)
 		slog.Debug("调用工具", "conversation", s.RequestID, "tool", call.Name)
 		if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallStarted{ToolCallStarted: &cursorpb.ToolCallStartedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 			return outcomes, err

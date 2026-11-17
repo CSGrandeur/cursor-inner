@@ -3,8 +3,9 @@ package tools
 import (
 	"strings"
 
-	"cursor-inner/internal/cursorpb"
 	"mvdan.cc/sh/v3/syntax"
+
+	"cursor-inner/internal/cursorpb"
 )
 
 // Cursor's commandSummary deduplicates parsing_result.executable_commands names;

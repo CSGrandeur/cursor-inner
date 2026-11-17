@@ -164,3 +164,65 @@ func TestNormalizeDNSSkipsLoopbackFromServers(t *testing.T) {
 		t.Fatalf("expected dns-local-0 to be 192.0.2.1 without loopback, got %v", locals)
 	}
 }
+
+// 已知 Google WebRTC TURN/媒体字面量前缀必须同时进入 route_address（否则包进不了 TUN）
+// 和 route 的 ip_cidr→proxy 规则（否则吸进来后会落到 final=direct，等于白吸）。
+// 来源与 PAC a8b9aade / Workspace 1279090 一致；测试用固定样例 IP，不扫大网段。
+var wantTURN = []string{"74.125.247.0/24", "74.125.250.0/24", "142.250.82.0/24", "2001:4860:4864::/48"}
+
+func TestConfigRoutesLiteralTURNToProxy(t *testing.T) {
+	m := mustConfig(t)
+	in := m["inbounds"].([]any)[0].(map[string]any)
+	ra, _ := json.Marshal(in["route_address"])
+	addr := string(ra)
+	for _, cidr := range wantTURN {
+		if !strings.Contains(addr, cidr) {
+			t.Errorf("route_address 未覆盖字面量 TURN 前缀 %s（此类目标不会进入 TUN）：%s", cidr, addr)
+		}
+	}
+	for _, leak := range []string{"0.0.0.0/0", `"::/0"`, "10.0.0.0/8", "192.168.0.0/16", "127.0.0.1"} {
+		if strings.Contains(addr, leak) {
+			t.Errorf("route_address 不应含 %s：%s", leak, addr)
+		}
+	}
+	// 非官方公网 IP 不得被吸入。
+	for _, n := range []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"} {
+		if strings.Contains(addr, n) {
+			t.Errorf("route_address 不应含非官方地址 %s：%s", n, addr)
+		}
+	}
+
+	route := m["route"].(map[string]any)
+	if final, _ := route["final"].(string); final != "direct" {
+		t.Fatalf("route.final 应为 direct 以免非官方进代理，得到 %q", final)
+	}
+	covered := map[string]bool{}
+	for _, raw := range route["rules"].([]any) {
+		rule := raw.(map[string]any)
+		if ob, _ := rule["outbound"].(string); ob != "proxy" {
+			continue
+		}
+		cidrs, _ := rule["ip_cidr"].([]any)
+		for _, c := range cidrs {
+			s, _ := c.(string)
+			covered[s] = true
+		}
+	}
+	for _, cidr := range wantTURN {
+		if !covered[cidr] {
+			t.Errorf("字面量 TURN 前缀 %s 进入 route_address 后没有 ip_cidr→proxy 规则，会落到 final=direct", cidr)
+		}
+	}
+	if strings.Contains(string(mustJSON(t, m)), "github.com") {
+		t.Error("第三方域名不应出现在配置里")
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}

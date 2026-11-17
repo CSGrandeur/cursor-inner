@@ -3,6 +3,7 @@ package official
 import (
 	"crypto/tls"
 	"net"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,8 @@ import (
 func TestForHost(t *testing.T) {
 	cases := map[string]Route{
 		"grok.com":                             Proxy,
+		"pages.grok.bot":                       Proxy,
+		"app.apps.grok.bot":                    Proxy,
 		"API.X.AI.":                            Proxy,
 		"us3.cursorvm.com":                     Proxy,
 		"api2.cursor.sh":                       Proxy,
@@ -235,6 +238,26 @@ func TestEveryOfficialNameProxiesOnEveryPath(t *testing.T) {
 	for _, h := range Hosts {
 		if r := ForHost("x." + h); r == Proxy {
 			t.Errorf("ForHost(sub of exact %q) = proxy, exact hosts must not broaden", h)
+		}
+	}
+}
+
+func TestTURNMediaMatchesLiteralsOnly(t *testing.T) {
+	if len(TURNMedia) != 4 {
+		t.Fatalf("TURNMedia: got %d prefixes, want 4", len(TURNMedia))
+	}
+	in := []string{"74.125.247.128", "74.125.250.129", "142.250.82.251", "2001:4860:4864:4:8000::1"}
+	out := []string{"8.8.8.8", "1.1.1.1", "74.125.246.1", "2001:4860:4863::1", "127.0.0.1", "192.168.1.1"}
+	for _, s := range in {
+		ip := netip.MustParseAddr(s)
+		if !IsTURNMedia(ip) {
+			t.Errorf("%s should be in TURNMedia", s)
+		}
+	}
+	for _, s := range out {
+		ip := netip.MustParseAddr(s)
+		if IsTURNMedia(ip) {
+			t.Errorf("%s must not be in TURNMedia", s)
 		}
 	}
 }

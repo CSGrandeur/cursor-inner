@@ -105,9 +105,9 @@ func Overflow(err error) bool {
 	return errors.As(err, &api) && api.Kind == KindContextOverflow
 }
 
-// inspectionPattern 识别供应商内容审核拒绝（含 DashScope DataInspection 的多种拼写）。
-// 与 Qwen Code 的永久失败码对齐，但不把鉴权/欠费/超长算进审核。
-var inspectionPattern = regexp.MustCompile(`(?i)data[_-]?inspection|content[_-]?filter|responsible[_-]?ai|inappropriate content|prohibited content|内容审核|不当内容`)
+// inspectionPattern 识别供应商内容审核拒绝（含 DashScope DataInspection、DeepSeek Content Exists Risk 与流式 refusal）。
+// 与 Qwen Code / Hermes 的永久失败码对齐，但不把鉴权/欠费/超长算进审核。
+var inspectionPattern = regexp.MustCompile(`(?i)data[_-]?inspection|content[_-]?filter|content exists risk|\brefusal\b|responsible[_-]?ai|inappropriate content|prohibited content|内容审核|不当内容`)
 
 // ContentInspection 判断错误是否为内容审核拒绝。取消、传输、超时不得算作审核。
 // 即使上游把 SSE 标成 server_error，只要 code/message 指向审核，也按审核处理。
@@ -170,6 +170,29 @@ func wantsEffortFallback(err error) bool {
 				return true
 			}
 		}
+	}
+	return false
+}
+
+// wantsReasoningSignatureFallback 判断 400 是否因历史中的 thinking 签名、加密推理块或 thought_signature 校验失败被拒。
+// 例如上下文裁剪改写了更早工具输出、分组模型切换后端或旧存档未记 ReasoningBy 时，剥掉不透明签名即可恢复本轮对话。
+func wantsReasoningSignatureFallback(err error) bool {
+	var api *APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	if api.Status != 400 && api.Kind != KindBadRequest {
+		return false
+	}
+	text := strings.ToLower(api.Text + " " + api.Detail + " " + api.Code + " " + api.Type)
+	if anyContains(text, "invalid_encrypted_content", "thinking_signature_invalid", "thought_signature") {
+		return anyContains(text, "invalid", "corrupt", "mismatch", "cannot", "failed", "decrypt", "verify", "signature")
+	}
+	if strings.Contains(text, "thinking") && anyContains(text,
+		"invalid signature", "signature in thinking", "cannot be modified",
+		"must remain as they were", "redacted_thinking",
+	) {
+		return true
 	}
 	return false
 }
@@ -277,7 +300,7 @@ func classifyDashscopeText(s string) (Kind, bool) {
 		return KindRateLimit, true
 	case anyContains(s, "arrearage", "insufficient_quota", "insufficient balance", "unpurchased", "accessdenied", "no permission"):
 		return KindAuth, true
-	case anyContains(s, "datainspection", "data_inspection", "responsible_ai", "responsibleai", "content_filter", "contentfilter"):
+	case anyContains(s, "datainspection", "data_inspection", "responsible_ai", "responsibleai", "content_filter", "contentfilter", "content exists risk"):
 		return KindBadRequest, true
 	case anyContains(s, "range of input length", "maximum context", "input length", "context length", "context window"):
 		return KindContextOverflow, true

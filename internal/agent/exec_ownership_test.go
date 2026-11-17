@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
-	"google.golang.org/protobuf/proto"
 	"strings"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"

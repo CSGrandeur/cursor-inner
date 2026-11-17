@@ -47,12 +47,15 @@ func DiscoverModels(ctx context.Context, in DiscoverInput, dial dialer.Func) ([]
 	if dial == nil {
 		dial = dialer.Direct()
 	}
-	client := &http.Client{Transport: &http.Transport{
+	tr := &http.Transport{
 		DialContext:       dial,
 		Proxy:             nil,
+		DisableKeepAlives: true,
 		ForceAttemptHTTP2: false,
 		TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
-	}, Timeout: 30 * time.Second}
+	}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 30 * time.Second}
 
 	var last error
 	for _, u := range urls {
@@ -204,12 +207,12 @@ func openaiModelsAt(ctx context.Context, client *http.Client, rawURL, apiKey str
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, i18n.Ef("探测模型失败（%d）：%s", "Model discovery failed (%d): %s", resp.StatusCode, excerpt(body))
+	}
 	var payload any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, i18n.E("上游返回的不是 JSON", "Upstream did not return JSON")
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, i18n.Ef("探测模型失败（%d）：%s", "Model discovery failed (%d): %s", resp.StatusCode, excerpt(body))
 	}
 	return modelIDs(payloadData(payload)), nil
 }
@@ -245,12 +248,12 @@ func anthropicModelsAt(ctx context.Context, client *http.Client, rawURL, apiKey 
 		if err != nil {
 			return nil, err
 		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return nil, i18n.Ef("探测模型失败（%d）：%s", "Model discovery failed (%d): %s", resp.StatusCode, excerpt(body))
+		}
 		var payload map[string]any
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil, i18n.E("上游返回的不是 JSON", "Upstream did not return JSON")
-		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return nil, i18n.Ef("探测模型失败（%d）：%s", "Model discovery failed (%d): %s", resp.StatusCode, excerpt(body))
 		}
 		for _, id := range modelIDs(payloadData(payload)) {
 			found[id] = struct{}{}

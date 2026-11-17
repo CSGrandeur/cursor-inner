@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -91,7 +92,9 @@ func loadModelsDevFile(cacheDir string) map[string]modelsDevEntry {
 }
 
 func refreshModelsDev(ctx context.Context, dial dialer.Func, cacheDir string) error {
-	client := &http.Client{Transport: &http.Transport{DialContext: dial}, Timeout: 30 * time.Second}
+	tr := &http.Transport{DialContext: dial, DisableKeepAlives: true}
+	defer tr.CloseIdleConnections()
+	client := &http.Client{Transport: tr, Timeout: 30 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsDevURL, nil)
 	if err != nil {
 		return err
@@ -102,7 +105,7 @@ func refreshModelsDev(ctx context.Context, dial dialer.Func, cacheDir string) er
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return err
+		return fmt.Errorf("models.dev HTTP %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
@@ -147,6 +150,18 @@ func walkModelsDev(node any, out map[string]modelsDevEntry) {
 				e.MaxOutputTokens = n
 			} else if n, ok := asInt(v["max_tokens"]); ok {
 				e.MaxOutputTokens = n
+			}
+			if lim, ok := v["limit"].(map[string]any); ok {
+				if e.ContextWindow <= 0 {
+					if n, ok := asInt(lim["context"]); ok {
+						e.ContextWindow = n
+					}
+				}
+				if e.MaxOutputTokens <= 0 {
+					if n, ok := asInt(lim["output"]); ok {
+						e.MaxOutputTokens = n
+					}
+				}
 			}
 			if b, ok := v["reasoning"].(bool); ok {
 				e.Reasoning = b

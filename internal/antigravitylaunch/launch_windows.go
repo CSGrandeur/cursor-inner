@@ -7,10 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"golang.org/x/sys/windows/registry"
+
 	"cursor-inner/internal/grokbot"
 	"cursor-inner/internal/logx"
 	"cursor-inner/internal/winproc"
-	"golang.org/x/sys/windows/registry"
 )
 
 // Launch 打开已安装的 Antigravity；已有进程在跑时也会激活或按需重启接管，不会静默吞掉。

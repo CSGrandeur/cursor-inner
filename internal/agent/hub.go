@@ -2,11 +2,12 @@ package agent
 
 import (
 	"context"
-	"google.golang.org/protobuf/proto"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
@@ -150,6 +151,17 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				start = true
 			}
 		}
+		if s.session != nil && s.session.Model.ID == "" && route.ModelID != "" && h.lookup != nil {
+			if model, ok := h.lookup(route.ModelID); ok {
+				s.session.Model = model
+				s.session.Fallbacks = nil
+				for _, id := range model.Fallback {
+					if fb, ok := h.lookup(id); ok && fb.ID != model.ID {
+						s.session.Fallbacks = append(s.session.Fallbacks, fb)
+					}
+				}
+			}
+		}
 		// NoteResume 会先把已答完的会话挂到新 request id 上，却来不及 adopt。
 		// 若不接住新动作，接着跑时仍用上一轮的 UserMessageAction，等于把旧指令再插一遍。
 		if s.session != nil && !start && s.session.Finished() && !s.session.Running() {
@@ -253,9 +265,9 @@ func (h *Hub) Done(requestID string) {
 		h.finished[requestID] = f
 		if conv := s.session.ConversationID(); conv != "" {
 			h.byConv[conv] = f
-			// 热交接会丢掉内存 finished；把 request→会话 落到磁盘，resume 才能回放。
+			// 热交接会丢掉内存 finished；把 request→会话+模型 落到磁盘，resume 和后台任务唤醒才能还原。
 			if h.history != nil {
-				if err := h.history.SaveRun(requestID, conv); err != nil {
+				if err := h.history.SaveRunModel(requestID, conv, s.session.Model.ID); err != nil {
 					slog.Debug("SaveRun failed", "request", requestID, "error", err)
 				}
 			}
@@ -330,7 +342,7 @@ func (h *Hub) sessionFromDiskLocked(requestID string) *Session {
 	if h.history == nil || requestID == "" {
 		return nil
 	}
-	conv := h.history.LoadRun(requestID)
+	conv, modelID := h.history.LoadRunModel(requestID)
 	if conv == "" {
 		return nil
 	}
@@ -338,8 +350,21 @@ func (h *Hub) sessionFromDiskLocked(requestID string) *Session {
 	if state == nil {
 		return nil
 	}
+	var model config.Model
+	var fallbacks []config.Model
+	if modelID != "" && h.lookup != nil {
+		if m, ok := h.lookup(modelID); ok {
+			model = m
+			for _, id := range m.Fallback {
+				if fb, ok := h.lookup(id); ok && fb.ID != m.ID {
+					fallbacks = append(fallbacks, fb)
+				}
+			}
+		}
+	}
 	run := &cursorpb.AgentRunRequest{ConversationId: &conv}
-	sess := newSession(requestID, config.Model{}, run, h.history)
+	sess := newSession(requestID, model, run, h.history)
+	sess.Fallbacks = fallbacks
 	sess.baseState = state
 	sess.finished.Store(true)
 	f := &finished{session: sess, at: time.Now()}

@@ -152,6 +152,39 @@ func TestBridgeDialFailureLoggedAndSummarized(t *testing.T) {
 	if strings.Contains(s, "secretpw") {
 		t.Errorf("日志泄露了密码：%s", s)
 	}
+	if !strings.Contains(s, "_file_only=true") {
+		t.Errorf("拨号失败告警应只写日志文件，避免裸刷控制台：%s", s)
+	}
+}
+
+func TestBridgeDirectDialFailureNotMisreportedAsProxy(t *testing.T) {
+	buf := captureLog(t, slog.LevelDebug)
+	var b Bridge
+	addr, err := b.Ensure("antigravity\nsocks5://127.0.0.1:1", func(ctx context.Context, n, a string) (net.Conn, error) {
+		connlog.SetReason(ctx, "reserved_ip")
+		connlog.Set(ctx, "direct")
+		return nil, errors.New("i/o timeout")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b.Close)
+	c, err := net.Dial("tcp4", strings.TrimPrefix(addr, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(c, "CONNECT internal.example:8080 HTTP/1.1\r\nHost: internal.example:8080\r\n\r\n")
+	_, _ = io.ReadAll(c)
+	c.Close()
+	s := waitFor(t, buf, "closed_by=dial")
+	if strings.Contains(s, "没能经代理连上目标") {
+		t.Fatalf("直连失败不应误报成代理连接失败：%s", s)
+	}
+	for _, want := range []string{"antigravity 代理桥直连目标失败", "route=direct", "route_why=reserved_ip", "_file_only=true"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("缺 %q：%s", want, s)
+		}
+	}
 }
 
 func TestPipeReportsUpstreamFirstAndForced(t *testing.T) {
@@ -247,5 +280,122 @@ func TestAntigravityFamily(t *testing.T) {
 	}
 	if antigravityFamily("api2.cursor.sh") || antigravityFamily("api.x.ai") || antigravityFamily("example.com") {
 		t.Fatal("non-antigravity hosts must stay out")
+	}
+}
+
+func TestPipeIgnoresPostEOFWriteAbortButPreservesUpstreamReadReset(t *testing.T) {
+	// 1. 客户端读完正常全关（EOF），随后上游补发 24 字节 TLS close_notify 触发向已关客户端写入报错：应归为正常 eof，不计 fail。
+	postCloseLn, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { postCloseLn.Close() })
+	go func() {
+		for {
+			s, err := postCloseLn.Accept()
+			if err != nil {
+				return
+			}
+			go func(s net.Conn) {
+				defer s.Close()
+				req := make([]byte, 3)
+				if _, err := io.ReadFull(s, req); err != nil {
+					return
+				}
+				_, _ = s.Write([]byte("ok!"))
+				// 等桥把客户端的 FIN 转过来后，模拟上游延迟发出收尾帧（如 TLS close_notify）。
+				buf := make([]byte, 1)
+				_, _ = s.Read(buf)
+				time.Sleep(30 * time.Millisecond)
+				_, _ = s.Write(bytes.Repeat([]byte("z"), 24))
+			}(s)
+		}
+	}()
+
+	// 2. 客户端半关闭等待响应，上游直接发 TCP RST：属于真实读取重置，必须归为 reset 并计入 fail。
+	rstLn, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { rstLn.Close() })
+	go func() {
+		for {
+			s, err := rstLn.Accept()
+			if err != nil {
+				return
+			}
+			go func(s net.Conn) {
+				req := make([]byte, 3)
+				_, _ = io.ReadFull(s, req)
+				if tc, ok := s.(*net.TCPConn); ok {
+					_ = tc.SetLinger(0)
+				}
+				_ = s.Close()
+			}(s)
+		}
+	}()
+
+	buf := captureLog(t, slog.LevelDebug)
+	SetConnDetail(true)
+	oldProbe := probeTarget
+	probeTarget = "off"
+	t.Cleanup(func() { SetConnDetail(false); probeTarget = oldProbe })
+
+	var b Bridge
+	addr, err := b.Ensure("antigravity\nhttp://127.0.0.1:1080", func(ctx context.Context, n, a string) (net.Conn, error) {
+		connlog.Set(ctx, "proxy")
+		var d net.Dialer
+		return d.DialContext(ctx, n, a)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b.Close)
+	bridgeAddr := strings.TrimPrefix(addr, "http://")
+
+	// 跑场景 1：客户端全关（SetLinger(0) 强制后续写客户端立即报 reset/broken pipe）。
+	c1, err := net.Dial("tcp4", bridgeAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t1 := postCloseLn.Addr().String()
+	_, _ = io.WriteString(c1, "CONNECT "+t1+" HTTP/1.1\r\nHost: "+t1+"\r\n\r\n")
+	okHdr := make([]byte, 39)
+	if _, err := io.ReadFull(c1, okHdr); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = c1.Write([]byte("req"))
+	resp := make([]byte, 3)
+	if _, err := io.ReadFull(c1, resp); err != nil {
+		t.Fatal(err)
+	}
+	_ = c1.(*net.TCPConn).CloseWrite()
+	time.Sleep(10 * time.Millisecond)
+	_ = c1.(*net.TCPConn).SetLinger(0)
+	_ = c1.Close()
+
+	s1 := waitFor(t, buf, "id=a-1")
+	if !strings.Contains(s1, "close=eof") {
+		t.Fatalf("expected post-EOF trailing write error to classify as close=eof, got:\n%s", s1)
+	}
+
+	// 跑场景 2：上游真实 RST。
+	c2, err := net.Dial("tcp4", bridgeAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	t2 := rstLn.Addr().String()
+	_, _ = io.WriteString(c2, "CONNECT "+t2+" HTTP/1.1\r\nHost: "+t2+"\r\n\r\n")
+	if _, err := io.ReadFull(c2, okHdr); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = c2.Write([]byte("req"))
+	_ = c2.(*net.TCPConn).CloseWrite()
+	_, _ = io.ReadAll(c2)
+
+	s2 := waitFor(t, buf, "id=a-2")
+	if !strings.Contains(s2, "close=reset") {
+		t.Fatalf("expected genuine upstream RST to classify as close=reset, got:\n%s", s2)
 	}
 }

@@ -29,7 +29,7 @@ func webClient(dial dialer.Func, timeout time.Duration) *http.Client {
 	if dial == nil {
 		dial = dialer.Direct()
 	}
-	return &http.Client{Timeout: timeout, Transport: &http.Transport{DialContext: dial, Proxy: nil}}
+	return &http.Client{Timeout: timeout, Transport: &http.Transport{DialContext: dial, Proxy: nil, DisableKeepAlives: true}}
 }
 
 var readHTTP = func(dial dialer.Func, rawURL string) ([]byte, error) {
@@ -462,5 +462,9 @@ func GeneratedImage(ui *cursorpb.ToolCall) (provider.Image, bool) {
 	if mime == "" {
 		return provider.Image{}, false
 	}
-	return provider.Image{MIME: mime, Data: raw}, true
+	fitted, fittedMIME, err := fitImage(raw, mime)
+	if err != nil {
+		return provider.Image{}, false
+	}
+	return provider.Image{MIME: fittedMIME, Data: fitted}, true
 }

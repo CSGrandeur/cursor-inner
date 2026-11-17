@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"cursor-inner/internal/inference"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cursor-inner/internal/inference"
 
 	"google.golang.org/protobuf/proto"
 
@@ -868,8 +869,8 @@ func (s *Server) countOfficial() {
 
 func (s *Server) setLastError(text string) {
 	text = strings.TrimSpace(text)
-	if len(text) > 80 {
-		text = text[:80]
+	if rs := []rune(text); len(rs) > 80 {
+		text = string(rs[:80])
 	}
 	s.mu.Lock()
 	s.lastError = text
@@ -947,13 +948,15 @@ var hop = map[string]struct{}{
 }
 
 func removeHop(h http.Header) {
+	for _, c := range h.Values("Connection") {
+		for _, name := range strings.Split(c, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				h.Del(name)
+			}
+		}
+	}
 	for k := range hop {
 		h.Del(k)
-	}
-	if c := h.Get("Connection"); c != "" {
-		for _, name := range strings.Split(c, ",") {
-			h.Del(strings.TrimSpace(name))
-		}
 	}
 }
 

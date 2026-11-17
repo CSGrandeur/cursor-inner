@@ -40,6 +40,17 @@ func SetReason(ctx context.Context, why string) {
 	}
 }
 
+// SetReasonDefault 仅在尚未记录原因时写入默认原因，避免覆盖外层更具体的归类。
+func SetReasonDefault(ctx context.Context, why string) {
+	if n, ok := ctx.Value(key{}).(*Note); ok {
+		n.mu.Lock()
+		if n.why == "" {
+			n.why = why
+		}
+		n.mu.Unlock()
+	}
+}
+
 // Route 返回记下的路；还没拨号时为空。
 func (n *Note) Route() string {
 	if n == nil {

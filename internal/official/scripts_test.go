@@ -33,6 +33,22 @@ func TestScriptsShareOfficialList(t *testing.T) {
 			t.Errorf("%s: official suffixes %q, want %q", name, m, want)
 		}
 	}
+	for _, pair := range [][2]string{
+		{filepath.Join("..", "..", "scripts", "strict-egress.ps1"), filepath.Join("..", "egress", "strict-egress.ps1")},
+		{filepath.Join("..", "..", "scripts", "tun-egress.ps1"), filepath.Join("..", "tunnel", "tun-egress.ps1")},
+	} {
+		a, err := os.ReadFile(pair[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(pair[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(a, b) {
+			t.Errorf("embedded script %s drifted from %s", pair[1], pair[0])
+		}
+	}
 }
 
 // 泄漏检查要覆盖两种代理范围：官方被直连判失败；第三方全局应走代理、仅官方应直连。

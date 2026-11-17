@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"cursor-inner/internal/agent"
 	"cursor-inner/internal/catalog"
 	"cursor-inner/internal/config"
 	"cursor-inner/internal/cursorpb"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/protox"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestBidiOriginalHeaderDoesNotStealLiveShellResults(t *testing.T) {

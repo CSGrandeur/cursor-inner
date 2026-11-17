@@ -32,9 +32,17 @@ const (
 // Config 生成 sing-box 配置：
 //   - 只有官方域名经 fake-ip 落入 198.18/fc00 段，再由 route 规则交给代理；
 //   - 其它域名用用户真实 DNS 原样解析、直连，连接不进 TUN；
-//   - route_address 只含 fake-ip 段和 DNS 服务器 IP，所以只有“官方连接”和“DNS”进 TUN，别的流量不受影响；
-//   - sniff + 按 ip_cidr(fake 段) 兜底，覆盖写死 IP / DoH 情况下仍把官方流量送进代理；
-//   - 代理出站拨号经 direct 的真实网卡，不回环进 TUN，避免成环；v2rayN 自身到上游的连接是真实 IP，不在捕获段内。
+//   - route_address 含 fake-ip 段、真实 DNS 服务器 IP，以及 official.TURNMedia
+//     （Antigravity Remote 的 WebRTC TURN 字面量前缀）。没有默认全局路由；
+//   - 这些字面量前缀必须同时出现在 route 的 ip_cidr→proxy 规则里，否则包进了 TUN
+//     却落到 final=direct，等于白吸；非官方公网 IP 不进 route_address；
+//   - sniff + fake-ip 段兜底，覆盖官方域名经 DoH/写死假 IP 的情况；
+//   - 代理出站拨号经 direct 的真实网卡（auto_detect_interface），目标是 127.0.0.1
+//     上的已有代理，不回环进 TUN；不要把代理自身地址放进 route_address；
+//   - UDP 媒体面需要 SOCKS 出站（默认）；HTTP 代理出站只能转 TCP（如 3478 控制面）。
+//   - route_address 写入 Windows 路由表。本环境 WSL 为 mirrored 时，发行版出站跟随
+//     主机路由，因而能覆盖 WSL language_server 的字面量 TURN；NAT 模式未在本仓库验证。
+//     未开启 TUN 时本配置不生效，单进程环境变量不能保证非 HTTP 零泄漏。
 func Config(o Options) ([]byte, error) {
 	host := strings.TrimSpace(o.ProxyHost)
 	if host == "" || o.ProxyPort <= 0 || o.ProxyPort > 65535 {
@@ -62,11 +70,14 @@ func Config(o Options) ([]byte, error) {
 
 	// 子域名用 domain_suffix(".grok.com")，顶点域名用 domain("grok.com") 精确匹配——
 	// 只有后缀会漏掉裸顶点域名（grok.com 本身不是 .grok.com 的子域），两者都要。
-	apex := append(append([]string(nil), OfficialSuffixes...), official.Hosts...)
-	suffixes := make([]string, 0, len(OfficialSuffixes))
-	for _, s := range OfficialSuffixes {
+	baseSuffixes := append(append([]string(nil), OfficialSuffixes...), "cloudflare-dns.com")
+	apex := append(append([]string(nil), baseSuffixes...), official.Hosts...)
+	suffixes := make([]string, 0, len(baseSuffixes))
+	for _, s := range baseSuffixes {
 		suffixes = append(suffixes, "."+s)
 	}
+	antiUpdaterKeywords := []string{"antigravity-hub-auto-updater", "antigravity-ide-auto-updater"}
+	antiUpdaterRegex := []string{`^antigravity-[^.]+\..*\.run\.app$`}
 
 	dnsServers := []any{
 		map[string]any{"type": "fakeip", "tag": "dns-fake", "inet4_range": fake4, "inet6_range": fake6},
@@ -89,13 +100,15 @@ func Config(o Options) ([]byte, error) {
 
 	routeAddress := []string{fake4, fake6}
 	routeAddress = append(routeAddress, routeDNS...)
+	routeAddress = append(routeAddress, official.TURNMedia...)
+	proxyCIDR := append([]string{fake4, fake6}, official.TURNMedia...)
 
 	cfg := map[string]any{
 		"log": logBlock(o.LogPath),
 		"dns": map[string]any{
 			"servers": dnsServers,
 			"rules": []any{
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater", "antigravity-ide-auto-updater"}, "server": "dns-fake"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": antiUpdaterKeywords, "domain_regex": antiUpdaterRegex, "server": "dns-fake"},
 			},
 			"final":    localTag,
 			"strategy": "prefer_ipv4",
@@ -120,8 +133,8 @@ func Config(o Options) ([]byte, error) {
 			"rules": []any{
 				map[string]any{"action": "sniff"},
 				map[string]any{"protocol": "dns", "action": "hijack-dns"},
-				map[string]any{"inbound": "tun-in", "ip_cidr": []string{fake4, fake6}, "outbound": "proxy"},
-				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": []string{"antigravity-hub-auto-updater", "antigravity-ide-auto-updater"}, "outbound": "proxy"},
+				map[string]any{"inbound": "tun-in", "ip_cidr": proxyCIDR, "outbound": "proxy"},
+				map[string]any{"domain": apex, "domain_suffix": suffixes, "domain_keyword": antiUpdaterKeywords, "domain_regex": antiUpdaterRegex, "outbound": "proxy"},
 			},
 			"final":                   "direct",
 			"auto_detect_interface":   true,

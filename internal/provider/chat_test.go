@@ -248,7 +248,8 @@ func TestToolResultCarriesTheImage(t *testing.T) {
 	), &seen)
 	m.Type = "anthropic"
 	m.BaseURL = srv.URL
-	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "look"}, {Role: "assistant", ToolCalls: []ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}}, tool}, nil, func(string) error { return nil }, nil); err != nil {
+	readTools := []Tool{{Name: "Read", Parameters: json.RawMessage(`{"type":"object"}`)}}
+	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "look"}, {Role: "assistant", ToolCalls: []ToolCall{{ID: "c1", Name: "Read", Arguments: "{}"}}}, tool}, readTools, func(string) error { return nil }, nil); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(seen), `"type":"tool_result"`) || !strings.Contains(string(seen), `"media_type":"image/png"`) || !strings.Contains(string(seen), "AQID") {

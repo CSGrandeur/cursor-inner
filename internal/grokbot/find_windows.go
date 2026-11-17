@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"cursor-inner/internal/winproc"
 	"golang.org/x/sys/windows/registry"
+
+	"cursor-inner/internal/winproc"
 )
 
 func windowsCandidates() []string {

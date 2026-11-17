@@ -39,10 +39,10 @@ $home2 = Join-Path $env:ProgramData 'cursor-inner'
 $stateFile = Join-Path $home2 'strict-egress.json'
 $installed = Join-Path $home2 'strict-egress.ps1'
 # ---- 官方端点清单（两份脚本里保持一致）----
-$OfficialSuffixes = @('grok.com', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'google', 'goog', 'google.com', 'google.dev', 'withgoogle.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
+$OfficialSuffixes = @('grok.com', 'grok.bot', 'x.ai', 'spacexai.com', 'cursor.com', 'cursor.sh', 'cursorapi.com', 'cursor-cdn.com', 'cursorvm.com', 'anysphere.co', 'cursor.spacex.com', 'cursor-staging.spacex.com', 'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'oaistatsig.com', 'google', 'goog', 'google.com', 'google.dev', 'withgoogle.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com')
 $OfficialExactHosts = @('agent-stores.s3.us-east-1.amazonaws.com', 'workoscdn.com', 'cursor.blob.core.windows.net')
 $OfficialHosts = @(
-  'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com',
+  'grok.com', 'www.grok.com', 'accounts.grok.com', 'assets.grok.com', 'api.grok.com', 'pages.grok.bot',
   'x.ai', 'www.x.ai', 'api.x.ai', 'accounts.x.ai', 'auth.x.ai', 'console.x.ai', 'docs.x.ai', 'grok.x.ai', 'cdn.x.ai',
   'spacexai.com', 'www.spacexai.com',
   'cursor.com', 'www.cursor.com', 'api.cursor.com', 'downloads.cursor.com', 'docs.cursor.com', 'forum.cursor.com', 'authenticator.cursor.sh',
@@ -60,6 +60,7 @@ function Test-OfficialName([string]$name) {
   $name = $name.TrimEnd('.').ToLower()
   foreach ($s in $OfficialSuffixes) { if ($name -eq $s -or $name.EndsWith('.' + $s)) { return $true } }
   if ($OfficialExactHosts -contains $name) { return $true }
+  if ($name.EndsWith('.run.app') -and ($name.Split('.')[0]).StartsWith('antigravity-')) { return $true }
   return $false
 }
 
