@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-17
+
+### Fixed
+
+- Adding a model to a group, or editing any existing model, could fail with “Cannot parse the request”. Saving an edit no longer clears the cache key and the fallback list either.
+
 ## [0.6.4] - 2026-11-17
 
 ### Changed
@@ -664,7 +670,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.5...HEAD
+[0.6.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.1...v0.6.2

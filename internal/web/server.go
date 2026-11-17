@@ -206,23 +206,24 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"api_key": key})
 	})
 	mux.HandleFunc("POST /api/models", func(w http.ResponseWriter, r *http.Request) {
-		var model config.Model
-		if err := readJSON(r, &model); err != nil {
+		var body modelBody
+		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		if err := backend.AddModel(model); err != nil {
+		if err := backend.AddModel(body.model()); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		writeState(w, backend)
 	})
 	mux.HandleFunc("POST /api/models/test", func(w http.ResponseWriter, r *http.Request) {
-		var model config.Model
-		if err := readJSON(r, &model); err != nil {
+		var body modelBody
+		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
+		model := body.model()
 		streamTest(w, func(progress func(provider.Progress)) provider.Result {
 			return backend.TestDraft(r.Context(), model, progress)
 		})
@@ -244,70 +245,13 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeState(w, backend)
 	})
 	mux.HandleFunc("PUT /api/models/{id}", func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			DisplayName     *string  `json:"display_name"`
-			GroupID         *string  `json:"group_id"`
-			Type            string   `json:"type"`
-			BaseURL         string   `json:"base_url"`
-			APIKey          string   `json:"api_key"`
-			Model           string   `json:"model"`
-			UseProxy        *bool    `json:"use_proxy"`
-			Reasoning       *bool    `json:"reasoning"`
-			Fast            *bool    `json:"fast"`
-			ContextWindow   *int     `json:"context_window"`
-			MaxOutputTokens *int     `json:"max_output_tokens"`
-			MaxImages       *int     `json:"max_images"`
-			ImageBudgetMB   *int     `json:"image_budget_mb"`
-			Overrides       []string `json:"overrides"`
-		}
+		var body modelBody
 		if err := readJSON(r, &body); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		if body.DisplayName != nil {
-			model := config.Model{
-				DisplayName: *body.DisplayName,
-				Type:        body.Type,
-				BaseURL:     body.BaseURL,
-				APIKey:      body.APIKey,
-				Model:       body.Model,
-				UseProxy:    body.UseProxy != nil && *body.UseProxy,
-				Reasoning:   body.Reasoning != nil && *body.Reasoning,
-				FastSupport: body.Fast != nil && *body.Fast,
-			}
-			if body.GroupID != nil {
-				model.GroupID = *body.GroupID
-			}
-			// 覆盖位由页面明确给出（用户改了哪个共享字段）；没带 overrides 时
-			// 由后端按与组值的差异判定。
-			if body.Overrides != nil {
-				for _, field := range body.Overrides {
-					switch field {
-					case "type":
-						model.TypeSet = true
-					case "base_url":
-						model.BaseURLSet = true
-					case "api_key":
-						model.APIKeySet = true
-					case "use_proxy":
-						model.UseProxySet = true
-					case "reasoning":
-						model.ReasoningSet = true
-					}
-				}
-			}
-			if body.ContextWindow != nil {
-				model.ContextWindow = *body.ContextWindow
-			}
-			if body.MaxOutputTokens != nil {
-				model.MaxOutputTokens = *body.MaxOutputTokens
-			}
-			if body.MaxImages != nil {
-				model.MaxImages = *body.MaxImages
-			}
-			if body.ImageBudgetMB != nil {
-				model.ImageBudgetMB = *body.ImageBudgetMB
-			}
+			model := body.model()
 			if err := backend.UpdateModel(r.PathValue("id"), model); err != nil {
 				status := http.StatusBadRequest
 				if err.Error() == "没有这个模型" {
@@ -472,6 +416,90 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
 	return &handler{Handler: guard(mux), push: push}
+}
+
+// modelBody 是模型表单提交的字段。添加、保存、草稿测试都用它，页面把整张表单一次发过来：
+// 除了模型本身的配置，还带分组的覆盖位（overrides）和保存时沿用已存 Key 所需的 id。
+// 只读字段（id、prompt_cache_key、fallback）在页面侧用来回填表单，服务端一并接住，
+// 免得页面多送一个键就被判成请求无法解析。
+type modelBody struct {
+	ID              *string   `json:"id"`
+	DisplayName     *string   `json:"display_name"`
+	GroupID         *string   `json:"group_id"`
+	Type            string    `json:"type"`
+	BaseURL         string    `json:"base_url"`
+	APIKey          string    `json:"api_key"`
+	Model           string    `json:"model"`
+	UseProxy        *bool     `json:"use_proxy"`
+	Reasoning       *bool     `json:"reasoning"`
+	Fast            *bool     `json:"fast"`
+	ContextWindow   *int      `json:"context_window"`
+	MaxOutputTokens *int      `json:"max_output_tokens"`
+	MaxImages       *int      `json:"max_images"`
+	ImageBudgetMB   *int      `json:"image_budget_mb"`
+	PromptCacheKey  *string   `json:"prompt_cache_key"`
+	Fallback        *[]string `json:"fallback"`
+	Overrides       []string  `json:"overrides"`
+}
+
+// model 把表单还原成要落盘的模型。没带的布尔项按 false，指针项按是否提交决定改不改。
+func (b modelBody) model() config.Model {
+	model := config.Model{
+		Type:        b.Type,
+		BaseURL:     b.BaseURL,
+		APIKey:      b.APIKey,
+		Model:       b.Model,
+		UseProxy:    b.UseProxy != nil && *b.UseProxy,
+		Reasoning:   b.Reasoning != nil && *b.Reasoning,
+		FastSupport: b.Fast != nil && *b.Fast,
+	}
+	if b.DisplayName != nil {
+		model.DisplayName = *b.DisplayName
+	}
+	if b.ID != nil {
+		// 草稿测试靠它认出「这是已有模型」，密钥留空时沿用已存的那把。
+		model.ID = *b.ID
+	}
+	if b.GroupID != nil {
+		model.GroupID = *b.GroupID
+	}
+	// 覆盖位由页面明确给出（用户改了哪个共享字段）；没带 overrides 时
+	// 由后端按与组值的差异判定。
+	for _, field := range b.Overrides {
+		switch field {
+		case "type":
+			model.TypeSet = true
+		case "base_url":
+			model.BaseURLSet = true
+		case "api_key":
+			model.APIKeySet = true
+		case "use_proxy":
+			model.UseProxySet = true
+		case "reasoning":
+			model.ReasoningSet = true
+		}
+	}
+	if b.ContextWindow != nil {
+		model.ContextWindow = *b.ContextWindow
+	}
+	if b.MaxOutputTokens != nil {
+		model.MaxOutputTokens = *b.MaxOutputTokens
+	}
+	if b.MaxImages != nil {
+		model.MaxImages = *b.MaxImages
+	}
+	if b.ImageBudgetMB != nil {
+		model.ImageBudgetMB = *b.ImageBudgetMB
+	}
+	// 缓存键和备用模型随表单提交：编辑时页面会把已存的值原样带回来，
+	// 丢掉就等于悄悄清空了这两项。
+	if b.PromptCacheKey != nil {
+		model.PromptCacheKey = *b.PromptCacheKey
+	}
+	if b.Fallback != nil {
+		model.Fallback = append([]string(nil), (*b.Fallback)...)
+	}
+	return model
 }
 
 // testEvent 是测试接口的一行。第一行给 plan，之后是各阶段进度，最后一行带完整结果。

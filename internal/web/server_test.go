@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -35,6 +37,9 @@ type fake struct {
 	discoverID        string
 	discoverGroupID   string
 	discoverProxy     bool
+	added             *config.Model
+	updated           *config.Model
+	draft             *config.Model
 }
 
 func (f *fake) State() (View, error) {
@@ -86,9 +91,15 @@ func (f *fake) SetDesktop(background, notify *bool) error {
 	}
 	return nil
 }
-func (f *fake) AddModel(config.Model) error            { return nil }
-func (f *fake) UpdateModel(string, config.Model) error { return nil }
-func (f *fake) DeleteModel(string) error               { return nil }
+func (f *fake) AddModel(m config.Model) error {
+	f.added = &m
+	return nil
+}
+func (f *fake) UpdateModel(_ string, m config.Model) error {
+	f.updated = &m
+	return nil
+}
+func (f *fake) DeleteModel(string) error { return nil }
 func (f *fake) AddGroup(g config.Group) error {
 	f.view.Groups = append(f.view.Groups, GroupView{ID: "g-new", Name: g.Name, Type: g.Type, BaseURL: g.BaseURL, UseProxy: g.UseProxy, Reasoning: g.Reasoning, KeyHint: "····key"})
 	return nil
@@ -166,7 +177,8 @@ func (f *fake) SetModelLimits(_ string, contextWindow, maxOutput *int) error {
 	}
 	return nil
 }
-func (f *fake) TestDraft(_ context.Context, _ config.Model, progress func(provider.Progress)) provider.Result {
+func (f *fake) TestDraft(_ context.Context, m config.Model, progress func(provider.Progress)) provider.Result {
+	f.draft = &m
 	return fakeTestProgress(progress)
 }
 func (f *fake) TestSaved(_ context.Context, _ string, progress func(provider.Progress)) provider.Result {
@@ -272,6 +284,98 @@ func TestQuitEndpoint(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != 200 || !f.quit {
 		t.Fatalf("status %d quit %v", res.StatusCode, f.quit)
+	}
+}
+
+// 页面新增表单字段时，服务端结构体必须一起认这个键，否则整张表单被判成「请求内容无法解析」。
+// 这里把 formModel() 里实际写进 body 的键逐个对回 modelBody 的 json 标签。
+func TestFormFieldsAreDeclaredInModelBody(t *testing.T) {
+	src := pageSource(t)
+	start := strings.Index(src, "function formModel()")
+	end := strings.Index(src[start:], "return body;")
+	if start < 0 || end < 0 {
+		t.Fatal("formModel() not found in page.html")
+	}
+	block := src[start : start+end]
+	keys := map[string]bool{}
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`(?m)^\s{4}([a-z_]+):`), // body 字面量里的键
+		regexp.MustCompile(`\bbody\.([a-z_]+) =`),  // 之后再赋上去的键
+		regexp.MustCompile(`\bbody\.([a-z_]+)\.`),  // 嵌套赋值，例如 body.fallback.ids
+	} {
+		for _, m := range re.FindAllStringSubmatch(block, -1) {
+			keys[m[1]] = true
+		}
+	}
+	if len(keys) < 5 {
+		t.Fatalf("only parsed %d form keys, the matcher is out of date: %v", len(keys), keys)
+	}
+	declared := map[string]bool{}
+	typ := reflect.TypeOf(modelBody{})
+	for i := 0; i < typ.NumField(); i++ {
+		name := strings.Split(typ.Field(i).Tag.Get("json"), ",")[0]
+		if name != "" {
+			declared[name] = true
+		}
+	}
+	for key := range keys {
+		if !declared[key] {
+			t.Errorf("page.html sends %q but modelBody has no such field; adding it to the form means adding it here too", key)
+		}
+	}
+}
+
+// 页面把整张模型表单一次提交：除配置外还带 id、overrides、prompt_cache_key 和 fallback。
+// 少认一个键就会回「请求内容无法解析」，所以这里按页面实际的 payload 走一遍。
+func TestModelFormPayloadIsAccepted(t *testing.T) {
+	const form = `{"id":"m1","display_name":"甲","group_id":"g1","type":"openai-chat",
+		"base_url":"https://api.example.com/v1","api_key":"sk-test","model":"qwen-max",
+		"use_proxy":true,"reasoning":false,"fast":true,"context_window":1000000,
+		"max_output_tokens":256000,"max_images":20,"image_budget_mb":24,
+		"prompt_cache_key":"cache-1","fallback":["m2"],"overrides":["type","use_proxy"]}`
+	f := &fake{}
+	srv := httptest.NewServer(Handler(f))
+	defer srv.Close()
+
+	post := func(path, body string) *http.Response {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	res := post("/api/models", form)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || f.added == nil {
+		t.Fatalf("add: status %d", res.StatusCode)
+	}
+	if got := f.added; got.DisplayName != "甲" || got.GroupID != "g1" || got.PromptCacheKey != "cache-1" ||
+		len(got.Fallback) != 1 || got.Fallback[0] != "m2" || !got.TypeSet || !got.UseProxySet || got.ReasoningSet {
+		t.Fatalf("add: %+v", got)
+	}
+
+	req, _ := http.NewRequest(http.MethodPut, srv.URL+"/api/models/m1", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || f.updated == nil {
+		t.Fatalf("update: status %d", res.StatusCode)
+	}
+	if got := f.updated; got.ContextWindow != 1000000 || got.MaxImages != 20 || got.MaxOutputTokens != 256000 {
+		t.Fatalf("update: %+v", got)
+	}
+
+	res = post("/api/models/test", form)
+	io.Copy(io.Discard, res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || f.draft == nil || f.draft.ID != "m1" {
+		t.Fatalf("test: status %d draft %+v", res.StatusCode, f.draft)
 	}
 }
 
