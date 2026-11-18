@@ -3,6 +3,7 @@ package antigravitylaunch
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -61,4 +62,76 @@ func TestExeFromUninstallResolvesIconAndDir(t *testing.T) {
 	if got := exeFromUninstall("Other App", dir, exe); got != "" {
 		t.Fatalf("unexpected match for other app: %q", got)
 	}
+}
+
+func TestResourcesDirsLayoutsAndSymlink(t *testing.T) {
+	t.Run("windows layout", func(t *testing.T) {
+		root := t.TempDir()
+		exe := filepath.Join(root, "Antigravity.exe")
+		res := filepath.Join(root, "resources")
+		if err := os.MkdirAll(res, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(exe, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got := uniqueExistingDirs(resourcesDirsForExe(exe))
+		if len(got) != 1 || got[0] != res {
+			t.Fatalf("got %v, want [%s]", got, res)
+		}
+	})
+
+	t.Run("darwin app bundle", func(t *testing.T) {
+		root := t.TempDir()
+		macOSDir := filepath.Join(root, "Antigravity.app", "Contents", "MacOS")
+		res := filepath.Join(root, "Antigravity.app", "Contents", "Resources")
+		if err := os.MkdirAll(macOSDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(res, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		bin := filepath.Join(macOSDir, "Antigravity")
+		if err := os.WriteFile(bin, []byte("x"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		got := uniqueExistingDirs(resourcesDirsForExe(bin))
+		if len(got) != 1 || got[0] != res {
+			t.Fatalf("got %v, want [%s]", got, res)
+		}
+	})
+
+	t.Run("linux symlink and shim", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("POSIX symlink test")
+		}
+		root := t.TempDir()
+		optBin := filepath.Join(root, "opt", "Antigravity", "antigravity")
+		res := filepath.Join(root, "opt", "Antigravity", "resources")
+		shimDir := filepath.Join(root, "usr", "bin")
+		shim := filepath.Join(shimDir, "antigravity")
+		if err := os.MkdirAll(res, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(shimDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(optBin, []byte("x"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(optBin, shim); err != nil {
+			t.Fatal(err)
+		}
+		got := ResourcesDirs(shim)
+		found := false
+		for _, d := range got {
+			if d == res {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("ResourcesDirs(%s) = %v, missing symlink target %s", shim, got, res)
+		}
+	})
 }

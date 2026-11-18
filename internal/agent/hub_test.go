@@ -487,6 +487,9 @@ func TestCancelAbortsInflightAndClosesHistory(t *testing.T) {
 func TestUpstreamErrorClosesHistoryWithExplain(t *testing.T) {
 	var n int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Finish receiving the request before closing an HTTP/1 connection.
+		// Otherwise a large unread body can turn the intended 503 into TCP RST.
+		_, _ = io.Copy(io.Discard, r.Body)
 		n++
 		if n == 1 {
 			w.Header().Set("Content-Type", "text/event-stream")
@@ -597,7 +600,9 @@ func TestResponsesCursorEffortReachTheModel(t *testing.T) {
 		{"reasoning=low", "qwen4-max-preview", "low"},
 		{"reasoning=medium", "qwen4-max-preview", "medium"},
 		{"reasoning=xhigh", "qwen4-max-preview", "xhigh"},
-		{"reasoning=high", "qwen4-max-preview", "xhigh"},
+		// high 在 qwen4 的档位表里，实测接口接受，原样透传。
+		{"reasoning=high", "qwen4-max-preview", "high"},
+		{"reasoning=max", "qwen4-max-preview", "xhigh"},
 		{"reasoning=high", "some-other-model", "high"},
 	} {
 		t.Run(tc.model+"/"+tc.suffix, func(t *testing.T) {
@@ -618,8 +623,8 @@ func TestResponsesCursorEffortReachTheModel(t *testing.T) {
 			if !strings.Contains(body, `"effort":"`+tc.want+`"`) {
 				t.Fatalf("want reasoning.effort=%s, body=%s", tc.want, body)
 			}
-			if tc.model == "qwen4-max-preview" && tc.suffix == "reasoning=high" && strings.Contains(body, `"effort":"high"`) {
-				t.Fatalf("stale high leaked: %s", body)
+			if tc.model == "qwen4-max-preview" && tc.suffix == "reasoning=max" && strings.Contains(body, `"effort":"max"`) {
+				t.Fatalf("stale max leaked: %s", body)
 			}
 		})
 	}
@@ -1853,7 +1858,7 @@ func TestSemSearchUsesClientGrepAndOnlyKeepsNumberedHits(t *testing.T) {
 	}
 }
 
-func TestToolSilenceBecomesAFailureTheModelCanContinue(t *testing.T) {
+func TestToolSilencePausesBeforeAnotherModelAction(t *testing.T) {
 	prev := toolWaitLimit
 	toolWaitLimit = 200 * time.Millisecond
 	t.Cleanup(func() { toolWaitLimit = prev })
@@ -1901,8 +1906,8 @@ func TestToolSilenceBecomesAFailureTheModelCanContinue(t *testing.T) {
 			}
 			fm.mu.Lock()
 			defer fm.mu.Unlock()
-			if len(fm.requests) < 2 || !strings.Contains(fm.requests[1], "termination is not confirmed") {
-				t.Fatalf("model did not receive the timeout: %d", len(fm.requests))
+			if len(fm.requests) != 1 || !session.HasQueuedInput() {
+				t.Fatalf("unconfirmed execution must be retained without another model action: requests=%d pending=%v", len(fm.requests), session.HasQueuedInput())
 			}
 			return
 		case <-ctx.Done():

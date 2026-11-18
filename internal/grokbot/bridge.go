@@ -386,15 +386,34 @@ func (b *Bridge) handle(c net.Conn) {
 		rec.status = http.StatusOK
 		if n := br.Buffered(); n > 0 {
 			rest, _ := br.Peek(n)
-			if _, err := up.Write(rest); err != nil {
-				rec.closedBy, rec.reason = "upstream", sanitizeErr(err)
+			nw, werr := up.Write(rest)
+			if nw > 0 {
+				rec.toUp += int64(nw)
+				b.stats.upBytes.Add(int64(nw))
+			}
+			if werr != nil {
+				rec.closedBy, rec.reason = "upstream", sanitizeErr(werr)
 				return
 			}
-			rec.toUp += int64(n)
 		}
 		rec.tunnelAt = time.Now()
 		fb := &firstByteConn{Conn: up}
-		r := b.pipe(c, fb)
+		route := routeLabel(rec)
+		bridgeName := b.name()
+		const firstProgressMark int64 = 10 << 20
+		const stepProgressMark int64 = 50 << 20
+		nextMark := firstProgressMark
+		r := b.pipeProgress(c, fb, func(totalDown int64) {
+			if totalDown < nextMark {
+				return
+			}
+			for totalDown >= nextMark {
+				nextMark += stepProgressMark
+			}
+			if debugOn() {
+				slog.Debug("bridge progress", "bridge", bridgeName, "target", rec.target, "route", route, "down", totalDown, "dur_ms", time.Since(rec.start).Milliseconds())
+			}
+		})
 		rec.firstAt = fb.firstAt()
 		rec.toUp += r.toUp
 		rec.toClient = r.toClient
@@ -413,7 +432,7 @@ func (b *Bridge) handle(c net.Conn) {
 	req.Header.Del("Proxy-Authorization")
 	req.Header.Del("Proxy-Connection")
 	req.Close = true
-	upw := &countWriter{w: up}
+	upw := &countWriter{w: up, counter: &b.stats.upBytes}
 	werr := req.Write(upw)
 	rec.toUp += upw.n
 	rec.tunnelAt = time.Now()
@@ -448,7 +467,8 @@ func (b *Bridge) handle(c net.Conn) {
 	}
 	rec.firstAt = time.Now()
 	rec.status = parseStatus(peek)
-	n, err := io.Copy(c, ubr)
+	cw := &countWriter{w: c, counter: &b.stats.downBytes}
+	n, err := io.Copy(cw, ubr)
 	rec.toClient = n
 	rec.closedBy, rec.reason = "upstream", sanitizeErr(ioErr(err))
 }
@@ -515,7 +535,7 @@ func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, 
 		req.Header.Set("Connection", "Upgrade")
 	}
 	req.Close = false
-	upw := &countWriter{w: up}
+	upw := &countWriter{w: up, counter: &b.stats.upBytes}
 	werr := req.Write(upw)
 	if werr == nil && br.Buffered() > 0 {
 		rest, _ := br.Peek(br.Buffered())
@@ -572,7 +592,7 @@ func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, 
 		}
 		defer resp.Body.Close()
 		resp.Close = true
-		cw := &countWriter{w: c}
+		cw := &countWriter{w: c, counter: &b.stats.downBytes}
 		err = resp.Write(cw)
 		rec.toClient += cw.n
 		rec.closedBy, rec.reason = "upstream", sanitizeErr(ioErr(err))
@@ -580,6 +600,9 @@ func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, 
 	}
 	nw, err := c.Write(hdr)
 	rec.toClient += int64(nw)
+	if nw > 0 {
+		b.stats.downBytes.Add(int64(nw))
+	}
 	if err != nil {
 		rec.closedBy, rec.reason = "client", sanitizeErr(err)
 		return
@@ -588,6 +611,9 @@ func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, 
 		rest, _ := ubr.Peek(n)
 		nw, err := c.Write(rest)
 		rec.toClient += int64(nw)
+		if nw > 0 {
+			b.stats.downBytes.Add(int64(nw))
+		}
 		if err != nil {
 			rec.closedBy, rec.reason = "client", sanitizeErr(err)
 			return
@@ -605,11 +631,7 @@ func (b *Bridge) handleUpgrade(c net.Conn, br *bufio.Reader, req *http.Request, 
 	rec.reason = sanitizeErr(r.err)
 }
 
-func (b *Bridge) logConn(r *connRec) {
-	if !debugOn() {
-		return
-	}
-	r.id = fmt.Sprintf("%s-%d", b.name()[:1], b.stats.seq.Add(1))
+func routeLabel(r *connRec) string {
 	route := r.note.Route()
 	if route == "" {
 		route = "none"
@@ -617,6 +639,15 @@ func (b *Bridge) logConn(r *connRec) {
 	if route == "proxy" {
 		route += "/" + r.kind
 	}
+	return route
+}
+
+func (b *Bridge) logConn(r *connRec) {
+	if !debugOn() {
+		return
+	}
+	r.id = fmt.Sprintf("%s-%d", b.name()[:1], b.stats.seq.Add(1))
+	route := routeLabel(r)
 	attrs := []any{"bridge", b.name(), "id", r.id, "client", r.client, "target", r.target, "route", route,
 		"dial_ms", r.dial.Milliseconds(), "dur_ms", time.Since(r.start).Milliseconds(),
 		"up", r.toUp, "down", r.toClient, "closed_by", r.closedBy,
@@ -668,13 +699,17 @@ func setPipeGrace(d time.Duration) func() {
 }
 
 type countWriter struct {
-	w io.Writer
-	n int64
+	w       io.Writer
+	n       int64
+	counter *atomic.Int64
 }
 
 func (cw *countWriter) Write(p []byte) (int, error) {
 	n, err := cw.w.Write(p)
 	cw.n += int64(n)
+	if cw.counter != nil && n > 0 {
+		cw.counter.Add(int64(n))
+	}
 	return n, err
 }
 
@@ -683,12 +718,22 @@ type onlyReader struct{ r io.Reader }
 func (or onlyReader) Read(p []byte) (int, error) { return or.r.Read(p) }
 
 type writeTracker struct {
-	w      io.Writer
-	failed bool
+	w       io.Writer
+	failed  bool
+	counter *atomic.Int64
+	onWrite func(int)
 }
 
 func (wt *writeTracker) Write(p []byte) (int, error) {
 	n, err := wt.w.Write(p)
+	if n > 0 {
+		if wt.counter != nil {
+			wt.counter.Add(int64(n))
+		}
+		if wt.onWrite != nil {
+			wt.onWrite(n)
+		}
+	}
 	if err != nil {
 		wt.failed = true
 	}
@@ -697,6 +742,10 @@ func (wt *writeTracker) Write(p []byte) (int, error) {
 
 // pipe 双向转发 client 与 up。一方结束后最多再等 pipeGrace，然后关两头。
 func (br *Bridge) pipe(client, up net.Conn) pipeResult {
+	return br.pipeProgress(client, up, nil)
+}
+
+func (br *Bridge) pipeProgress(client, up net.Conn, onDown func(int64)) pipeResult {
 	type side struct {
 		name     string
 		n        int64
@@ -704,8 +753,16 @@ func (br *Bridge) pipe(client, up net.Conn) pipeResult {
 		writeErr bool
 	}
 	done := make(chan side, 2)
-	cp := func(name string, dst, src net.Conn) {
-		wt := &writeTracker{w: dst}
+	cp := func(name string, dst, src net.Conn, counter *atomic.Int64, progress func(int64)) {
+		var total int64
+		var onWrite func(int)
+		if progress != nil {
+			onWrite = func(n int) {
+				total += int64(n)
+				progress(total)
+			}
+		}
+		wt := &writeTracker{w: dst, counter: counter, onWrite: onWrite}
 		n, err := io.Copy(wt, onlyReader{r: src})
 		if tcp, ok := dst.(interface{ CloseWrite() error }); ok {
 			_ = tcp.CloseWrite()
@@ -713,8 +770,8 @@ func (br *Bridge) pipe(client, up net.Conn) pipeResult {
 		wfail := err != nil && wt.failed
 		done <- side{name, n, ioErr(err), wfail}
 	}
-	go cp("upstream", client, up) // 上游 → 客户端，结束说明上游先断
-	go cp("client", up, client)
+	go cp("upstream", client, up, &br.stats.downBytes, onDown) // 上游 → 客户端，结束说明上游先断
+	go cp("client", up, client, &br.stats.upBytes, nil)
 	var res pipeResult
 	record := func(s side) {
 		if s.name == "upstream" {

@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
-    <img src="docs/images/banner-light.svg" alt="cursor-inner: bring your own models into Cursor" width="100%">
+    <img src="docs/images/banner-light.svg" alt="cursor-inner: No-TUN app proxy, Cursor & Antigravity account switching, and your own models in Cursor" width="100%">
   </picture>
 </p>
 
-<p align="center"><sub>Your models in Cursor's Agent · Cursor, Grok, Codex and Antigravity through your proxy</sub></p>
+<p align="center"><sub>Route Codex, Antigravity, Cursor & Grok through your proxy without TUN · Switch Cursor & Antigravity accounts · Run your own models in Cursor</sub></p>
 
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
@@ -19,34 +19,65 @@
 <p align="center">
   <a href="README.md">简体中文</a> · <b>English</b>
   <br>
-  <a href="#installation">Installation</a> · <a href="#features">Features</a> · <a href="#usage">Usage</a> · <a href="#faq">FAQ</a>
+  <a href="#core-capabilities">Capabilities</a> · <a href="#previews">Previews</a> · <a href="#installation">Installation</a> · <a href="#usage">Usage</a> · <a href="#where-traffic-goes">Where traffic goes</a> · <a href="#faq">FAQ</a>
 </p>
 
 <br>
 
-cursor-inner runs on your computer. Custom models appear in Cursor's list and use Cursor's Agent to read and edit files, run commands, search, and call MCP tools and subagents from the current chat; official models are still sent to Cursor unchanged. Cursor, Grok, Codex and Antigravity use the one proxy address you enter, without changing the system proxy or enabling a system-wide TUN that carries other programs along. On quit, or on an unexpected exit, Cursor's previous proxy settings are written back. It runs on Windows, macOS and Linux, and the settings page switches between Chinese and English.
+cursor-inner runs locally on your machine and brings three everyday workflows into one lightweight control panel: per-process proxy takeover without a system-wide TUN, unified account management and switching for both Cursor and Antigravity, and your own model endpoints inside Cursor's Agent. Available on Windows, macOS, and Linux, with instant Chinese/English switching and strictly `127.0.0.1`-only local listeners.
+
+> The model APIs you connect may charge for usage. cursor-inner is an independent open-source project and is not affiliated with Cursor, Anthropic, Google, or OpenAI.
+
+## Core capabilities
+
+<table width="100%">
+  <tr>
+    <td width="33.3%" valign="top">
+      <p><b>1. No-TUN app proxy</b></p>
+      <p>Enter one outbound proxy (<code>socks5</code> / <code>http</code>) to route <b>Codex</b>, <b>Antigravity</b>, <b>Cursor</b>, and <b>Grok</b> without a system TUN, system proxy edits, or <code>hosts</code> changes.</p>
+      <ul>
+        <li><b>Covers WSL mode</b>: Antigravity's WSL language server and remote downloads go through your proxy automatically without touching system or WSL config files.</li>
+        <li><b>Official-only by default</b>: sends only OpenAI, Antigravity, Google, Cursor, and x.ai hosts via proxy while keeping LAN and other apps direct, with Global and official-only TUN / Strict fallback.</li>
+      </ul>
+    </td>
+    <td width="33.3%" valign="top">
+      <p><b>2. Multi-IDE account switching</b></p>
+      <p>A dedicated <b>Accounts</b> tab manages multiple <b>Cursor</b> and <b>Antigravity</b> sessions side by side, putting whichever IDE you used most recently first.</p>
+      <ul>
+        <li><b>Flexible onboarding</b>: browser sign-in, pasted tokens/cookies, batch JSON import, importing the active IDE session, and local backup export.</li>
+        <li><b>Tiers &amp; clean switch</b>: inspect <code>ULTRA</code>, <code>PRO+</code>, <code>PRO</code>, and <code>FREE</code> quotas with reset timers; switching closes the app, writes credentials (incl. WSL and <code>state.vscdb</code>-less builds), and reopens cleanly.</li>
+      </ul>
+    </td>
+    <td width="33.3%" valign="top">
+      <p><b>3. Custom models in Cursor</b></p>
+      <p>Connect OpenAI Chat, OpenAI Responses, and Anthropic endpoints appended only to Cursor's list, leaving official models untouched.</p>
+      <ul>
+        <li><b>Groups &amp; multi-plan sets</b>: share URL, type, and key per provider, swap Pay-as-you-go and Token Plans from the group header, or override and reset per model.</li>
+        <li><b>Full Agent workflow</b>: upstream model discovery and a six-stage capability/speed probe; edit files with diffs, run background commands, invoke MCP and subagents, with safe recovery and fallback.</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+## Previews
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-accounts-en-dark.png">
+    <img src="docs/images/window-accounts-en-light.png" alt="cursor-inner Accounts tab for Cursor and Antigravity" width="92%">
+  </picture>
+  <br>
+  <sub><b>Accounts:</b> Cursor and Antigravity subtabs automatically put the most recently used IDE first with tiers, quotas, and one-click switching</sub>
+</p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-en-dark.png">
-    <img src="docs/images/window-en-light.png" alt="cursor-inner settings page" width="92%">
+    <img src="docs/images/window-en-light.png" alt="cursor-inner Custom models, groups, and upstream discovery" width="92%">
   </picture>
+  <br>
+  <sub><b>Custom models:</b> model groups, plan selector, six-stage probe metrics, and upstream model discovery</sub>
 </p>
-
-The model APIs you connect may charge for usage. cursor-inner is an independent project and is not affiliated with Cursor or its developers.
-
-## Features
-
-- **Your own models.** OpenAI Chat, OpenAI Responses and Anthropic endpoints. Add, test, edit and remove them on the settings page; once they pass, they are appended to the end of Cursor's model list.
-- **Model groups.** Models from one provider share a group: enter the endpoint URL, type and API key once, and each model in the group only needs its model name, context window and the rest. A group collapses to a summary of its name, endpoint and key. A group can hold several Plans (Several URL + key sets for one platform; switch from the group header. For example pay-as-you-go and a token plan); maintain them with **Add plan**, and the models follow. Every model can still be configured on its own: whichever field you change in the form becomes that model's own value, and a switch you flipped in the table gets a reset that returns it to the group. Deleting a group turns its models into standalone models and keeps their settings.
-- **Discover upstream models.** With the endpoint and key filled in, click **Discover models** next to the model name and pick from the provider's list.
-- **Connectivity test.** A test probes tool calls, reasoning, images and cache, and records speed; the strip under the table shows the stages, a progress bar and the live output token count, with a Cancel button while it runs. Results are saved with the model.
-- **Official models unchanged.** The list is only appended to, never replaced; official requests go to Cursor as they are. Switching back to an official model in the same chat is not affected by earlier custom-model turns.
-- **Agent work.** Read and edit files, run commands, search, call MCP tools and subagents from the current chat; edits show a diff and are written after you accept them. The context usage bar is the same one built-in models get.
-- **Long tasks keep going.** A model can leave a background command on this machine and is woken to continue when it ends, or when a matching line of output appears.
-- **Stops that make sense.** Stop shows a stopped notice; an upstream rejection or error explains itself and keeps completed steps and the checkpoint. After a hot update or restart, finished chats resume normally.
-- **Your proxy.** Take over Cursor, Grok, Codex and Antigravity with one address, or send only official hosts through the proxy (Antigravity included) and connect directly to everything else. Taking over Antigravity also covers its WSL mode, without changing system or WSL settings. Each custom model chooses whether to use the proxy. If a connection still bypasses takeover, TUN mode or Strict mode covers official hosts only (TUN can also cover Antigravity, including WSL) and leaves other programs alone.
-- **Update and quit.** Update in one click; Cursor and Grok keep running, and only signed releases are installed. Quitting, or an unexpected exit, restores Cursor's proxy settings; on Windows the close button only hides cursor-inner to the notification area.
 
 ## Installation
 
@@ -62,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, checks the file against the release `SHA256SUMS.txt`, and installs it for the current user. No administrator rights. For a specific version, set `CURSOR_INNER_VERSION=v0.6.5`.
+The installer detects your OS and CPU, verifies `SHA256SUMS.txt` from the release, and installs for the current user without administrator rights. Pin a version with `CURSOR_INNER_VERSION=v0.7.0`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -107,22 +138,22 @@ The binaries are not code-signed. The install script is not blocked by SmartScre
 
 ## Usage
 
-1. Run cursor-inner. It closes any running Cursor and opens the settings page. Open Cursor, Open Grok, Open Codex and Open Antigravity in the top bar start those apps and do not quit cursor-inner.
-2. On Models, fill in the display name, model name, endpoint URL and API key. For several models from one provider, click **New group**, give the Group name and the shared URL, type and key, then add models into it. If you are unsure of the model name, click **Discover models** to pick from the upstream list. Click Test to verify; the area under the table shows the stages, progress and live token count. When editing, leave the key blank to keep it.
-3. Open Cursor again, start a new chat, and pick the model you added. If Cursor is already open, it only fetches its model list about every 5 minutes while focused; to see the model right away, click Refresh model list in Cursor Settings → Models, or run Reload Window.
-4. Click Quit when you are done. On Windows, the window close button only hides cursor-inner to the notification area; quit from the icon menu. Cursor's settings are restored.
-
-   Before quitting it asks once and lists the apps that will be closed with it; tick "Don't ask again" to skip the question later. Only processes cursor-inner took over are closed, never ones you started yourself. Next time you open it, a bar at the top of the settings page can Restore the apps closed last time, through the proxy as before; Dismiss hides the bar.
+1. Run cursor-inner to open the settings page. **Open Cursor**, **Open Codex**, **Open Grok**, and **Open Antigravity** in the top bar launch those apps directly under current takeover settings without quitting cursor-inner.
+2. If you only want Codex, Antigravity, or Grok to route through your proxy without turning on system TUN, set your outbound proxy on **Network** and enable the corresponding takeover switches (Official only by default).
+3. To manage multiple sessions, switch to **Accounts** and add, import, or switch **Cursor** and **Antigravity** accounts.
+4. To bring custom models into Cursor, configure endpoints or **New group** on **Models**, use **Discover models** if needed, verify capabilities with **Test**, and pick the model inside Cursor. While Cursor is open, it refreshes its model list roughly every 5 minutes when focused; to see new entries immediately, click **Refresh model list** in Cursor Settings → Models, or run Reload Window.
+5. Click **Quit** when done. On Windows, closing the window only hides cursor-inner to the notification area; quit from the tray menu. Cursor's original proxy settings are restored automatically. Quitting asks once before closing taken-over child apps ("Don't ask again" skips later prompts) while leaving independent windows alone, and the next launch offers **Restore** or **Dismiss** at the top.
 
 > [!IMPORTANT]
-> With **Auto** selected, Cursor only uses official models. Select a custom model in the list to use it.
+> With **Auto** selected in Cursor, only official models are used. Pick your custom model explicitly from the list to use it.
 
-The settings page has four tabs: **Models**, **Network**, **General** and **Update**. A URL ending in `#models`, `#network`, `#general` or `#update` opens that tab.
+The settings page has five tabs: **Models**, **Accounts**, **Network**, **General**, and **Update**. Append `#models`, `#accounts`, `#network`, `#general`, or `#update` to jump straight to a tab.
 
-- **Models**: Cursor only. Add, discover and test; the key in the list carries a Key label and copies on click; Copy fills the add form including the key, masked until you reveal it. Groups appear as sections; click a group header to collapse or expand it, leaving only the summary, and add models to the group, edit it or delete it right from the header. A member's endpoint column reads "follows group", and fields that differ from the group are marked custom, with a hover listing which ones. When a group holds several plans, the group header shows a plan selector; switching it makes the members use the new plan's URL, type and key at once. In the group editor, the plans section adds a set with **Add plan**, each with a plan name, type, URL and key; leaving the key blank while editing keeps the stored one. The group selector at the top of the form picks an existing group, standalone, or a new group; with a group selected, leaving the URL, type or key blank follows the group. Fields you leave unset use the group's settings; changing one makes it this model's own value. Context window, max output, max images, image total (MB), reasoning, Fast, cache key and fallback can be left empty; images are shrunk when read, and a request over the limits drops the oldest tool images first, keeping the newest few. Fallback takes the names of other added models, comma-separated, used before any text has been shown when authentication fails or the endpoint is rate-limited. The ? next to Context window and Max output opens a small help card. With reasoning on, Cursor's effort list follows the model's documented levels.
-- **Network**: the proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, Take over Antigravity, TUN mode and Strict mode. An empty proxy means a direct connection; a bare `host:port` is detected as socks5 or http. Official only includes Antigravity and Google-related addresses (including google.dev and withgoogle.com). Taking over Antigravity also covers its WSL mode, without changing system or WSL settings. TUN mode can likewise cover Antigravity official traffic, including WSL. If cursor-inner starts before your proxy software, the status bar shows "Waiting for proxy…" and connects automatically once it is up; official traffic never goes direct.
-- **Update**: the buttons are Check for updates and Update. Only signed releases are installed; Cursor and Grok keep running, and a version that fails its check leaves the current one in place.
-- **General**: image generation and start at login. On Windows there is also **Run in background** and **Notifications**. To let Agent generate images, fill in an OpenAI-compatible endpoint under Images.
+- **Models**: Cursor only. Add, discover, test, copy (filling the form with key masked), and organize models into collapsible groups. Group headers offer plan switching when multiple plans are maintained via **Add plan** (leaving key blank while editing keeps the stored value). Fields left unset follow the group; editing one marks it custom with a per-row reset. Context window, max output, max images, image total (MB), reasoning, Fast, cache key, and comma-separated fallback model names are optional; `?` beside Context window and Max output opens quick reference help cards.
+- **Accounts**: switches cleanly between **Cursor** and **Antigravity** subtabs, ordered automatically so whichever app was active most recently stays first. An empty list reads "No saved accounts yet.". The toolbar provides Add, Paste, Import current, Refresh all, and Export, with Import and Import JSON inside the paste drawer (Cursor accepts JWT, session cookie, `user_xxx::eyJ...`, JSON, and multi-line tokens; Antigravity accepts `1//` refresh tokens, JSON, and multi-line lists). Clicking Add opens browser authorization showing "Finish signing in in the browser. You can also copy this link." alongside Copy and Cancel. Rows show subscription tiers and quota bars with Switch, Refresh, and Remove actions; switching closes a running instance, writes credentials (including Antigravity WSL fallback files and OS keyrings), and reopens it with active takeover settings. Export files stay local.
+- **Network**: outbound proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, Take over Antigravity, TUN mode, and Strict mode. An empty address connects directly; a bare `host:port` is auto-detected as socks5 or http. Official only includes Cursor, OpenAI, Grok, x.ai, Antigravity, and Google-related addresses (such as google.dev and withgoogle.com), and covers Antigravity's WSL mode without editing system or WSL settings. TUN mode can likewise cover official Antigravity traffic (including WSL) when needed. If cursor-inner starts before your proxy software, the status bar displays "Waiting for proxy…" and connects automatically once listening; official traffic never leaks direct while waiting.
+- **General**: image generation endpoint (OpenAI-compatible `GenerateImage`) and start at login, plus **Run in background** and **Notifications** on Windows.
+- **Update**: **Check for updates** and **Update**. Installs only signed releases; Cursor and Grok keep running across port handover and failed checks roll back automatically.
 
 <details>
 <summary><b>Command line</b></summary>
@@ -141,17 +172,18 @@ The settings page has four tabs: **Models**, **Network**, **General** and **Upda
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-en-dark.svg">
-    <img src="docs/images/flow-en-light.svg" alt="Cursor reaches the local cursor-inner proxy: custom models go to your endpoint, official models are forwarded unchanged; Grok and friends use your proxy, other hosts are tunneled as-is" width="100%">
+    <img src="docs/images/flow-en-light.svg" alt="cursor-inner routing diagram: Cursor routes custom vs official models locally; Codex, Antigravity (including WSL), and Grok use per-process proxy takeover while other hosts stay direct" width="100%">
   </picture>
 </p>
 
-Cursor traffic that honors the proxy setting reaches this machine first: custom models are called from here, official models are forwarded unchanged, and other hosts are tunneled without decryption. Grok, Codex and Antigravity use the proxy you configured. The settings page accepts only local connections.
+Proxy-aware Cursor traffic lands on `127.0.0.1` first: custom models call your APIs directly from this machine, official requests go to Cursor unchanged, and unrelated hosts tunnel untouched. Codex, Antigravity (including WSL), and Grok receive per-process proxy settings and local bridges routed to your outbound proxy without a system-wide TUN; under **Official only**, non-official traffic connects directly. Both the web console and local proxy accept loopback connections only.
 
 ## Known limitations
 
-- Web search merges Bing, DuckDuckGo and Baidu. Baidu sometimes returns only a captcha page, and then only the other two sources remain.
-- With a custom model, typing `@` does not open the file menu. Drag a file into the chat, or use Add to Chat.
-- Some APIs do not return a cache-hit count, so the window cannot show one.
+- Web search merges Bing, DuckDuckGo, and Baidu. When Baidu serves only a captcha page, results from the other two sources remain.
+- With custom models selected, typing `@` does not open Cursor's file picker. Drag files into the chat or use Add to Chat.
+- Endpoints that omit cache-hit metrics cannot display a cache hit rate in the UI.
+- Signing in to or refreshing Antigravity accounts requires Antigravity to be installed on this computer first.
 
 ## FAQ
 
@@ -165,12 +197,14 @@ Auto chooses only among official models. Select your custom model in the list.
 <details>
 <summary><b>Can a custom model edit files and run commands?</b></summary>
 
-Yes, when the model supports tool calls. In Agent it can read, search, edit and delete files, edit notebooks, run commands, call MCP tools from the current chat, and start a subagent. Edits show a diff and are written after you accept them. Stop aborts a tool that has not finished. Commit messages, chat titles and tab completion still come from Cursor.
+Yes, when the model supports tool calls. In Agent it can read, search, edit and delete files, edit notebooks, run commands, call MCP tools from the current chat, and start subagents. Edits preview diffs before applying; Stop cancels pending work; commit messages, chat titles, and Tab completion stay on Cursor.
+
+Execution heartbeats keep active tools alive. If contact is lost or a tool stream closes early, the turn pauses cleanly and retains dispatched executions for ordered recovery instead of silently repeating side-effecting calls.
 
 </details>
 
 <details>
-<summary><b>Where is my API key stored?</b></summary>
+<summary><b>Where are API keys and account tokens stored?</b></summary>
 
 | Platform | Data directory |
 | --- | --- |
@@ -178,21 +212,21 @@ Yes, when the model supports tool calls. In Agent it can read, search, edit and 
 | macOS | `~/Library/Application Support/cursor-inner/` |
 | Linux | `~/.config/cursor-inner/` (or `$XDG_CONFIG_HOME/cursor-inner/`) |
 
-`config.json` holds the switches, the proxy and your custom models. **API keys are stored in plain text.** The file is readable only by the current user. Custom-model chats are in `conversations/`. The settings page and the local proxy listen on `127.0.0.1` only.
+`config.json` stores switches, proxy settings, and custom models (**API keys are stored in plain text**); `cursor-accounts.json` and `antigravity-accounts.json` store saved account sessions. All files are user-readable only, and the local proxy and settings UI listen on `127.0.0.1` only.
 
 </details>
 
 <details>
 <summary><b>If cursor-inner exits unexpectedly, does Cursor lose its connection?</b></summary>
 
-No. After a crash or a forced quit, your previous proxy settings are written back and Cursor is closed. Open Cursor again.
+No. When the main process exits or stops, it restores your previous proxy settings and closes any taken-over Cursor instance. Reopen Cursor to resume normally.
 
 </details>
 
 <details>
 <summary><b>Will it keep working after Cursor updates?</b></summary>
 
-Official models are not affected, and custom models are answered locally. If a custom-model turn hangs or fails to resume, update to this release and restart Cursor once.
+Official models are unaffected, and custom models are served locally. If an update changes client framing and breaks turns or recovery, update cursor-inner to the latest release and restart Cursor once.
 
 </details>
 
@@ -211,7 +245,7 @@ Official models are not affected, and custom models are answered locally. If a c
    | Fedora / RHEL | `sudo rm /etc/pki/ca-trust/source/anchors/cursor-inner.pem && sudo update-ca-trust` |
    | Arch and others | `sudo trust anchor --remove ~/.config/cursor-inner/ca/ca.crt` |
 
-3. Delete the data directory and the program. If you used the installer, also delete `cursor-inner.lnk` from the Start menu on Windows, or `~/.local/share/applications/cursor-inner.desktop` on Linux.
+3. Delete the data directory and binary. If installed via the installer script, remove `cursor-inner.lnk` from the Start menu (Windows) or `~/.local/share/applications/cursor-inner.desktop` (Linux).
 
 </details>
 
@@ -223,12 +257,12 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.6.5 ./build.sh linux
+VERSION=v0.7.0 ./build.sh linux
 ```
 
 ## Acknowledgements
 
-Cursor protocol handling follows [cursor-byok](https://github.com/leookun/cursor-byok). License texts of dependencies are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Cursor protocol handling follows [cursor-byok](https://github.com/leookun/cursor-byok). Dependency license texts are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

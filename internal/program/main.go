@@ -424,12 +424,17 @@ func Main(version string) {
 		application.SyncCodex()
 		application.SyncAntigravity()
 		go func() {
-			tick := time.NewTicker(5 * time.Second)
+			tick := time.NewTicker(time.Second)
 			defer tick.Stop()
+			ticks := 0
 			for range tick.C {
-				application.SyncGrok()
-				application.SyncCodex()
+				ticks++
+				application.TickRecentApps()
 				application.SyncAntigravity()
+				if ticks%5 == 0 {
+					application.SyncGrok()
+					application.SyncCodex()
+				}
 			}
 		}()
 	}

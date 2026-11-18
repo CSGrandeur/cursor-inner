@@ -135,7 +135,13 @@ func TestProductionResponsesBodyUnchangedWithoutProbeOpts(t *testing.T) {
 	if len(inc) != 1 || inc[0] != "reasoning.encrypted_content" {
 		t.Fatalf("production include missing: %s", raw)
 	}
-	if body["reasoning"] != nil || body["tool_choice"] != nil {
+	// qwen4 是分级 effort 家族：没开推理时要显式发 effort=none（省略等于仍开着），
+	// 其它探测专属字段一个都不能出现。
+	reasoning, _ := body["reasoning"].(map[string]any)
+	if len(reasoning) != 1 || reasoning["effort"] != "none" {
+		t.Fatalf("production body reasoning should be exactly effort=none: %s", raw)
+	}
+	if body["tool_choice"] != nil {
 		t.Fatalf("production body unexpectedly has probe fields: %s", raw)
 	}
 	tools, _ := body["tools"].([]any)

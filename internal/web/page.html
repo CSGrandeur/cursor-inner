@@ -29,6 +29,8 @@
     --primary-bg: #f4f1ea;
     --primary-text: #151514;
     --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px rgba(0, 0, 0, .35);
+    --seg-bg: var(--field);
+    --seg-active: var(--raise);
     --sans: "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
     --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
   }
@@ -56,6 +58,8 @@
       --primary-bg: #151514;
       --primary-text: #f4f1ea;
       --shadow: 0 1px 2px rgba(21, 21, 20, .04), 0 8px 24px rgba(21, 21, 20, .06);
+      --seg-bg: var(--raise);
+      --seg-active: var(--panel);
     }
   }
   * { box-sizing: border-box; }
@@ -188,7 +192,7 @@
     column-gap: 14px; align-items: start;
     min-height: 44px; padding: 10px 16px;
   }
-  html[lang="en"] .row { grid-template-columns: 9.2em minmax(0, 1fr) max-content; }
+  html[lang="en"] .row { grid-template-columns: 11.4em minmax(0, 1fr) max-content; }
   .row > h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding-top: 2px; }
   .row + .row { border-top: 1px solid var(--line); }
   .row[hidden] { display: none; }
@@ -220,6 +224,130 @@
   }
   .meta:empty { display: none; }
   .meta.warn { color: var(--bad); }
+  /* —— 账号管理 —— */
+  .acct-shell { padding: 12px 16px 14px; }
+  .acct-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 14px; flex-wrap: wrap; }
+  .acct-subtabs {
+    display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+    background: var(--seg-bg); border: 1px solid var(--line-strong); border-radius: 9px;
+    max-width: 100%; overflow-x: auto; scrollbar-width: none;
+  }
+  .acct-subtabs::-webkit-scrollbar { display: none; }
+  .acct-subtab {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    height: 28px; padding: 0 10px;
+    border: 0; border-radius: 6px; background: transparent;
+    color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  }
+  .acct-subtab:hover { color: var(--text); background: transparent; border-color: transparent; }
+  .acct-subtab[aria-selected="true"] {
+    background: var(--seg-active); color: var(--text); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 0 0 1px var(--line);
+  }
+  .acct-subtab[aria-selected="true"]:hover { background: var(--seg-active); }
+  .acct-subtab:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+  .acct-subtab .app-icon { width: 15px; height: 15px; flex: none; display: block; border-radius: 4px; opacity: .76; transition: opacity .15s; }
+  .acct-subtab[aria-selected="true"] .app-icon { opacity: 1; }
+  .acct-subtab .count { font-weight: 400; }
+  .acct-subtab .tab-dot { width: 5px; height: 5px; }
+  .acct-subbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 4px 16px; flex-wrap: wrap;
+    margin-top: 8px; min-height: 20px;
+  }
+  .acct-subbar .desc { min-width: 0; flex: 1 1 260px; }
+  .acct-subbar .meta { flex: 0 1 auto; max-width: 100%; }
+  .acct-empty {
+    margin-top: 8px; padding: 14px 12px;
+    border: 1px dashed var(--line-strong); border-radius: 9px;
+    color: var(--faint); font-size: 12px; text-align: center;
+  }
+  .acct-empty[hidden] { display: none; }
+  .anti-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: none; }
+  .anti-bar button.sm { white-space: nowrap; }
+  .anti-drawer {
+    margin-top: 8px; padding: 8px 10px;
+    border: 1px solid var(--line-strong); border-radius: 8px; background: var(--raise);
+    animation: pane-in .15s ease-out both;
+  }
+  .anti-login-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .anti-login-status .spin {
+    flex: none; width: 11px; height: 11px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong); border-top-color: var(--signal);
+    animation: spin .8s linear infinite;
+  }
+  .anti-login-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; min-width: 0; }
+  .anti-login-row button.sm, .anti-import button.sm { height: 28px; flex: none; white-space: nowrap; }
+  .anti-login-row[hidden], .anti-drawer[hidden] { display: none; }
+  .anti-import { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .anti-secret { flex: 1 1 220px; min-width: 0; }
+  .anti-import-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+  #anti-auth-url { flex: 1 1 200px; width: auto; min-width: 0; font-family: var(--mono); font-size: 12px; cursor: pointer; }
+  #anti-token { font-family: var(--mono); font-size: 12px; }
+  .anti-list {
+    list-style: none; margin: 8px 0 0; padding: 0;
+    border: 1px solid var(--line); border-radius: 9px;
+    background: var(--field); overflow: hidden;
+  }
+  .anti-list:empty { display: none; }
+  .anti-item {
+    display: grid; grid-template-columns: minmax(170px, 1.15fr) minmax(0, 1.45fr) auto;
+    align-items: center; gap: 6px 12px; padding: 7px 10px;
+    transition: background .12s;
+  }
+  .anti-item + .anti-item { border-top: 1px solid var(--line); }
+  .anti-item:hover { background: var(--raise); }
+  .anti-item.is-current {
+    box-shadow: inset 2.5px 0 0 var(--good);
+    background: linear-gradient(90deg, var(--good-soft), transparent 45%);
+  }
+  .anti-item.is-current:hover {
+    background: linear-gradient(90deg, var(--good-soft), var(--raise) 55%);
+  }
+  .anti-who { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  button.anti-email {
+    min-width: 0; max-width: 100%; height: auto; padding: 1px 4px; margin-left: -4px;
+    border: 0; border-radius: 5px; background: transparent;
+    color: var(--text); font-weight: 500; text-align: left;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  button.anti-email:hover { background: var(--line); border-color: transparent; }
+  .anti-badges { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+  .anti-badge {
+    display: inline-flex; align-items: center; gap: 4px; flex: none;
+    padding: 0 6px; height: 17px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 600; line-height: 1; letter-spacing: .01em;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .anti-badge.current { color: var(--good); background: var(--good-soft); }
+  .anti-badge.current::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+  .anti-badge.tier-ultra { color: var(--signal); background: var(--signal-soft); }
+  .anti-badge.tier-pro_plus { color: var(--signal); background: var(--signal-soft); border-color: color-mix(in srgb, var(--signal) 28%, transparent); }
+  .anti-badge.tier-pro { color: var(--text); background: var(--raise); border-color: var(--line-strong); }
+  .anti-badge.tier-team { color: var(--text); background: var(--raise); border-color: var(--line-strong); }
+  .anti-badge.tier-trial { color: var(--muted); background: var(--raise); border-color: var(--line); }
+  .anti-badge.tier-free { color: var(--faint); border-color: var(--line); }
+  .anti-badge.bad { color: var(--bad); background: var(--bad-soft); }
+  .anti-quotas { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+  .anti-q {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11.5px; line-height: 1.3; white-space: nowrap; cursor: help;
+  }
+  .anti-q-name { color: var(--muted); font-weight: 500; }
+  .anti-q-track {
+    position: relative; width: 34px; height: 4px; border-radius: 999px;
+    background: var(--line-strong); overflow: hidden; flex: none;
+  }
+  .anti-q-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--good); }
+  .anti-q-fill.low { background: var(--signal); }
+  .anti-q-fill.empty { background: var(--bad); }
+  .anti-q-pct { font-size: 11.5px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .anti-q-reset { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .anti-q-msg { font-size: 11.5px; color: var(--faint); }
+  .anti-q-msg.bad { color: var(--bad); }
+  .anti-ops { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex: none; }
+  .anti-ops button.sm { padding: 0 8px; }
+  .anti-ops button.switch-ready { border-color: color-mix(in srgb, var(--signal) 42%, var(--line-strong)); }
+  .anti-ops button.switch-ready:hover { border-color: var(--signal); color: var(--signal); background: var(--signal-soft); }
   .tail {
     display: flex; align-items: center; justify-content: flex-end; gap: 6px;
     min-height: 24px; padding-top: 2px;
@@ -377,12 +505,13 @@
   button.tag:hover { color: var(--text); }
   /* 测试进行中：按钮文字不换，宽度就不变；只在原位置转圈。进度和阶段在表下列出。 */
   button.test-btn { position: relative; }
-  button.test-btn.testing { color: transparent; }
+  button.test-btn.testing, button.test-btn.testing:hover { color: transparent; }
   button.test-btn.testing::after {
-    content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -7.5px 0 0 -7.5px;
+    content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px;
     border: 1.5px solid var(--line-strong); border-top-color: var(--signal); border-radius: 50%;
     animation: spin .8s linear infinite;
   }
+  button.primary.test-btn.testing::after { border-color: rgba(128, 128, 128, .35); border-top-color: var(--primary-text); }
   button.test-btn.testing:disabled { opacity: 1; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .test-run {
@@ -672,6 +801,21 @@
     .desc button.qa { display: inline-grid; vertical-align: -3px; margin-left: 4px; }
     .status { gap: 2px 12px; padding: 4px 0; }
     .tabs button { padding: 0 10px; }
+    .acct-shell { padding: 12px 14px; }
+    .acct-subbar .desc { flex-basis: 100%; }
+  }
+  @media (max-width: 640px) {
+    .acct-head { gap: 8px 10px; }
+    .anti-item { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 10px; }
+    .anti-item .anti-quotas { grid-column: 1 / -1; grid-row: 2; }
+  }
+  @media (max-width: 440px) {
+    .anti-item { grid-template-columns: 1fr; gap: 5px; }
+    .anti-item .anti-quotas { grid-column: 1; grid-row: auto; }
+    .anti-ops { justify-content: flex-start; flex-wrap: wrap; }
+    .anti-login-row { flex-wrap: wrap; }
+    .anti-secret { flex-basis: 100%; }
+    #anti-auth-url { flex: 1 1 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -791,6 +935,7 @@
   <section class="panel" aria-label="cursor-inner">
     <nav class="tabs" role="tablist" data-i18n-aria="tabsLabel" aria-label="设置">
       <button type="button" role="tab" id="tab-models" data-tab="models" aria-controls="pane-models" aria-selected="true"><span data-i18n="tabModels">模型</span><span class="count" id="model-count">0</span><i class="tab-dot"></i></button>
+      <button type="button" role="tab" id="tab-accounts" data-tab="accounts" aria-controls="pane-accounts" aria-selected="false" tabindex="-1"><span data-i18n="tabAccounts">账号</span><span class="count" id="account-count">0</span><i class="tab-dot"></i></button>
       <button type="button" role="tab" id="tab-network" data-tab="network" aria-controls="pane-network" aria-selected="false" tabindex="-1"><span data-i18n="tabNetwork">网络</span><i class="tab-dot"></i></button>
       <button type="button" role="tab" id="tab-general" data-tab="general" aria-controls="pane-general" aria-selected="false" tabindex="-1"><span data-i18n="tabGeneral">通用</span><i class="tab-dot"></i></button>
       <button type="button" role="tab" id="tab-update" data-tab="update" aria-controls="pane-update" aria-selected="false" tabindex="-1"><span data-i18n="tabUpdate">更新</span><i class="tab-dot"></i></button>
@@ -904,6 +1049,69 @@
           <button id="model-submit" class="primary" type="submit" data-i18n="add">添加</button>
         </div>
       </form>
+    </div>
+
+    <div class="pane" role="tabpanel" id="pane-accounts" aria-labelledby="tab-accounts" hidden>
+      <div class="acct-shell" id="anti-accounts">
+        <div class="acct-head">
+          <div class="acct-subtabs" id="account-subtabs" role="tablist" data-i18n-aria="tabAccounts" aria-label="账号">
+            <button type="button" role="tab" class="acct-subtab" id="subtab-cursor" data-acct-app="cursor" aria-selected="true">
+              <img class="app-icon" alt="" aria-hidden="true" width="15" height="15" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAF+UlEQVR42rWXTWxbWRXHf+fe95797OfaTkzTNklB+ZAo0NG0qZAQG9gNbJCGgRmJBUgs2LBAYgfb2bJDjAANEksGMSMG0SlipouhaZtM2ySTQKdNQ5VPl8R2rMZxYr/37mWRxNM2ieOg8qQnWfb1+f/P+Z97PoSdRwPxZ1KpU8bnB2Lk60AXYHk+j1ihhLUfNEL1+1qttraHKXsf8vnkqxr9C1HS+/xw9/HAWrtgMD+pVLbeAbQAFPLJ74py/gAWa4kB+T8xsCJoEEwcf6tc3XpXurv9M2JlGiQPmN2IHO2LCHEc7+inNdZ2HLVYBG0Mj7xQzutU0v2pUvobnYKLCNZawjAkkzmB42i2t7dRSiHSUeAUECslJyJlSjqV8l4Xob8lUhtggDAMcV2P4eFhzp37AkGQQSlFvb5JFEUdE9l1RDnW0o2001wQgSgKEVH0nz3LwMAQQRDQaDYREXp7++jq6qZYXKFSKXcoixVBck4nOhtj6O4uMDQ0TFd3AWNims0m7AJEUUQikWBgYJBCocDKyjIbGxsopVBKtSNiDyVgrSWOY4JMhsHBIc6c6UVEiKIIAMdxMMagtd4B2f1PLtdFNpujXC5RLBbZ3t5qK4lzGLhWmpMne+jrP4vv+6yvrwP2KbViY6hWq894aAHBdT1OnTrN6uoj6vX6oSScg8JujOHFCxd5+dvfwfdTbNQeI6JQzxix1rJVr+8rW9ZasBbtOIgIb//pLWZmpnEcZ58czoHea43neSwsLvDaa9/j/PkX/ufKM3HnFu+8/cdDc0H7vvtjJVJ49hr29vVTLq3xtyuXmZubo7dvJ9P3ruIe2U9f0zK6uVljcWGe1f8UeeNXv+Thw39Tq208ScCKIFhW2t6CVCpNIpFkfPwm09NTvPTSN3nllVfJ5nIAGGNQSrXOR2HI2toq5fIaqVSKqalJZmamSafTGGMOxDg0An19/biuizGGZDIJwNTUBKOj13A9j8HBoRa4tZZKpcTy0iK12mMcxyUMI37z6zeo1+sYYyiV1vYVASwrbQl4nveUbr6fol7f5Mb1USbu3Kanp4dsNsv8/EOq6xVEdm5AEARcvvxXrn34IekgoNlsUi6XDiSgjpNQcRyjtSYIAubmHvC7N3/Lg9lPaDYauxkOnudRLBa58t57+KkUxrRvUs5xCOwVnmw2SyZzgnQ6jbWglMZag7UW13X5y7t/plpdJwiCI2cap5OmYYxBRMhkMmSzOTzPIwzDVjsG28qV2dlZro3+g2QyibX2yMbUloC1O4Z93yeXy7eMfgos+/rGxOQEg4PDlEtrVKtVXNc9PoE91lpr8vkugiBoReLJ3/fCa60lkUhw9+6/WJifp1AokM/nKZdKPHpUfKpGHDQc7AOPogjXdRkYGCSTybQ64iEzHloptra2GB8fx3EcoigijmNO9vRw4eIIQZAhjqMD5VAHhV0pxdjYDcbHx4iiqBX6/aV05zsvkWBycoJKpdKq98mkT6PR4KPxMWZmPt5NVNu5BI3tbW7eGOXB7H0ujlxicHAIgGaz+VT1c12XUqnE5OQkruu2CNy7d5c7t29RqZTwXA9R6nhJqJTC932q1XXe//sV7t/7HCOXvszp06cJw4goilqNa2zsJs1mk0wmw9LSErdvjbO4uIDWGt9PHVqGj7wFxhgcxwEcFhbmWV5e4vPnvsiFCxdJp9MkEgnm5+dZWFgkjmOuXn2f+/c+IY5jEolEy0bbW97dlR5VwlesxR6UE89Ow41Gg0wmw/kXXmRk5BKO43L9+jX+OfMxm7UaXiLROtvONxERa8xV6c77ryulf26tjTsZy5VSRFFEGIb09JzCGMPa2mpL/yM8fmI3EB3H5meSzyf7tahpkBPH2Q12htEQkAMnnbbgoIy1Zd2UL+nt7eixn3CXtVIvIztLQ6eWWgNpZ+B2J/RoRMQg3y893vxIA3prO5xMeM68CF8VUYEI0sm7W4ul0/MiorAUreVH5fXNt1rL6d6GnMslP6tF/xCxX8NSsM9pSVVgrbAm8IHBvlmpbC3vYf4X/unkcZns81QAAAAASUVORK5CYII=">
+              <span data-i18n="appCursor">Cursor</span>
+              <span class="count" id="cursor-acct-count">0</span>
+              <i class="tab-dot" id="subtab-dot-cursor"></i>
+            </button>
+            <button type="button" role="tab" class="acct-subtab" id="subtab-antigravity" data-acct-app="antigravity" aria-selected="false" tabindex="-1">
+              <img class="app-icon" alt="" aria-hidden="true" width="15" height="15" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASwSURBVFhHvZdbbFRVFIYRH3nnEQMEIwkYDW0wWsBE06DSB4nYUgOmbaIPBBIflNCLTXq/DG0ttSm9DN6aEoXGIkGCgKWlFdAo0XJJL7bQWqptmWo70zIzZ39mz9l7embmTJnWyJ/snLPXWWv9/7nsddZetuwhAB6zjOUxjmBMeL6YoRI9Hm5fLGQOmSvcviCsASrBCmAl8ASwGlgDrA0b0iavSR/pK2OCNxCzCB0ErAMqgB+Bv4AZIYQHmAXmooxZ5TMjY4QQ14DDMpc1d1RolUA6MI0JoY5LgY6VudKtHBEII9fBPiGEX51bhqGGxWaEzUGoWJ9FSIaVy478KSGEK8BuBttDmPmEZxLhugd+5ars4dC5hBD3JUeECMt7L1cxUrUNTALDP4Prei6upjjcOZvx5qUhem8qFyM0ZB46p8PKKU8Ca1Wt2yvKKUoWU0DvrRx+bl3HQNPzjBW8yN9p8cxlJCFGhpWb7ZPQOSVHkNMqQC6bMeUUkUGoOxue7OJ4eyLffJtCe3Mqv1amcDc7hfvJ25hz5Gvn0GAT2ig5VtgJkGv3oV/+iZ4SCr9Lo+r0BzS1ZHGqNpOree8xcCCDib3J+Ad/Nx0jRWiD5FhpJ2CVWsNWZzUxp2PuEQ62v8++M4Xsb63lUPMnVNR/yvHyWi5lF9Oz512mvmw1g4yItxhIojhWWQXoFSCrmCwyQWcNQz3+s0MdvNFWyJsnW9jVfJY9xzrZX9dFQeUFnAUnOHOgihuF9XbkEjqn5FitOJdbBchyKquZ1TkE+VfaeLnlC7Z/3kliYw+v1Q2yq+YO71T1kVP6Cx/nnqP1YDPTo5MBfxH6GvREcqyNWYA+mZh183prG1uPXWbr0V621Y7x0pEptlf/w84qF2mOexws66Mk6zI3frgbiDFrUxBLE2Cou7h4Z5TNjR0k1PWTcGScZ0vdrM/3siHPR3yBlx0OD29XuNiXP8RXrX+YSUKf438TUNo1yIbqW2ypmWRjkYfdTj8NXYLma5D1NSSUGrzi8JJ6eJrMukncs+Z3YNGweAE6YtZnsLNlkLiP/mRjsYfMUwY+9Z3pp3zuJmwtg6QKP7sr5rg+YJZny1tYvAAdfHXYQ1zNKM+UzZDs9ON+YNqlCDn8SkxDJzxXBIllBnXnTeNiBEQsQx1c9P0UTztcbCrz0tFv2jRpwFn5ebzwVpMpYm+9wOVW10MOkcvQthDppCNTPnY4XWwonuNQm3qv83cVhBZ74TbEF8ILJYKTP5lGJTYwsStEtqVYJ6zudLPJ4ebVWj/DgR+1vQAJbc9pg/W5kNogmJC9kVkYdVTUUhz8GfmVc/eQl8Q6N1sqfVzqU4mikEtoAfLRpzrhyQ8h//T8ZXWM+jMK+R33jhvsdHpIOurj/G1lXIBcQ4sYnYL0z2BNNtS2B0z2v2N1ohsSh3Ly9Y0bNHYb9Mt2NEZyDS1i+gE4u+H0b4GpbkjKrZxagLUlk21TSEsW7Z0vBBkzHxdsyeRXFNmShYnIkM6GjJL1xrYpjW3Im/CZNUtLsW9KNSwiHn1brhG2MTmsNhdL2pioTY3c3MS2MdGwqnzkWzMNGRCz4gWwpM2pFao+/G/b838BcfpXnavGZQgAAAAASUVORK5CYII=">
+              <span data-i18n="acctAntigravity">反重力</span>
+              <span class="count" id="anti-acct-count">0</span>
+              <i class="tab-dot" id="subtab-dot-antigravity"></i>
+            </button>
+          </div>
+          <div class="anti-bar">
+            <button type="button" class="sm primary test-btn" id="anti-add" data-i18n="antiAdd">添加</button>
+            <button type="button" class="sm" id="anti-paste" aria-expanded="false" data-i18n="antiPaste">粘贴</button>
+            <button type="button" class="sm test-btn" id="anti-import-current" data-i18n="antiImportCurrent">导入当前</button>
+            <button type="button" class="sm test-btn" id="anti-refresh-all" data-i18n="antiRefreshAll" hidden>刷新全部</button>
+            <button type="button" class="sm" id="anti-export" data-i18n="antiExport">导出</button>
+          </div>
+        </div>
+        <div class="acct-subbar">
+          <p class="desc"><span id="acct-desc"></span><button type="button" class="qa" id="acct-tip" data-i18n-aria="more">?</button></p>
+          <p class="meta" id="anti-accounts-meta"></p>
+        </div>
+        <div class="anti-drawer anti-login" id="anti-login" hidden>
+          <div class="anti-login-status"><i class="spin"></i><span data-i18n="antiLoginWait">在浏览器里完成授权。这个链接也可以复制。</span></div>
+          <div class="anti-login-row">
+            <input id="anti-auth-url" type="text" readonly spellcheck="false" data-i18n-aria="antiLoginWait">
+            <button type="button" class="sm" id="anti-copy-url" data-i18n="copy">复制</button>
+            <button type="button" class="sm" id="anti-login-cancel" data-i18n="antiCancel">取消</button>
+          </div>
+        </div>
+        <div class="anti-drawer anti-import" id="anti-import" hidden>
+          <span class="secret anti-secret">
+            <input id="anti-token" class="mono" type="password" autocomplete="off" spellcheck="false">
+            <button id="anti-token-eye" type="button" aria-label="显示" title="显示">
+              <svg class="eye-off" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                <circle cx="8" cy="8" r="1.6"/>
+                <path d="M3 13 13 3"/>
+              </svg>
+              <svg class="eye-on" hidden width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4Z"/>
+                <circle cx="8" cy="8" r="1.6"/>
+              </svg>
+            </button>
+          </span>
+          <div class="anti-import-actions">
+            <button type="button" class="sm primary test-btn" id="anti-import-token" data-i18n="antiImportToken">导入</button>
+            <button type="button" class="sm test-btn" id="anti-import-json" data-i18n="antiImportJSON">导入 JSON</button>
+          </div>
+          <input id="anti-json-file" type="file" accept="application/json,.json,.txt" hidden>
+        </div>
+        <div class="acct-empty" id="acct-empty" hidden data-i18n="antiEmpty">还没有保存的账号。</div>
+        <ul class="anti-list" id="anti-account-list"></ul>
+      </div>
     </div>
 
     <div class="pane" role="tabpanel" id="pane-network" aria-labelledby="tab-network" hidden>
@@ -1061,6 +1269,17 @@
     </div>
   </div>
 </dialog>
+<dialog class="quit-dialog" id="anti-dialog" aria-labelledby="anti-dlg-title">
+  <div class="quit-box">
+    <h3 id="anti-dlg-title"></h3>
+    <p class="quit-lead" id="anti-dlg-lead"></p>
+    <div class="quit-foot">
+      <span style="margin-right:auto"></span>
+      <button type="button" class="sm" id="anti-dlg-cancel" data-i18n="quitCancel">取消</button>
+      <button type="button" class="sm solid" id="anti-dlg-ok"></button>
+    </div>
+  </div>
+</dialog>
 <script>
 const BOOT_HASH = location.hash;
 const MESSAGES = {
@@ -1081,6 +1300,19 @@ const MESSAGES = {
     grokOn: "正在运行的 Grok Bot 走上面的代理。", grokNoProxy: "代理没开，不会给 Grok Bot 加代理。", grokOff: "不接管。",
     codexOn: "正在运行的 Codex 走上面的代理。", codexNoProxy: "代理没开，不会给 Codex 加代理。", codexOff: "不接管。",
     antigravityOn: "正在运行的反重力走上面的代理。", antigravityNoProxy: "代理没开，不会给反重力加代理。", antigravityOff: "不接管。",
+    antiAccounts: "反重力账号", antiAccountsDesc: "保存多个账号。切换会关掉反重力再打开。", antiAccountsTip: "用 Google 登录，或粘贴 refresh token（支持 JSON / 多行），也可把反重力当前登录的账号收进来。切换会先关掉正在运行的反重力，写入凭据，再按当前接管设置打开。导出的文件含 refresh token，只留在本机。",
+    cursorAccountsDesc: "保存多个账号。切换会关掉 Cursor 再打开。", cursorAccountsTip: "浏览器登录，或粘贴会话凭据（JWT、Cookie、JSON / 多行），也可把 Cursor 当前登录的账号收进来。切换会先关掉正在运行的 Cursor，写入凭据，再按当前接管设置打开。导出的文件含凭据，只留在本机。",
+    cursorToken: "Cursor 凭据", cursorTokenPh: "粘贴 JWT、WorkosCursorSessionToken 或 user_xxx::eyJ...",
+    cursorSwitchTitle: "切换 Cursor 账号", cursorSwitchAsk: "切换到 {email}？正在运行的 Cursor 会关闭并按当前接管设置重新打开。", cursorSwitching: "正在切换账号并重启 Cursor…",
+    cursorRemoveAsk: "确定删除 {email}？只会从这里的列表移除，不影响 Cursor 当前的登录状态。", cursorExportAsk: "导出文件包含所有账号的凭据。请只保存在本机，不要发送给他人。",
+    antiEmpty: "还没有保存的账号。", antiCurrent: "当前 {email}", antiCount: "{n} 个账号", antiCurrentTag: "当前",
+    antiAdd: "添加", antiPaste: "粘贴", antiImportCurrent: "导入当前", antiRefreshAll: "刷新全部", antiExport: "导出", antiImportToken: "导入", antiImportJSON: "导入 JSON", antiToken: "refresh token", antiTokenPh: "粘贴 refresh token（1// 开头或 JSON）", antiCancel: "取消", antiLoginWait: "在浏览器里完成授权。这个链接也可以复制。",
+    antiSwitch: "切换", antiRefresh: "刷新", antiRemove: "删除",
+    antiSwitchTitle: "切换反重力账号", antiSwitchAsk: "切换到 {email}？正在运行的反重力会关闭并按当前接管设置重新打开。",
+    antiRemoveTitle: "删除账号", antiRemoveAsk: "确定删除 {email}？只会从这里的列表移除，不影响反重力当前的登录状态。",
+    antiExportTitle: "导出备份", antiExportAsk: "导出文件包含所有账号的 refresh token。请只保存在本机，不要发送给他人。",
+    antiSwitching: "正在切换账号并重启反重力…", antiForbiddenTag: "403 受限", antiForbiddenHint: "账号受限 (403)，无法获取配额", antiExpiredTag: "需重登", antiExpiredHint: "凭据已失效，请重新添加", antiQuotaResetAt: "重置时间：{time}", antiCopyEmailTip: "点击复制邮箱",
+    antiAdded: "已添加 {email}", antiImported: "已导入 {email}", antiSwitched: "已切换到 {email}", antiRefreshed: "已刷新 {email}", antiRefreshedAll: "已刷新 {ok} 个账号", antiRefreshedAllPartial: "已刷新 {ok} 个账号，{bad} 个失败：{error}", antiRemoved: "已删除 {email}", antiImportJSONDone: "导入完成：成功 {ok}，失败 {bad}",
     proxy: "代理", proxyDesc: "出站代理地址，留空直连。", proxyTip: "一个出站地址。没写协议时自动识别 socks5 或 http，留空则直连。只改地址时不必关 Cursor。",
     scope: "代理范围", scopeGlobal: "全局", scopeOfficial: "仅官方",
     scopeDesc: "默认只让官方地址走代理，其余直连；也可改为全部走代理。", scopeTip: "全局：Cursor 和 Grok Bot 的联网全部走上面的代理。仅官方（默认）：只有 Grok、x.ai、Cursor、OpenAI、Antigravity 的地址走代理，其余直连。回环和局域网始终直连。",
@@ -1137,7 +1369,7 @@ const MESSAGES = {
     capToolsRejected: "该接口拒绝此测试方式",
     capSpeedVal: "{speed} tokens/s · 首字 {first} ms · 总耗时 {duration} ms · 输出 {tokens} tokens{estimated}", capFailed: "测试异常：{error}",
     ttBadge: "文本工具", ttBadgeTip: "该端点不支持原生工具调用，这个模型改用文本工具模式（可能不够稳定）",
-    tabsLabel: "设置", tabModels: "模型", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyWaiting: "等待代理…", stProxyDown: "代理没有启动", proxyWaitingTip: "代理 {addr} 还没开始监听（代理软件可能还在启动）。就绪后会自动接上；等待期间官方流量不会直连。", proxyDownTip: "代理 {addr} 一直没有开始监听。请打开你的代理软件（例如 v2rayN、Clash），打开后会自动接上，不用重启 cursor-inner。", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", takeTimeout: "接管等待超时，仍没有接上。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
+    tabsLabel: "设置", tabModels: "模型", tabAccounts: "账号", acctAntigravity: "反重力", tabNetwork: "网络", tabUpdate: "更新", tabGeneral: "通用", more: "详细说明", stTakeOn: "接管中", stTakeOff: "未接管", stTakeBad: "接管异常", stTakePending: "正在接管…", stTakeSwitch: "正在切换到新版本…", stTakeSettle: "正在确认接管…", stLoading: "正在读取…", stLinkWait: "正在重新连接…", stLinkLost: "连接已断开", stProxyWaiting: "等待代理…", stProxyDown: "代理没有启动", proxyWaitingTip: "代理 {addr} 还没开始监听（代理软件可能还在启动）。就绪后会自动接上；等待期间官方流量不会直连。", proxyDownTip: "代理 {addr} 一直没有开始监听。请打开你的代理软件（例如 v2rayN、Clash），打开后会自动接上，不用重启 cursor-inner。", stProxyChecking: "确认中…", takeNotActive: "接管没有在预期时间内生效。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", takeTimeout: "接管等待超时，仍没有接上。点“启动 Cursor”重新打开它；仍不行就点“打开日志”看原因。", linkLostTip: "连不上 cursor-inner 后台，页面会继续重试。", stDirect: "直连", stProxyBad: "未生效", stOfficial: "仅官方", stTunOn: "已开启", stTunStarting: "启动中", stTunFailed: "已回退", stUpAvail: "有更新 {latest}", stUpBusy: "更新中 {pct}", stUpFailed: "更新失败", stVersion: "当前版本 {v}",
     switchLang: "EN"
   },
   en: {
@@ -1157,6 +1389,19 @@ const MESSAGES = {
     grokOn: "A running Grok Bot uses the proxy above.", grokNoProxy: "The proxy is off, so Grok Bot is left direct.", grokOff: "Not taken over.",
     codexOn: "A running Codex uses the proxy above.", codexNoProxy: "The proxy is off, so Codex is left direct.", codexOff: "Not taken over.",
     antigravityOn: "A running Antigravity uses the proxy above.", antigravityNoProxy: "The proxy is off, so Antigravity is left direct.", antigravityOff: "Not taken over.",
+    antiAccounts: "Antigravity accounts", antiAccountsDesc: "Saves accounts. Switching closes Antigravity, then opens it.", antiAccountsTip: "Sign in with Google, paste refresh tokens (or JSON / multi-line), or import the account Antigravity is using now. Switching closes a running Antigravity, writes the credentials, and opens it again with the current takeover settings. The export file contains refresh tokens; keep it on this computer.",
+    cursorAccountsDesc: "Saves accounts. Switching closes Cursor, then opens it.", cursorAccountsTip: "Sign in in the browser, paste session tokens (JWT, Cookie, JSON / multi-line), or import the account Cursor is using now. Switching closes a running Cursor, writes credentials, and opens it again with the current takeover settings. The export file contains credentials; keep it on this computer.",
+    cursorToken: "Cursor token", cursorTokenPh: "Paste JWT, WorkosCursorSessionToken, or user_xxx::eyJ...",
+    cursorSwitchTitle: "Switch Cursor account", cursorSwitchAsk: "Switch to {email}? A running Cursor will close and open again.", cursorSwitching: "Switching account and restarting Cursor…",
+    cursorRemoveAsk: "Remove {email}? This only deletes it from the list here. Cursor stays signed in.", cursorExportAsk: "The export file contains credentials for your accounts. Keep it on this computer and do not send it to anyone.",
+    antiEmpty: "No saved accounts yet.", antiCurrent: "Current {email}", antiCount: "{n} accounts", antiCurrentTag: "Current",
+    antiAdd: "Add", antiPaste: "Paste", antiImportCurrent: "Import current", antiRefreshAll: "Refresh all", antiExport: "Export", antiImportToken: "Import", antiImportJSON: "Import JSON", antiToken: "refresh token", antiTokenPh: "Paste refresh token (1// or JSON)", antiCancel: "Cancel", antiLoginWait: "Finish signing in in the browser. You can also copy this link.",
+    antiSwitch: "Switch", antiRefresh: "Refresh", antiRemove: "Remove",
+    antiSwitchTitle: "Switch Antigravity account", antiSwitchAsk: "Switch to {email}? A running Antigravity will close and open again.",
+    antiRemoveTitle: "Remove account", antiRemoveAsk: "Remove {email}? This only deletes it from the list here. Antigravity stays signed in.",
+    antiExportTitle: "Export backup", antiExportAsk: "The export file contains refresh tokens for your accounts. Keep it on this computer and do not send it to anyone.",
+    antiSwitching: "Switching account and restarting Antigravity…", antiForbiddenTag: "403", antiForbiddenHint: "Account restricted (403); quota unavailable", antiExpiredTag: "Expired", antiExpiredHint: "Grant expired; add account again", antiQuotaResetAt: "Resets at: {time}", antiCopyEmailTip: "Click to copy email",
+    antiAdded: "Added {email}", antiImported: "Imported {email}", antiSwitched: "Switched to {email}", antiRefreshed: "Refreshed {email}", antiRefreshedAll: "Refreshed {ok} accounts", antiRefreshedAllPartial: "Refreshed {ok} accounts, {bad} failed: {error}", antiRemoved: "Removed {email}", antiImportJSONDone: "Import finished: {ok} succeeded, {bad} failed",
     proxy: "Proxy", proxyDesc: "Outbound proxy address; empty means direct.", proxyTip: "One outbound address. A bare host:port is detected as socks5 or http. Empty means direct. Changing only the address does not close Cursor.",
     scope: "Proxy scope", scopeGlobal: "Global", scopeOfficial: "Official only",
     scopeDesc: "Default: only official endpoints use the proxy. Or send all traffic through it.", scopeTip: "Global: all Cursor and Grok Bot traffic uses the proxy above. Official only (default): only Grok, x.ai, Cursor, OpenAI and Antigravity addresses use it; everything else connects directly. Loopback and LAN are always direct.",
@@ -1213,7 +1458,7 @@ const MESSAGES = {
     capToolsRejected: "The endpoint rejected this test method",
     capSpeedVal: "{speed} tokens/s · first token {first} ms · total {duration} ms · {tokens} output tokens{estimated}", capFailed: "Test error: {error}",
     ttBadge: "text tool", ttBadgeTip: "This endpoint does not support native tool calls, so this model uses text tool mode (may be less reliable).",
-    tabsLabel: "Settings", tabModels: "Models", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyWaiting: "Waiting for proxy…", stProxyDown: "Proxy not running", proxyWaitingTip: "The proxy {addr} is not listening yet (your proxy software may still be starting). cursor-inner connects automatically once it is up; official traffic never goes direct while waiting.", proxyDownTip: "The proxy {addr} has not started listening. Start your proxy software (for example v2rayN or Clash); cursor-inner connects automatically once it is up, no restart needed.", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", takeTimeout: "Timed out waiting for takeover; it is still not in place. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
+    tabsLabel: "Settings", tabModels: "Models", tabAccounts: "Accounts", acctAntigravity: "Antigravity", tabNetwork: "Network", tabUpdate: "Update", tabGeneral: "General", more: "Details", stTakeOn: "Takeover on", stTakeOff: "Not taken over", stTakeBad: "Takeover problem", stTakePending: "Taking over…", stTakeSwitch: "Switching to the new version…", stTakeSettle: "Confirming takeover…", stLoading: "Loading…", stLinkWait: "Reconnecting…", stLinkLost: "Disconnected", stProxyWaiting: "Waiting for proxy…", stProxyDown: "Proxy not running", proxyWaitingTip: "The proxy {addr} is not listening yet (your proxy software may still be starting). cursor-inner connects automatically once it is up; official traffic never goes direct while waiting.", proxyDownTip: "The proxy {addr} has not started listening. Start your proxy software (for example v2rayN or Clash); cursor-inner connects automatically once it is up, no restart needed.", stProxyChecking: "checking…", takeNotActive: "Takeover did not come up in the expected time. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", takeTimeout: "Timed out waiting for takeover; it is still not in place. Press Open Cursor to restart it; if that does not help, press Open logs to see why.", linkLostTip: "Cannot reach the cursor-inner backend; this page keeps retrying.", stDirect: "direct", stProxyBad: "not in effect", stOfficial: "official only", stTunOn: "on", stTunStarting: "starting", stTunFailed: "fell back", stUpAvail: "Update {latest}", stUpBusy: "Updating {pct}", stUpFailed: "Update failed", stVersion: "Current version {v}",
     switchLang: "中文"
   }
 };
@@ -1293,8 +1538,10 @@ function applyLang() {
   document.querySelectorAll("[data-i18n-tip]").forEach((node) => { node.dataset.tip = t(node.dataset.i18nTip); });
   document.querySelector("#lang").textContent = t("switchLang");
   syncReveal();
+  syncAntiTokenEye();
   syncFormMode();
   rebuildGroupPick();
+  lastAntiRenderKey = "";
   if (lastState) render(lastState);
   renderStatus();
 }
@@ -2032,6 +2279,7 @@ function renderMetas(state) {
   const antiMeta = document.querySelector("#antigravity-meta");
   antiMeta.textContent = state.takeover_antigravity ? (state.proxy && state.proxy.effective ? t("antigravityOn") : t("antigravityNoProxy")) : t("antigravityOff");
   antiMeta.title = antiMeta.textContent;
+  renderAccounts(state);
 }
 
 function render(state) {
@@ -2688,6 +2936,617 @@ document.querySelector("#open-antigravity").addEventListener("click", () => {
     return null;
   });
 });
+
+const ACCT_APPS = {
+  cursor: {
+    api: "/api/cursor/accounts",
+    listField: "cursor_accounts",
+    errField: "cursor_account_error",
+    exportName: "cursor-accounts.json",
+    descKey: "cursorAccountsDesc",
+    tipKey: "cursorAccountsTip",
+    tokenPhKey: "cursorTokenPh",
+    tokenAriaKey: "cursorToken",
+    switchTitleKey: "cursorSwitchTitle",
+    switchAskKey: "cursorSwitchAsk",
+    switchingKey: "cursorSwitching",
+    removeAskKey: "cursorRemoveAsk",
+    exportAskKey: "cursorExportAsk"
+  },
+  antigravity: {
+    api: "/api/antigravity/accounts",
+    listField: "anti_accounts",
+    errField: "anti_account_error",
+    exportName: "antigravity-accounts.json",
+    descKey: "antiAccountsDesc",
+    tipKey: "antiAccountsTip",
+    tokenPhKey: "antiTokenPh",
+    tokenAriaKey: "antiToken",
+    switchTitleKey: "antiSwitchTitle",
+    switchAskKey: "antiSwitchAsk",
+    switchingKey: "antiSwitching",
+    removeAskKey: "antiRemoveAsk",
+    exportAskKey: "antiExportAsk"
+  }
+};
+const acctUI = {
+  cursor: { pasteOpen: false, loginOn: false, authUrl: "", tokenDraft: "", timer: 0 },
+  antigravity: { pasteOpen: false, loginOn: false, authUrl: "", tokenDraft: "", timer: 0 }
+};
+let activeAcctApp = "";
+let acctUserPinned = false;
+let lastOrderFirst = "";
+let lastRenderedApp = "";
+let antiBusyCount = 0;
+let lastAntiRenderKey = "";
+
+function normalizeAcctOrder(order) {
+  const out = [];
+  if (Array.isArray(order)) {
+    for (const name of order) {
+      if (ACCT_APPS[name] && !out.includes(name)) out.push(name);
+    }
+  }
+  for (const name of ["cursor", "antigravity"]) {
+    if (!out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+function acctApp() {
+  return ACCT_APPS[activeAcctApp] ? activeAcctApp : "cursor";
+}
+
+function acctDrawerBusy() {
+  if (antiBusyCount > 0) return true;
+  const dlg = document.querySelector("#anti-dialog");
+  if (dlg && dlg.open) return true;
+  const ui = acctUI[activeAcctApp];
+  if (!ui) return false;
+  if (ui.loginOn) return true;
+  if (ui.pasteOpen) {
+    const inp = document.querySelector("#anti-token");
+    if (document.activeElement === inp || (inp && inp.value.trim())) return true;
+  }
+  return false;
+}
+
+function acctAppLevel(accounts, errText) {
+  if (errText) return "bad";
+  let hasWarn = false;
+  for (const a of accounts) {
+    const bad = a.status === "forbidden" || a.status === "invalid_grant" || a.status === "expired";
+    if (!bad) continue;
+    if (a.current) return "bad";
+    hasWarn = true;
+  }
+  return hasWarn ? "warn" : "";
+}
+
+function selectAcctApp(app, pinned, focus) {
+  if (!ACCT_APPS[app]) return;
+  const inp = document.querySelector("#anti-token");
+  if (activeAcctApp && activeAcctApp !== app && acctUI[activeAcctApp] && inp) {
+    acctUI[activeAcctApp].tokenDraft = inp.value;
+  }
+  if (pinned) acctUserPinned = true;
+  const changed = activeAcctApp !== app;
+  activeAcctApp = app;
+  if (changed && inp && acctUI[app]) {
+    inp.value = acctUI[app].tokenDraft || "";
+  }
+  if (lastState) {
+    lastAntiRenderKey = "";
+    renderAccounts(lastState);
+  }
+  if (focus) {
+    const btn = document.querySelector('#account-subtabs [data-acct-app="' + app + '"]');
+    if (btn) btn.focus();
+  }
+}
+
+function onEnterAccountsTab() {
+  if (!lastState || acctDrawerBusy()) return;
+  const order = normalizeAcctOrder(lastState.account_order);
+  acctUserPinned = false;
+  if (activeAcctApp !== order[0]) {
+    const inp = document.querySelector("#anti-token");
+    if (activeAcctApp && acctUI[activeAcctApp] && inp) {
+      acctUI[activeAcctApp].tokenDraft = inp.value;
+    }
+    activeAcctApp = order[0];
+    if (inp && acctUI[activeAcctApp]) inp.value = acctUI[activeAcctApp].tokenDraft || "";
+  }
+  lastAntiRenderKey = "";
+  renderAccounts(lastState);
+}
+
+function formatAntiReset(unixSec) {
+  if (!unixSec) return "";
+  const diff = unixSec - Math.floor(Date.now() / 1000);
+  if (diff <= 0) return "";
+  if (diff >= 86400) return Math.floor(diff / 86400) + "d" + Math.floor((diff % 86400) / 3600) + "h";
+  if (diff >= 3600) return Math.floor(diff / 3600) + "h" + Math.floor((diff % 3600) / 60) + "m";
+  if (diff >= 60) return Math.floor(diff / 60) + "m";
+  return "<1m";
+}
+
+function askAntiConfirm(title, lead, okLabel, isDanger) {
+  const dlg = document.querySelector("#anti-dialog");
+  if (!dlg || typeof dlg.showModal !== "function") {
+    return Promise.resolve(confirm(lead));
+  }
+  document.querySelector("#anti-dlg-title").textContent = title;
+  document.querySelector("#anti-dlg-lead").textContent = lead;
+  const okBtn = document.querySelector("#anti-dlg-ok");
+  const cancelBtn = document.querySelector("#anti-dlg-cancel");
+  okBtn.textContent = okLabel;
+  okBtn.className = "sm " + (isDanger ? "danger" : "solid");
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ans) => {
+      if (settled) return;
+      settled = true;
+      okBtn.removeEventListener("click", onOK);
+      cancelBtn.removeEventListener("click", onCancel);
+      dlg.removeEventListener("cancel", onCancel);
+      dlg.removeEventListener("click", onBackdrop);
+      if (dlg.open) dlg.close();
+      resolve(ans);
+    };
+    const onOK = () => done(true);
+    const onCancel = (ev) => { if (ev) ev.preventDefault(); done(false); };
+    const onBackdrop = (ev) => { if (ev.target === dlg) done(false); };
+    okBtn.addEventListener("click", onOK);
+    cancelBtn.addEventListener("click", onCancel);
+    dlg.addEventListener("cancel", onCancel);
+    dlg.addEventListener("click", onBackdrop);
+    dlg.showModal();
+    (isDanger ? cancelBtn : okBtn).focus();
+  });
+}
+
+async function withAntiBusy(button, fn) {
+  antiBusyCount++;
+  if (button) {
+    button.classList.add("testing");
+    button.setAttribute("aria-busy", "true");
+    button.disabled = true;
+  }
+  try {
+    return await fn();
+  } finally {
+    antiBusyCount = Math.max(0, antiBusyCount - 1);
+    if (button) {
+      button.classList.remove("testing");
+      button.removeAttribute("aria-busy");
+      button.disabled = false;
+    }
+  }
+}
+
+function syncAntiTokenEye() {
+  const inp = document.querySelector("#anti-token");
+  const btn = document.querySelector("#anti-token-eye");
+  if (!inp || !btn) return;
+  const shown = inp.type === "text";
+  btn.querySelector(".eye-on").hidden = !shown;
+  btn.querySelector(".eye-off").hidden = shown;
+  btn.title = shown ? t("hideKey") : t("showKey");
+  btn.setAttribute("aria-label", btn.title);
+}
+
+function renderAccounts(state) {
+  if (!state) return;
+  const order = normalizeAcctOrder(state.account_order);
+  const first = order[0];
+  if (!acctDrawerBusy()) {
+    if (!activeAcctApp || (!acctUserPinned && activeAcctApp !== first) || (first !== lastOrderFirst)) {
+      if (first !== lastOrderFirst) acctUserPinned = false;
+      const inp = document.querySelector("#anti-token");
+      if (activeAcctApp && activeAcctApp !== first && acctUI[activeAcctApp] && inp) {
+        acctUI[activeAcctApp].tokenDraft = inp.value;
+      }
+      activeAcctApp = first;
+      if (inp && acctUI[activeAcctApp]) inp.value = acctUI[activeAcctApp].tokenDraft || "";
+    }
+  }
+  lastOrderFirst = first;
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+
+  const subtabs = document.querySelector("#account-subtabs");
+  const desired = order.map(name => document.querySelector("#subtab-" + name)).filter(Boolean);
+  if (desired.length && desired.some((node, idx) => subtabs.children[idx] !== node)) {
+    subtabs.replaceChildren(...desired);
+  }
+
+  let totalCount = 0;
+  let worstLevel = "";
+  for (const name of ["cursor", "antigravity"]) {
+    const s = ACCT_APPS[name];
+    const items = Array.isArray(state[s.listField]) ? state[s.listField] : [];
+    const err = tr(state[s.errField]);
+    totalCount += items.length;
+    const cntNode = document.querySelector(name === "cursor" ? "#cursor-acct-count" : "#anti-acct-count");
+    if (cntNode) cntNode.textContent = String(items.length);
+    const lvl = acctAppLevel(items, err);
+    const sdot = document.querySelector("#subtab-dot-" + name);
+    if (sdot) sdot.className = "tab-dot" + (lvl ? " " + lvl : "");
+    if (lvl === "bad" || (lvl === "warn" && worstLevel === "")) worstLevel = lvl;
+    const btn = document.querySelector("#subtab-" + name);
+    if (btn) {
+      const selected = name === app;
+      btn.setAttribute("aria-selected", String(selected));
+      btn.tabIndex = selected ? 0 : -1;
+    }
+  }
+  document.querySelector("#account-count").textContent = String(totalCount);
+  setDot("accounts", worstLevel);
+
+  const accounts = Array.isArray(state[spec.listField]) ? state[spec.listField] : [];
+  const desc = document.querySelector("#acct-desc");
+  desc.textContent = t(spec.descKey);
+  desc.title = desc.textContent;
+  document.querySelector("#acct-tip").dataset.tip = t(spec.tipKey);
+
+  document.querySelector("#anti-import").hidden = !ui.pasteOpen;
+  document.querySelector("#anti-login").hidden = !ui.loginOn;
+  document.querySelector("#anti-auth-url").value = ui.authUrl || "";
+  document.querySelector("#anti-paste").setAttribute("aria-expanded", String(ui.pasteOpen));
+  const tokenInp = document.querySelector("#anti-token");
+  tokenInp.placeholder = t(spec.tokenPhKey);
+  tokenInp.setAttribute("aria-label", t(spec.tokenAriaKey));
+
+  document.querySelector("#anti-refresh-all").hidden = accounts.length === 0;
+  document.querySelector("#anti-export").hidden = accounts.length === 0;
+
+  const meta = document.querySelector("#anti-accounts-meta");
+  const errText = tr(state[spec.errField]);
+  meta.classList.toggle("warn", !!errText);
+  if (errText) meta.textContent = errText;
+  else if (accounts.length === 0) meta.textContent = "";
+  else {
+    const current = accounts.find((account) => account.current);
+    meta.textContent = current ? t("antiCurrent", {email: current.email}) : t("antiCount", {n: String(accounts.length)});
+  }
+  meta.title = meta.textContent;
+  document.querySelector("#acct-empty").hidden = accounts.length > 0 || !!errText;
+
+  const listKey = JSON.stringify({lang, app, accounts});
+  if ((antiBusyCount > 0 && app === lastRenderedApp) || listKey === lastAntiRenderKey) return;
+  lastAntiRenderKey = listKey;
+  lastRenderedApp = app;
+
+  const list = document.querySelector("#anti-account-list");
+  list.replaceChildren();
+  for (const account of accounts) {
+    const item = el("li", "anti-item" + (account.current ? " is-current" : ""));
+    const who = el("div", "anti-who");
+    const emailBtn = el("button", "anti-email", account.email);
+    emailBtn.type = "button";
+    emailBtn.dataset.tip = (account.name && account.name !== account.email ? account.name + " · " : "") + t("antiCopyEmailTip");
+    emailBtn.addEventListener("click", () => void copyText(account.email));
+    who.append(emailBtn);
+
+    const isExpired = account.status === "invalid_grant" || account.status === "expired";
+    const badges = el("span", "anti-badges");
+    if (account.current) badges.append(el("span", "anti-badge current", t("antiCurrentTag")));
+    if (account.tier) {
+      const tierKey = account.tier.toLowerCase().replace(/\+/g, "_plus").replace(/[^a-z0-9_]/g, "");
+      badges.append(el("span", "anti-badge tier-" + tierKey, account.tier));
+    }
+    if (account.status === "forbidden") badges.append(el("span", "anti-badge bad", t("antiForbiddenTag")));
+    else if (isExpired) badges.append(el("span", "anti-badge bad", t("antiExpiredTag")));
+    if (badges.childNodes.length) who.append(badges);
+
+    const quotas = el("div", "anti-quotas");
+    if (Array.isArray(account.quotas) && account.quotas.length) {
+      for (const q of account.quotas) {
+        const qNode = el("span", "anti-q");
+        const pct = Math.max(0, Math.min(100, Number(q.percent) || 0));
+        const track = el("span", "anti-q-track");
+        const fill = el("span", "anti-q-fill" + (pct <= 5 ? " empty" : pct <= 25 ? " low" : ""));
+        fill.style.width = pct + "%";
+        track.append(fill);
+        qNode.append(el("span", "anti-q-name", q.label), track, el("span", "anti-q-pct mono", pct + "%"));
+        const resetTxt = formatAntiReset(q.reset_at);
+        if (resetTxt) qNode.append(el("span", "anti-q-reset mono", resetTxt));
+        const tipBits = [q.label + " " + pct + "%" + (q.window ? " (" + q.window + ")" : "")];
+        if (q.reset_at) tipBits.push(t("antiQuotaResetAt", {time: new Date(q.reset_at * 1000).toLocaleString()}));
+        qNode.dataset.tip = tipBits.join(" · ");
+        quotas.append(qNode);
+      }
+    } else if (account.status === "forbidden") {
+      quotas.append(el("span", "anti-q-msg bad", t("antiForbiddenHint")));
+    } else if (isExpired) {
+      quotas.append(el("span", "anti-q-msg bad", t("antiExpiredHint")));
+    } else {
+      quotas.append(el("span", "anti-q-msg", "--"));
+    }
+
+    const ops = el("div", "anti-ops");
+    for (const [key, action] of [["antiSwitch", "switch"], ["antiRefresh", "refresh"], ["antiRemove", "remove"]]) {
+      const button = el("button", "sm" + (action === "remove" ? " danger" : " test-btn") + (action === "switch" && !account.current ? " switch-ready" : ""), t(key));
+      button.type = "button";
+      button.dataset.anti = action;
+      button.dataset.app = app;
+      button.dataset.id = account.id;
+      button.dataset.email = account.email;
+      ops.append(button);
+    }
+    item.append(who, quotas, ops);
+    list.append(item);
+  }
+}
+
+for (const button of document.querySelectorAll('#account-subtabs [role="tab"]')) {
+  button.addEventListener("click", () => selectAcctApp(button.dataset.acctApp, true));
+  button.addEventListener("keydown", (event) => {
+    const shown = [...document.querySelectorAll('#account-subtabs [role="tab"]')];
+    const i = shown.indexOf(button);
+    let next = null;
+    if (event.key === "ArrowRight") next = shown[(i + 1) % shown.length];
+    else if (event.key === "ArrowLeft") next = shown[(i - 1 + shown.length) % shown.length];
+    else if (event.key === "Home") next = shown[0];
+    else if (event.key === "End") next = shown[shown.length - 1];
+    if (!next) return;
+    event.preventDefault();
+    selectAcctApp(next.dataset.acctApp, true, true);
+  });
+}
+
+function stopAcctLoginPoll(app) {
+  const ui = acctUI[app];
+  if (ui && ui.timer) clearInterval(ui.timer);
+  if (ui) ui.timer = 0;
+}
+
+async function pollAcctLogin(app) {
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+  if (!spec || !ui) return;
+  try {
+    const status = await send(spec.api + "/login");
+    if (status.running) return;
+    stopAcctLoginPoll(app);
+    ui.loginOn = false;
+    ui.authUrl = "";
+    if (acctApp() === app) document.querySelector("#anti-login").hidden = true;
+    const errText = tr(status.error);
+    if (errText) showError(errText);
+    else if (status.account) toast(t("antiAdded", {email: status.account.email || ""}), "ok");
+    lastAntiRenderKey = "";
+    load();
+  } catch (err) {
+    stopAcctLoginPoll(app);
+    ui.loginOn = false;
+    ui.authUrl = "";
+    if (acctApp() === app) document.querySelector("#anti-login").hidden = true;
+    showError(err.message);
+  }
+}
+
+document.querySelector("#anti-account-list").addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  if (!button || !button.dataset.anti || !button.dataset.id) return;
+  const app = button.dataset.app || acctApp();
+  const spec = ACCT_APPS[app];
+  if (!spec) return;
+  const id = encodeURIComponent(button.dataset.id);
+  const email = button.dataset.email || "";
+  if (button.dataset.anti === "switch") {
+    if (!(await askAntiConfirm(t(spec.switchTitleKey), t(spec.switchAskKey, {email}), t("antiSwitch"), false))) return;
+    await withAntiBusy(button, () => act(async () => {
+      toast(t(spec.switchingKey), "pending");
+      const state = await send(spec.api + "/" + id + "/switch", {method: "POST"});
+      lastAntiRenderKey = "";
+      toast(t("antiSwitched", {email}), "ok");
+      return state;
+    }));
+    return;
+  }
+  if (button.dataset.anti === "remove") {
+    if (!(await askAntiConfirm(t("antiRemoveTitle"), t(spec.removeAskKey, {email}), t("antiRemove"), true))) return;
+    await withAntiBusy(button, () => act(async () => {
+      const state = await send(spec.api + "/" + id, {method: "DELETE"});
+      lastAntiRenderKey = "";
+      toast(t("antiRemoved", {email}), "ok");
+      return state;
+    }));
+    return;
+  }
+  if (button.dataset.anti === "refresh") {
+    await withAntiBusy(button, () => act(async () => {
+      const view = await send(spec.api + "/" + id + "/refresh", {method: "POST"});
+      lastAntiRenderKey = "";
+      toast(t("antiRefreshed", {email: view.email || email}), "ok");
+      return await send("/api/state");
+    }));
+  }
+});
+
+document.querySelector("#anti-add").addEventListener("click", () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+  const btn = document.querySelector("#anti-add");
+  void withAntiBusy(btn, () => act(async () => {
+    const data = await send(spec.api + "/login", {method: "POST"});
+    ui.loginOn = true;
+    ui.authUrl = data.auth_url || "";
+    if (acctApp() === app) {
+      document.querySelector("#anti-auth-url").value = ui.authUrl;
+      document.querySelector("#anti-login").hidden = false;
+    }
+    stopAcctLoginPoll(app);
+    ui.timer = setInterval(() => void pollAcctLogin(app), 1500);
+    return null;
+  }));
+});
+document.querySelector("#anti-auth-url").addEventListener("click", (ev) => {
+  ev.target.select();
+  void copyText(ev.target.value);
+});
+document.querySelector("#anti-copy-url").addEventListener("click", () => {
+  void copyText(document.querySelector("#anti-auth-url").value);
+});
+document.querySelector("#anti-login-cancel").addEventListener("click", () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+  act(async () => {
+    await send(spec.api + "/login", {method: "DELETE"});
+    stopAcctLoginPoll(app);
+    ui.loginOn = false;
+    ui.authUrl = "";
+    if (acctApp() === app) document.querySelector("#anti-login").hidden = true;
+    return await send("/api/state");
+  });
+});
+document.querySelector("#anti-paste").addEventListener("click", () => {
+  const app = acctApp();
+  const ui = acctUI[app];
+  ui.pasteOpen = !ui.pasteOpen;
+  document.querySelector("#anti-import").hidden = !ui.pasteOpen;
+  document.querySelector("#anti-paste").setAttribute("aria-expanded", String(ui.pasteOpen));
+  if (ui.pasteOpen) document.querySelector("#anti-token").focus();
+});
+document.querySelector("#anti-token-eye").addEventListener("click", () => {
+  const inp = document.querySelector("#anti-token");
+  inp.type = inp.type === "password" ? "text" : "password";
+  syncAntiTokenEye();
+});
+document.querySelector("#anti-token").addEventListener("paste", (event) => {
+  const raw = event.clipboardData && event.clipboardData.getData("text");
+  if (!raw || !/[\r\n]/.test(raw)) return;
+  if (!raw.includes("1//") && acctApp() !== "cursor" && !/^[\s]*[\[{]/.test(raw)) return;
+  event.preventDefault();
+  const inp = document.querySelector("#anti-token");
+  inp.value = raw.replace(/[\r\n]+/g, " ").trim();
+  acctUI[acctApp()].tokenDraft = inp.value;
+});
+document.querySelector("#anti-token").addEventListener("input", (event) => {
+  const ui = acctUI[acctApp()];
+  if (ui) ui.tokenDraft = event.target.value;
+});
+document.querySelector("#anti-token").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); document.querySelector("#anti-import-token").click(); }
+  else if (event.key === "Escape") {
+    const ui = acctUI[acctApp()];
+    if (ui) ui.pasteOpen = false;
+    document.querySelector("#anti-import").hidden = true;
+    document.querySelector("#anti-paste").setAttribute("aria-expanded", "false");
+  }
+});
+document.querySelector("#anti-import-token").addEventListener("click", () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+  const raw = document.querySelector("#anti-token").value.trim();
+  const btn = document.querySelector("#anti-import-token");
+  void withAntiBusy(btn, () => act(async () => {
+    const looksMultiOrJSON = raw.startsWith("{") || raw.startsWith("[") || (raw.match(/1\/\//g) || []).length > 1 || (app === "cursor" && /[\s,;]/.test(raw) && raw.split(/[\s,;]+/).filter(Boolean).length > 1);
+    if (looksMultiOrJSON) {
+      const data = await send(spec.api + "/import-json", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: raw,
+      });
+      ui.tokenDraft = "";
+      ui.pasteOpen = false;
+      if (acctApp() === app) document.querySelector("#anti-token").value = "";
+      const results = data.results || [];
+      const ok = results.filter((item) => item.ok).length;
+      const bad = results.length - ok;
+      const failed = results.find((item) => !item.ok);
+      lastAntiRenderKey = "";
+      if (failed) showError(tr(failed.error) || t("antiImportJSONDone", {ok: String(ok), bad: String(bad)}));
+      else toast(t("antiImportJSONDone", {ok: String(ok), bad: String(bad)}), "ok");
+      return await send("/api/state");
+    }
+    const view = await send(spec.api + "/import", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({refresh_token: raw}),
+    });
+    ui.tokenDraft = "";
+    ui.pasteOpen = false;
+    if (acctApp() === app) document.querySelector("#anti-token").value = "";
+    lastAntiRenderKey = "";
+    toast(t("antiImported", {email: view.email || ""}), "ok");
+    return await send("/api/state");
+  }));
+});
+document.querySelector("#anti-import-json").addEventListener("click", () => {
+  document.querySelector("#anti-json-file").click();
+});
+document.querySelector("#anti-json-file").addEventListener("change", () => {
+  const input = document.querySelector("#anti-json-file");
+  const file = input.files && input.files[0];
+  input.value = "";
+  if (!file) return;
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const ui = acctUI[app];
+  const btn = document.querySelector("#anti-import-json");
+  void withAntiBusy(btn, () => act(async () => {
+    const raw = await file.text();
+    const data = await send(spec.api + "/import-json", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: raw,
+    });
+    ui.pasteOpen = false;
+    lastAntiRenderKey = "";
+    const results = data.results || [];
+    const ok = results.filter((item) => item.ok).length;
+    const bad = results.length - ok;
+    const failed = results.find((item) => !item.ok);
+    if (failed) showError(tr(failed.error) || t("antiImportJSONDone", {ok: String(ok), bad: String(bad)}));
+    else toast(t("antiImportJSONDone", {ok: String(ok), bad: String(bad)}), "ok");
+    return await send("/api/state");
+  }));
+});
+document.querySelector("#anti-import-current").addEventListener("click", () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const btn = document.querySelector("#anti-import-current");
+  void withAntiBusy(btn, () => act(async () => {
+    const view = await send(spec.api + "/import-current", {method: "POST"});
+    lastAntiRenderKey = "";
+    toast(t("antiImported", {email: view.email || ""}), "ok");
+    return await send("/api/state");
+  }));
+});
+document.querySelector("#anti-refresh-all").addEventListener("click", () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  const btn = document.querySelector("#anti-refresh-all");
+  void withAntiBusy(btn, () => act(async () => {
+    const res = await send(spec.api + "/refresh-all", {method: "POST"});
+    lastAntiRenderKey = "";
+    if (res.bad > 0) showError(t("antiRefreshedAllPartial", {ok: String(res.ok), bad: String(res.bad), error: tr(res.error) || t("unknownError")}));
+    else toast(t("antiRefreshedAll", {ok: String(res.ok)}), "ok");
+    return res.state || await send("/api/state");
+  }));
+});
+document.querySelector("#anti-export").addEventListener("click", async () => {
+  const app = acctApp();
+  const spec = ACCT_APPS[app];
+  if (!(await askAntiConfirm(t("antiExportTitle"), t(spec.exportAskKey), t("antiExport"), false))) return;
+  act(async () => {
+    const data = await send(spec.api + "/export");
+    const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], {type: "application/json"});
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = spec.exportName;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    return null;
+  });
+});
 document.querySelector("#run-leakcheck").addEventListener("click", () => {
   act(async () => {
     await send("/api/leakcheck", {method: "POST"});
@@ -2814,8 +3673,8 @@ document.addEventListener("mouseout", (event) => {
   hideTip();
 });
 // —— 标签页与状态条 ——
-// 当前标签记在 URL hash（#models / #network / #update / #general）：刷新、热交接后的自动刷新、托盘直达都停在同一个标签。
-const TABS = ["models", "network", "general", "update"];
+// 当前标签记在 URL hash（#models / #accounts / #network / #update / #general）：刷新、热交接后的自动刷新、托盘直达都停在同一个标签。
+const TABS = ["models", "accounts", "network", "general", "update"];
 const tabButtons = [...document.querySelectorAll('.tabs [role="tab"]')];
 let upMissing = false; // 后端没有更新器（/api/update 不可用）：隐藏“更新”标签
 function tabFromHash() {
@@ -2824,6 +3683,8 @@ function tabFromHash() {
   return TABS.includes(name) ? name : "models";
 }
 function showTab(name, focus) {
+  const prevNode = tabButtons.find(b => b.getAttribute("aria-selected") === "true");
+  const prevTab = prevNode ? prevNode.dataset.tab : "";
   for (const button of tabButtons) {
     const on = button.dataset.tab === name;
     button.setAttribute("aria-selected", String(on));
@@ -2831,6 +3692,7 @@ function showTab(name, focus) {
     document.getElementById(button.getAttribute("aria-controls")).hidden = !on;
     if (on && focus) button.focus();
   }
+  if (name === "accounts" && prevTab !== "accounts") onEnterAccountsTab();
   hideTip();
 }
 function selectTab(name, focus) {

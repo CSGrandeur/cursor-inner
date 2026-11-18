@@ -87,6 +87,8 @@ const silentToolLimit = 2
 // 必须正常收尾（pauseTurn）：若以错误结束，客户端会把整轮渲染成 Operation interrupted.，已流出的正文和改动会看不见。
 const inspectionPauseNotice = "\n\n（本轮已暂停：上游内容审核未通过%s。已完成步骤和检查点已保留。请修改任务说明或更换模型后发送新消息继续。这不是传输中断或长度截断，也不会自动重试同一请求。）"
 
+const pendingExecNotice = "\n\n(Paused: an editor execution has no confirmed terminal result. Its state and received events are saved. It will not be automatically repeated. Resume to collect its result, or inspect the editor before taking further action.)"
+
 const silentToolNotice = "\n\n(Stopped: the editor did not respond to %d tool calls in a row. Send a new message to retry.)"
 
 // toolWaitLimit 是一次普通执行在没有新消息时最多再等多久。
@@ -110,7 +112,9 @@ type Session struct {
 	stateMu          sync.Mutex     // serialize adoption with starting a model runner
 	run              *cursorpb.AgentRunRequest
 	history          *History
-	inbox            chan *cursorpb.ExecClientMessage
+	bookOnce         sync.Once
+	execBook         *execBook
+	runInstance      uint64
 	replies          chan *cursorpb.InteractionResponse
 	stopped          chan struct{}
 	nextID           uint32
@@ -122,7 +126,6 @@ type Session struct {
 	workspaces       []string
 	dial             dialer.Func
 	mcp              []*cursorpb.McpToolDefinition
-	early            map[uint32]*cursorpb.ExecClientMessage
 	steer            chan struct{}
 	queueMu          sync.Mutex
 	queued           []steer
@@ -152,20 +155,20 @@ type Session struct {
 }
 
 func newSession(requestID string, model config.Model, run *cursorpb.AgentRunRequest, history *History) *Session {
-	return &Session{
+	s := &Session{
 		RequestID: requestID,
 		Model:     model,
 		run:       run,
 		history:   history,
-		inbox:     make(chan *cursorpb.ExecClientMessage, 64),
 		replies:   make(chan *cursorpb.InteractionResponse, 8),
 		kv:        make(chan *cursorpb.KvClientMessage, 8),
 		stopped:   make(chan struct{}, 1),
 		argFails:  map[string]int{},
-		early:     map[uint32]*cursorpb.ExecClientMessage{},
 		steer:     make(chan struct{}, 1),
 		loops:     newLoopTracker(),
 	}
+	s.book()
+	return s
 }
 
 func (s *Session) deliverKV(msg *cursorpb.KvClientMessage) {
@@ -336,13 +339,7 @@ func formatToolUses(order []string, counts map[string]int) string {
 	return b.String()
 }
 
-func (s *Session) deliver(msg *cursorpb.ExecClientMessage) {
-	select {
-	case s.inbox <- msg:
-	default:
-		slog.Warn(fmt.Sprintf("会话 %s 的执行结果队列已满，丢弃 id=%d", s.RequestID, msg.GetId()))
-	}
-}
+func (s *Session) deliver(msg *cursorpb.ExecClientMessage) { s.enqueueExec(msg) }
 
 // ConversationID 是这条 run 所属的会话，用于按会话找回已经答完的 run。
 func (s *Session) ConversationID() string {
@@ -381,7 +378,7 @@ func (s *Session) adopt(run *cursorpb.AgentRunRequest) {
 func (s *Session) HasQueuedInput() bool {
 	s.queueMu.Lock()
 	defer s.queueMu.Unlock()
-	return len(s.queued) > 0 || len(s.inserts) > 0 || len(s.pending) > 0
+	return len(s.queued) > 0 || len(s.inserts) > 0 || len(s.pending) > 0 || s.hasPendingExec()
 }
 
 func (s *Session) deliverInteraction(msg *cursorpb.InteractionResponse) {
@@ -477,7 +474,6 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	s.finished.Store(false)
 	s.stateMu.Unlock()
 	defer s.running.Store(0)
-	defer s.execs.Clear()
 	defer s.finished.Store(true)
 	// 已经答完的 run 被 resume 时会在同一个会话上再跑一轮（例如后台任务完成），
 	// 结束标记已在启动锁内清掉；这里重置自动压缩记录，避免沿用上一轮的压缩状态。
@@ -487,13 +483,19 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	var mu sync.Mutex
 	send := func(m *cursorpb.AgentServerMessage) error {
 		if exec := m.GetExecServerMessage(); exec != nil {
-			s.execs.Store(exec.GetId(), exec.GetExecId())
+			s.execDispatched(exec)
+			if err := s.execJournalError(); err != nil {
+				return err
+			}
 			slog.Debug("exec dispatched", "session", s.RequestID, "id", exec.GetId(), "exec", exec.GetExecId())
 		}
 		noteClient(s.RequestID, m)
 		mu.Lock()
 		defer mu.Unlock()
 		err := emit(m)
+		if exec := m.GetExecServerMessage(); exec != nil {
+			s.execWritten(exec.GetId(), err)
+		}
 		if err != nil {
 			runlog.Emit(runlog.Note{Kind: "client", Request: s.RequestID, Detail: "write_error", Error: err.Error()})
 		}
@@ -624,6 +626,19 @@ func (s *Session) Run(ctx context.Context, dial dialer.Func, emit Emit) (runErr 
 	if skipReason != "" {
 		slog.Info("turn_skip 本次不调用模型", "conversation", short, "action", plan.kind, "reason", skipReason, logx.FileOnly)
 		return send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_TurnEnded{TurnEnded: &cursorpb.TurnEndedUpdate{}}}))
+	}
+	if s.foreignPendingExec() {
+		_, err = s.pauseTurn(send, conversation, system, messages, mode, "An earlier editor execution in this conversation is still unresolved. Resume that turn or inspect its state before issuing another action.")
+		return err
+	}
+	var resumePause string
+	messages, resumePause, err = s.resumeExecJobs(ctx, send, messages)
+	if err != nil {
+		return err
+	}
+	if resumePause != "" {
+		_, err = s.pauseTurn(send, conversation, system, messages, mode, resumePause)
+		return err
 	}
 	runlog.Emit(runlog.Note{Kind: "turn", Request: s.RequestID, Model: name, Detail: "start", Messages: userTurns(messages)})
 	defer func() {
@@ -825,6 +840,15 @@ next:
 				return err
 			}
 			for _, outcome := range results {
+				if outcome.pause != "" {
+					closed, e := s.pauseTurn(send, conversation, system, messages, mode, outcome.pause)
+					messages = closed
+					if e != nil {
+						return e
+					}
+					sentCheckpoint = true
+					return nil
+				}
 				if outcome.stop {
 					slog.Warn(fmt.Sprintf("会话 %s 的工具 %s 连续 %d 次参数错误，暂停这一轮", s.RequestID, outcome.call.Name, argFailLimit))
 					closed, err := s.pauseTurn(send, conversation, system, messages, mode, fmt.Sprintf(argFailNotice, outcome.call.Name, argFailLimit))
@@ -937,6 +961,7 @@ func hasModelWork(messages []provider.Message) bool {
 }
 
 type toolOutcome struct {
+	pause  string
 	call   provider.ToolCall
 	text   string
 	images []provider.Image
@@ -968,6 +993,9 @@ func (s *Session) catalogFor(mode cursorpb.AgentMode) []provider.Tool {
 }
 
 func (s *Session) runTool(ctx context.Context, send Emit, call provider.ToolCall) (toolOutcome, error) {
+	if s.hasUnresolvedExec() {
+		return toolOutcome{call: call, isErr: true, pause: pendingExecNotice, text: "This tool was not dispatched because an earlier editor execution is unresolved."}, nil
+	}
 	call = s.repair(call)
 	if text, isErr, ui, ok := tools.FinishLocal(call); ok {
 		return s.card(send, call, text, isErr, ui, "")
@@ -1231,31 +1259,47 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 	s.prepareExec(pending, exec)
 	s.noteTool(call.Name)
 	runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "start", WaitMs: toolBudget(pending).Milliseconds()})
+	job := s.beginExecJob(call, exec.GetId())
+	stage := 0
 	if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallStarted{ToolCallStarted: &cursorpb.ToolCallStartedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 		return toolOutcome{}, err
 	}
 	for {
-		if err := send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ExecServerMessage{ExecServerMessage: exec}}); err != nil {
-			return toolOutcome{}, err
+		if !s.execWasSent(exec.GetId()) {
+			s.execDispatched(exec)
+			if err := s.execJournalError(); err != nil {
+				return toolOutcome{}, err
+			}
+			if err := send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ExecServerMessage{ExecServerMessage: exec}}); err != nil {
+				return toolOutcome{}, err
+			}
 		}
 		s.track(exec.GetId())
 		started := time.Now()
 		for {
 			result, err := s.awaitTool(ctx, pending, exec.GetId())
-			if gaveUp(err, ctx) {
-				slog.Debug("会话工具等待超时", "conversation", s.RequestID, "tool", call.Name)
+			if lifecycleError(err) {
 				s.untrack(exec.GetId())
-				s.silentTools++
-				if pending != nil && pending.Wait > 0 {
-					runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "left_running", ElapsedMs: time.Since(started).Milliseconds()})
-					return s.stopTool(send, call, ui, leftRunning(call.Name))
+				var failure *execWaitError
+				errors.As(err, &failure)
+				slog.Debug("exec wait ended", "run_instance", s.runInstance, "request", s.RequestID, "id", exec.GetId(), "reason", failure.reason)
+				if failure.reason == "client_throw" {
+					out := toolOutcome{call: call, text: "The editor executor reported an error. Partial side effects may exist; inspect state before retrying.", isErr: true, card: ui, pause: pendingExecNotice}
+					s.finishExecJob(out)
+					return out, nil
 				}
-				_ = send(abortExec(exec.GetId()))
-				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "stopped", ElapsedMs: time.Since(started).Milliseconds()})
-				return s.stopTool(send, call, ui, toolStopped)
+				if failure.reason == "execution_total_limit" {
+					_ = send(abortExec(exec.GetId()))
+				}
+				if failure.reason == "inactive" {
+					s.silentTools++
+				}
+				out, e := s.stopTool(send, call, ui, leftRunning(call.Name))
+				out.pause = pendingExecNotice
+				return out, e
 			}
 			if errors.Is(err, errBreak) {
-				s.untrack(exec.GetId())
+				s.cancelExecJob(call.ID)
 				_ = send(abortExec(exec.GetId()))
 				return toolOutcome{}, err
 			}
@@ -1271,6 +1315,8 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 			}
 			if done {
 				s.untrack(exec.GetId())
+				out := toolOutcome{call: call, text: text, images: pending.Images, isErr: isErr, card: ui}
+				s.finishExecJob(out)
 				if ui.GetShellToolCall() == nil || ui.GetShellToolCall().GetResult().GetResult() != nil {
 					if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallCompleted{ToolCallCompleted: &cursorpb.ToolCallCompletedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 						return toolOutcome{}, err
@@ -1280,19 +1326,18 @@ func (s *Session) execLoop(ctx context.Context, send Emit, call provider.ToolCal
 				if !isErr {
 					s.noteEdited(call)
 				}
-				return toolOutcome{call: call, text: text, images: pending.Images, isErr: isErr, card: ui}, nil
+				return out, nil
 			}
-			if pastWait(pending, started) {
-				slog.Debug("会话工具等待超时", "conversation", s.RequestID, "tool", call.Name)
+			if next != nil && s.cancelledBeforeStage(job, stage+1) {
 				s.untrack(exec.GetId())
-				runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Tool: call.Name, Detail: "left_running", ElapsedMs: time.Since(started).Milliseconds()})
-				return s.stopTool(send, call, ui, leftRunning(call.Name))
+				out := toolOutcome{call: call, isErr: true, text: "Cancelled before the next execution stage. No additional operation was dispatched."}
+				s.finishExecJob(out)
+				return out, nil
 			}
 			if next != nil {
 				s.untrack(exec.GetId())
-				s.nextID++
-				next.Id = s.nextID
-				next.ExecId = fmt.Sprintf("%s-%d", call.ID, s.nextID)
+				stage++
+				s.jobStage(job, stage, next)
 				exec = next
 				break
 			}
@@ -1316,6 +1361,13 @@ func (s *Session) prepareExec(pending *tools.Pending, exec *cursorpb.ExecServerM
 }
 
 func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.ToolCall) ([]toolOutcome, error) {
+	if s.hasUnresolvedExec() {
+		out := make([]toolOutcome, len(calls))
+		for i, c := range calls {
+			out[i] = toolOutcome{call: c, isErr: true, pause: pendingExecNotice, text: "This tool was not dispatched because an earlier editor execution is unresolved."}
+		}
+		return out, nil
+	}
 	outcomes := make([]toolOutcome, len(calls))
 	waiting := map[uint32]int{}
 	type live struct {
@@ -1339,6 +1391,11 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		if err := send(interaction(&cursorpb.InteractionUpdate{Message: &cursorpb.InteractionUpdate_ToolCallStarted{ToolCallStarted: &cursorpb.ToolCallStartedUpdate{CallId: call.ID, ToolCall: ui}}})); err != nil {
 			return outcomes, err
 		}
+		s.beginExecJob(call, exec.GetId())
+		s.execDispatched(exec)
+		if err := s.execJournalError(); err != nil {
+			return outcomes, err
+		}
 		if err := send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ExecServerMessage{ExecServerMessage: exec}}); err != nil {
 			return outcomes, err
 		}
@@ -1347,25 +1404,35 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		jobs[i] = live{pending: pending, ui: ui, call: call}
 	}
 	for len(waiting) > 0 {
-		waitCtx, cancel := context.WithTimeout(ctx, toolWaitLimit)
-		msg, err := s.awaitAny(waitCtx, waiting)
-		cancel()
-		if gaveUp(err, ctx) {
-			slog.Debug("会话并行工具等待超时", "conversation", s.RequestID, "pending", len(waiting))
-			s.silentTools++
-			runlog.Emit(runlog.Note{Kind: "tool", Request: s.RequestID, Detail: "parallel_stopped", Tools: len(waiting)})
-			for id, index := range waiting {
-				s.untrack(id)
-				_ = send(abortExec(id))
-				job := jobs[index]
-				out, stopErr := s.stopTool(send, job.call, job.ui, toolStopped)
-				if stopErr != nil {
-					return outcomes, stopErr
-				}
-				outcomes[index] = out
+		msg, err := s.awaitAny(ctx, waiting)
+		if lifecycleError(err) {
+			var failure *execWaitError
+			errors.As(err, &failure)
+			slog.Debug("exec wait ended", "run_instance", s.runInstance, "request", s.RequestID, "id", failure.id, "reason", failure.reason)
+			index, ok := waiting[failure.id]
+			if !ok {
+				return outcomes, err
 			}
-			return outcomes, nil
+			delete(waiting, failure.id)
+			s.untrack(failure.id)
+			job := jobs[index]
+			if failure.reason == "client_throw" {
+				outcomes[index] = toolOutcome{call: job.call, text: "The editor executor reported an error. Inspect state before retrying.", isErr: true, card: job.ui, pause: pendingExecNotice}
+				s.finishExecJob(outcomes[index])
+			} else {
+				out, _ := s.stopTool(send, job.call, job.ui, toolStopped)
+				out.pause = pendingExecNotice
+				outcomes[index] = out
+				if failure.reason == "execution_total_limit" {
+					_ = send(abortExec(failure.id))
+				}
+				if failure.reason == "inactive" {
+					s.silentTools++
+				}
+			}
+			continue
 		}
+
 		if err != nil {
 			return outcomes, err
 		}
@@ -1376,9 +1443,13 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 		job := jobs[index]
 		next, text, isErr := job.pending.Advance(msg, job.ui)
 		if next != nil {
-			s.nextID++
-			next.Id = s.nextID
-			next.ExecId = fmt.Sprintf("%s-%d", job.call.ID, s.nextID)
+			b := s.book()
+			b.mu.Lock()
+			saved := b.jobs[job.call.ID]
+			stage := len(saved.Stages)
+			b.mu.Unlock()
+			s.jobStage(saved, stage, next)
+			s.execDispatched(next)
 			if err := send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ExecServerMessage{ExecServerMessage: next}}); err != nil {
 				return outcomes, err
 			}
@@ -1390,6 +1461,7 @@ func (s *Session) runParallel(ctx context.Context, send Emit, calls []provider.T
 			return outcomes, err
 		}
 		outcomes[index] = toolOutcome{call: job.call, text: text, images: job.pending.Images, isErr: isErr, card: job.ui}
+		s.finishExecJob(outcomes[index])
 	}
 	return outcomes, nil
 }
@@ -1408,9 +1480,7 @@ func (s *Session) awaitTool(ctx context.Context, pending *tools.Pending, id uint
 	if pending != nil && pending.Wait > 0 {
 		limit = pending.Wait
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, limit)
-	defer cancel()
-	return s.await(waitCtx, id)
+	return s.waitExec(ctx, map[uint32]int{id: 0}, limit, execTotalLimit, true)
 }
 
 func pastWait(pending *tools.Pending, started time.Time) bool {
@@ -1449,7 +1519,6 @@ func (s *Session) track(id uint32) {
 }
 
 func (s *Session) untrack(id uint32) {
-	s.execs.Delete(id)
 	kept := s.inflight[:0]
 	for _, have := range s.inflight {
 		if have != id {
@@ -1460,23 +1529,7 @@ func (s *Session) untrack(id uint32) {
 }
 
 func (s *Session) awaitAny(ctx context.Context, waiting map[uint32]int) (*cursorpb.ExecClientMessage, error) {
-	for id := range waiting {
-		if msg, ok := s.early[id]; ok {
-			delete(s.early, id)
-			return msg, nil
-		}
-	}
-	for {
-		select {
-		case msg := <-s.inbox:
-			if _, ok := waiting[msg.GetId()]; ok {
-				return msg, nil
-			}
-			s.early[msg.GetId()] = msg
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
+	return s.waitExec(ctx, waiting, toolWaitLimit, execTotalLimit, false)
 }
 
 func (s *Session) requestContext(ctx context.Context, send Emit) (*cursorpb.RequestContext, error) {
@@ -1492,7 +1545,6 @@ func (s *Session) requestContext(ctx context.Context, send Emit) (*cursorpb.Requ
 	waitCtx, cancel := context.WithTimeout(ctx, contextTimeout)
 	defer cancel()
 	msg, err := s.await(waitCtx, id)
-	s.execs.Delete(id)
 	if err != nil {
 		return nil, err
 	}
@@ -1505,25 +1557,7 @@ func (s *Session) requestContext(ctx context.Context, send Emit) (*cursorpb.Requ
 
 // await 等待指定 id 的执行结果。先到的其他结果暂存，留给对应的等待者。
 func (s *Session) await(ctx context.Context, id uint32) (*cursorpb.ExecClientMessage, error) {
-	if msg, ok := s.early[id]; ok {
-		delete(s.early, id)
-		return msg, nil
-	}
-	for {
-		select {
-		case msg := <-s.inbox:
-			if msg.GetId() == id {
-				return msg, nil
-			}
-			s.early[msg.GetId()] = msg
-		case <-s.steer:
-			if s.pullQueued() {
-				return nil, errBreak
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
+	return s.waitExec(ctx, map[uint32]int{id: 0}, 0, 0, true)
 }
 
 // startQuietThinking 在安静超过 quietThinkingAfter 时发一条思考增量。

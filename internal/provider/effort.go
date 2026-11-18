@@ -70,12 +70,14 @@ func requestEffort(req chatRequest, m config.Model) string {
 }
 
 // documentedEffortSet 只收录有官方依据的家族档位，避免把单一模型的规则套到其它 provider。
-// Qwen4（含 qwen4-max-preview）：阿里/千问文档为 low、medium、xhigh，默认 xhigh。
+// Qwen4（含 qwen4-max-preview）：阿里/千问文档为 low、medium、xhigh，默认 xhigh；
+// qwen-code 的分级 effort 家族档位表在 xhigh 之下还有 high，实测 qwen4-max 接受 high，
+// 所以列到 high、上限仍是 xhigh（不高估到 max）。
 // Qwen3 / 其它家族未在本函数列出，走通用列表。
 func documentedEffortSet(m config.Model) (levels []string, defaultEffort string, ok bool) {
 	n := canonicalModelName(m.Model)
 	if strings.HasPrefix(n, "qwen4") {
-		return []string{"low", "medium", "xhigh"}, "xhigh", true
+		return []string{"low", "medium", "high", "xhigh"}, "xhigh", true
 	}
 	return nil, "", false
 }

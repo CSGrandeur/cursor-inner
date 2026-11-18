@@ -7,6 +7,9 @@ import (
 	"runtime"
 )
 
+// RunningExe 在 Unix 平台返回最近记住的 Cursor 路径。
+func RunningExe() string { return LastRememberedExe() }
+
 func Start() error {
 	if runtime.GOOS == "darwin" {
 		return exec.Command("open", "-a", "Cursor").Start()

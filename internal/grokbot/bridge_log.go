@@ -32,17 +32,19 @@ func debugOn() bool { return connDebug.Load() }
 var statsEvery = time.Minute
 
 type bridgeStats struct {
-	once     sync.Once
-	seq      atomic.Uint64
-	active   atomic.Int64
-	grace    atomic.Int64 // 一个方向已结束、正在等另一方向（防泄漏的收尾等待）
-	opened   atomic.Int64 // 本周期新建
-	closed   atomic.Int64 // 本周期结束
-	forced   atomic.Int64 // 本周期因收尾超时被强制关闭
-	failMu   sync.Mutex
-	fails    int
-	failHost map[string]int
-	failLast string
+	once      sync.Once
+	seq       atomic.Uint64
+	active    atomic.Int64
+	grace     atomic.Int64 // 一个方向已结束、正在等另一方向（防泄漏的收尾等待）
+	opened    atomic.Int64 // 本周期新建
+	closed    atomic.Int64 // 本周期结束
+	forced    atomic.Int64 // 本周期因收尾超时被强制关闭
+	upBytes   atomic.Int64 // 本周期实时上行写入字节
+	downBytes atomic.Int64 // 本周期实时下行写入字节
+	failMu    sync.Mutex
+	fails     int
+	failHost  map[string]int
+	failLast  string
 }
 
 func (s *bridgeStats) dialFailed(target string, err error) {
@@ -59,8 +61,9 @@ func (s *bridgeStats) dialFailed(target string, err error) {
 }
 
 // snapshot 取出并清零本周期计数。
-func (s *bridgeStats) snapshot() (opened, closed, forced int64, fails int, top, last string) {
+func (s *bridgeStats) snapshot() (opened, closed, forced, upBytes, downBytes int64, fails int, top, last string) {
 	opened, closed, forced = s.opened.Swap(0), s.closed.Swap(0), s.forced.Swap(0)
+	upBytes, downBytes = s.upBytes.Swap(0), s.downBytes.Swap(0)
 	s.failMu.Lock()
 	defer s.failMu.Unlock()
 	fails, last = s.fails, s.failLast
@@ -91,13 +94,14 @@ func (b *Bridge) startReporter() {
 }
 
 func (b *Bridge) reportStats() {
-	opened, closed, forced, fails, top, last := b.stats.snapshot()
+	opened, closed, forced, upBytes, downBytes, fails, top, last := b.stats.snapshot()
 	defer b.reportDetail()
 	if !debugOn() {
 		return
 	}
 	attrs := []any{"bridge", b.name(), "active", b.stats.active.Load(), "grace_wait", b.stats.grace.Load(),
-		"opened", opened, "closed", closed, "forced", forced, "close_wait", closeWaitCountOrNA()}
+		"opened", opened, "closed", closed, "forced", forced,
+		"up_bytes", upBytes, "down_bytes", downBytes, "close_wait", closeWaitCountOrNA()}
 	if fails > 0 {
 		attrs = append(attrs, "dial_fail", fails, "dial_fail_top", top, "dial_fail_last", last)
 	}

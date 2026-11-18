@@ -101,19 +101,43 @@ func ProfileOf(m config.Model) Profile {
 	return p
 }
 
-// qwenEnableThinking 仅对 Qwen3 混合思考系列（排除始终思考的 QwQ）返回 enable_thinking：
+// qwenTieredFamily 报告这个模型属于分级 effort 家族：qwen4 全系、qwen3.8-max 一带、
+// 邀请制的 qwen-latest-series-*。它们直接读 reasoning_effort（low…max 透传，none 关闭），
+// 不认 enable_thinking，也不要 thinking_budget（与 reasoning_effort 同时出现会被拒）。
+func qwenTieredFamily(model string) bool {
+	n := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(n, "/"); i >= 0 {
+		n = n[i+1:]
+	}
+	if i := strings.Index(n, ":"); i >= 0 {
+		n = n[:i]
+	}
+	return strings.HasPrefix(n, "qwen4") ||
+		strings.HasPrefix(n, "qwen3.8") ||
+		strings.HasPrefix(n, "qwen-latest-series-")
+}
+
+// qwenEnableThinking 仅对 Qwen3 混合思考系列（排除始终思考的 QwQ 与分级 effort 家族）返回 enable_thinking：
 // 用户开了推理为 true，否则 false，避免 Qwen3 在非推理调用里默认思考拖慢、串出 reasoning。
-// 其它家族返回 nil，请求里不带该字段。
+// 其它家族返回 nil，请求里不带该字段。分级 effort 家族关思考走 reasoning_effort=none，
+// 见 qwenTieredEffortOff。
 func qwenEnableThinking(m config.Model) *bool {
 	if DetectFamily(m) != FamilyQwen {
 		return nil
 	}
 	name := strings.ToLower(m.Model)
-	if !strings.Contains(name, "qwen3") || strings.Contains(name, "qwq") {
+	if !strings.Contains(name, "qwen3") || strings.Contains(name, "qwq") || qwenTieredFamily(m.Model) {
 		return nil
 	}
 	v := m.Reasoning
 	return &v
+}
+
+// qwenTieredEffortOff 报告这个 Qwen 模型关思考时要用 reasoning_effort=none，
+// 而不是省略字段或发 enable_thinking=false。这些模型默认思考，省略字段等于开着。
+// 2026-11-17 在 token-plan 网关的 qwen4-max 上实测：none 返回 200 且 reasoning token 为 0。
+func qwenTieredEffortOff(m config.Model) bool {
+	return DetectFamily(m) == FamilyQwen && !m.Reasoning && qwenTieredFamily(m.Model)
 }
 
 // DeepSeek V4 的思考可能长时间没有新数据，参考实现允许单次流读取空闲 5 分钟。
@@ -160,6 +184,11 @@ func qwenVariantLimits(model string) (contextWindow, maxOut int) {
 		return 262144, 65536
 	case strings.HasPrefix(n, "qwen3-max"):
 		return 262144, 32768
+	// 邀请制 latest-series 别名（如 qwen-latest-series-invite-202610-m4）名字里没有代号，
+	// 会落到最后的 qwen 兜底行算成 256K；整个系列是 1M。分支放在 qwen 兜底之前，
+	// 尾部连字符避免误伤只是开头相同的模型。
+	case strings.HasPrefix(n, "qwen-latest-series-"):
+		return 1000000, 65536
 	case reQwen3Dot.MatchString(n): // qwen3.5 等
 		return 1000000, 65536
 	case n == "qwen-plus-latest", n == "qwen-flash-latest":

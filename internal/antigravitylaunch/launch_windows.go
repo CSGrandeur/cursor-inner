@@ -45,6 +45,19 @@ func Launch(proxyURL string) error {
 	return start(path, proxyURL)
 }
 
+// installedExe 在不弹窗、不起子进程的前提下定位本机已安装的 Antigravity.exe。
+func installedExe() string {
+	candidates := windowsCandidates()
+	if exe := ExePath(); exe != "" {
+		candidates = append([]string{exe}, candidates...)
+	}
+	path, err := findAntigravity(candidates, lookupAntigravity)
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
 func windowsCandidates() []string {
 	var out []string
 	if local := os.Getenv("LOCALAPPDATA"); local != "" {

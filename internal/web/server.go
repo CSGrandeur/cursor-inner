@@ -46,6 +46,12 @@ func HandlerVersion(backend Backend, version string) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"version": version})
 	})
 	registerDiscover(mux, backend)
+	if ab, ok := backend.(AntiAccountBackend); ok {
+		registerAntiAccounts(mux, ab)
+	}
+	if cb, ok := backend.(CursorAccountBackend); ok {
+		registerCursorAccounts(mux, cb)
+	}
 	push := newStreams()
 	if up, ok := backend.(UpdateBackend); ok {
 		registerUpdate(mux, up, push)

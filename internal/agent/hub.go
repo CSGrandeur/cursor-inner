@@ -47,7 +47,9 @@ type Hub struct {
 }
 
 func New(lookup func(id string) (config.Model, bool), history *History) *Hub {
-	return &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, aliases: map[string]*finished{}, byConv: map[string]*finished{}, lookup: lookup, history: history}
+	h := &Hub{slots: map[string]*slot{}, finished: map[string]*finished{}, aliases: map[string]*finished{}, byConv: map[string]*finished{}, lookup: lookup, history: history}
+	h.restorePendingExecOwners()
+	return h
 }
 
 // Bidi 处理一条已解压的 BidiAppend 请求体。
@@ -134,6 +136,9 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 				}
 			}
 		}
+		if s.session == nil && route.ModelID != "" {
+			s.session = h.pendingExecutionSessionLocked(m.RunRequest)
+		}
 		// 模型可能不在这条 run 的第一条消息里。先到的消息认不出，不能让后面带自定义模型的消息改走官方。
 		if s.session == nil && route.ModelID != "" && h.lookup != nil {
 			if model, ok := h.lookup(route.ModelID); ok {
@@ -171,10 +176,31 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 			s.decided = true
 			close(s.ready)
 		}
+	case *cursorpb.AgentClientMessage_ExecClientControlMessage:
+		owner := s.session
+		if owner == nil && !s.decided {
+			if f := h.finished[requestID]; f != nil {
+				route.Local = true
+				owner = f.session
+			}
+		}
+		if owner != nil && owner.ownsControl(m.ExecClientControlMessage) {
+			owner.deliverControl(m.ExecClientControlMessage)
+			route.Local = true
+		}
 	case *cursorpb.AgentClientMessage_ExecClientMessage:
+		if s.session == nil && !s.decided {
+			if f := h.finished[requestID]; f != nil && f.session.ownsExec(m.ExecClientMessage) {
+				f.session.deliver(m.ExecClientMessage)
+				route.Local = true
+			}
+		}
 		if s.session != nil {
-			slog.Debug("exec routed", "request", requestID, "original", "", "session", s.session.RequestID, "id", m.ExecClientMessage.GetId(), "exec", m.ExecClientMessage.GetExecId(), "delivered", true)
-			s.session.deliver(m.ExecClientMessage)
+			owned := s.session.ownsExec(m.ExecClientMessage)
+			slog.Debug("exec routed", "request", requestID, "original", "", "run_instance", s.session.runInstance, "id", m.ExecClientMessage.GetId(), "exec", m.ExecClientMessage.GetExecId(), "delivered", owned)
+			if owned {
+				s.session.deliver(m.ExecClientMessage)
+			}
 		}
 	case *cursorpb.AgentClientMessage_InteractionResponse:
 		if s.session != nil {
@@ -208,7 +234,7 @@ func (h *Hub) applyLocked(requestID string, msg *cursorpb.AgentClientMessage) (R
 			s.session.deliverKV(m.KvClientMessage)
 		}
 	}
-	route.Local = s.session != nil || delivered
+	route.Local = route.Local || s.session != nil || delivered
 	return route, s.session, start
 }
 
@@ -442,12 +468,12 @@ func (h *Hub) sweepLocked() {
 		}
 	}
 	for id, f := range h.finished {
-		if time.Since(f.at) > 2*time.Hour {
+		if time.Since(f.at) > 2*time.Hour && !f.session.hasPendingExec() {
 			delete(h.finished, id)
 		}
 	}
 	for conv, f := range h.byConv {
-		if time.Since(f.at) > 2*time.Hour {
+		if time.Since(f.at) > 2*time.Hour && !f.session.hasPendingExec() {
 			delete(h.byConv, conv)
 		}
 	}

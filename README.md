@@ -1,11 +1,11 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.svg">
-    <img src="docs/images/banner-light.svg" alt="cursor-inner：在 Cursor 里接入自己的模型，官方模型照常使用" width="100%">
+    <img src="docs/images/banner-light.svg" alt="cursor-inner：免开 TUN 应用代理、Cursor 与反重力多账号切换、在 Cursor 接入自定义模型" width="100%">
   </picture>
 </p>
 
-<p align="center"><sub>自己的模型用 Cursor 的 Agent · Cursor、Grok、Codex、反重力 走你的代理</sub></p>
+<p align="center"><sub>免开 TUN 让 Codex、反重力、Cursor、Grok 走你的代理 · Cursor 与反重力多账号切换 · 在 Cursor 接入自己的模型</sub></p>
 
 <p align="center">
   <a href="https://github.com/CSGrandeur/cursor-inner/releases/latest"><img src="https://img.shields.io/github/v/release/CSGrandeur/cursor-inner?style=flat-square&color=ff5a2b&label=release" alt="Release"></a>
@@ -19,34 +19,65 @@
 <p align="center">
   <b>简体中文</b> · <a href="README.en.md">English</a>
   <br>
-  <a href="#安装">安装</a> · <a href="#功能">功能</a> · <a href="#使用">使用</a> · <a href="#常见问题">常见问题</a>
+  <a href="#核心能力">核心能力</a> · <a href="#界面预览">界面预览</a> · <a href="#安装">安装</a> · <a href="#使用">使用</a> · <a href="#流量怎么走">流量怎么走</a> · <a href="#常见问题">常见问题</a>
 </p>
 
 <br>
 
-cursor-inner 在你的电脑上运行。自定义模型出现在 Cursor 的列表里，用 Cursor 的 Agent 读改文件、运行命令、搜索，调用当前对话里的 MCP 和子代理；选官方模型时，请求原样发往 Cursor。Cursor、Grok、Codex、反重力走你填的一个代理地址，不改系统代理，也不开系统 TUN 带上其它程序。退出或意外结束时，Cursor 原来的代理设置会写回。Windows、macOS、Linux 可用，配置页中英文可切换。
+cursor-inner 运行在你自己的电脑上，把日常高频用到的三件事收到同一个轻量本地控制台里：免开系统 TUN 让指定 AI 客户端精准走代理、统一管理并切换 Cursor 与反重力多账号、以及把自己的模型接进 Cursor 原生 Agent。Windows、macOS、Linux 可用，配置页中英文即时切换，只监听本机 `127.0.0.1`。
+
+> 模型接口可能另行计费。cursor-inner 是独立开源项目，与 Cursor、Anthropic、Google 或 OpenAI 没有关联。
+
+## 核心能力
+
+<table width="100%">
+  <tr>
+    <td width="33.3%" valign="top">
+      <p><b>1. 免开 TUN 应用代理</b></p>
+      <p>填一个出站代理（<code>socks5</code> / <code>http</code>），即可接管 <b>Codex</b>、<b>反重力</b>、<b>Cursor</b> 与 <b>Grok</b>，不改系统代理或 <code>hosts</code>，不开全局虚拟网卡。</p>
+      <ul>
+        <li><b>覆盖 WSL 模式</b>：接管反重力时，Linux 子系统里的语言服务与远程连接一并走代理，无需调整系统或 WSL 配置。</li>
+        <li><b>默认仅官方分流</b>：仅 OpenAI、Antigravity、Google、Cursor、x.ai 地址走代理，局域网与常规网页直连；也可随时切全局或按需开启仅官方 TUN / 严格模式。</li>
+      </ul>
+    </td>
+    <td width="33.3%" valign="top">
+      <p><b>2. Cursor 与反重力切号</b></p>
+      <p>独立的<b>账号</b>板块集中保存多组 <b>Cursor</b> 与<b>反重力</b>会话凭据，两个子标签按<b>最近使用的软件</b>自动排在最前。</p>
+      <ul>
+        <li><b>多种导入方式</b>：浏览器授权登录、粘贴令牌/Cookie、JSON 批量导入，或一键导入当前软件正在使用的账号，可随时导出本机备份。</li>
+        <li><b>配额与无痛切号</b>：集中查看 <code>ULTRA</code>、<code>PRO+</code>、<code>PRO</code>、<code>FREE</code> 订阅档位、余量与重置时间；切号自动关闭软件、写入凭据后按接管设置重启。</li>
+      </ul>
+    </td>
+    <td width="33.3%" valign="top">
+      <p><b>3. Cursor 自定义模型</b></p>
+      <p>接入 OpenAI Chat、OpenAI Responses、Anthropic 兼容接口，只追加在 Cursor 模型列表末尾，官方模型原样转发。</p>
+      <ul>
+        <li><b>分组与多套餐</b>：同供应商共享地址、类型与密钥，组头下拉即时切换 Token Plan / 按量付费套餐；单模型仍可单独覆盖或恢复跟随。</li>
+        <li><b>原生 Agent 体验</b>：支持上游模型探测与六阶段能力测速；Agent 可读改文件、跑后台命令、调 MCP 与子代理，支持中断恢复与备用模型兜底。</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+## 界面预览
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-accounts-zh-dark.png">
+    <img src="docs/images/window-accounts-zh-light.png" alt="cursor-inner 账号管理与切换页面" width="92%">
+  </picture>
+  <br>
+  <sub><b>账号管理：</b>Cursor 与反重力子标签按最近使用自动排序，集中查看订阅档位、余量与一键切换</sub>
+</p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/window-zh-dark.png">
-    <img src="docs/images/window-zh-light.png" alt="cursor-inner 配置页" width="92%">
+    <img src="docs/images/window-zh-light.png" alt="cursor-inner 自定义模型与分组探测页面" width="92%">
   </picture>
+  <br>
+  <sub><b>自定义模型：</b>模型分组、多套餐切换、能力探测结果与上游模型一键点选</sub>
 </p>
-
-模型接口可能另行计费。cursor-inner 是独立项目，与 Cursor 及其开发商没有关联。
-
-## 功能
-
-- **自己的模型。** OpenAI Chat、OpenAI Responses、Anthropic 三种接口。在配置页添加、测试、编辑、删除，通过后追加在 Cursor 模型列表末尾。
-- **模型分组。** 同一家供应商的模型放进一个分组，统一填接口地址、类型、密钥，组里每个模型只配模型名、上下文窗口等其余项。分组可折叠，只看名称、接口和密钥摘要。一个组可以存多套套餐（同一平台的多套地址与密钥，组头下拉切换。比如按量付费和 Token Plan），点“添加套餐”维护，组内模型跟着换。每个模型仍可单独配：表单里改哪个字段，哪个字段就成了它自己的；表格里拨过的开关旁有复位，点一下恢复跟随分组。删组时组内模型转为独立模型，配置保留。
-- **探测上游模型。** 填好地址和密钥，点模型名旁的「探测模型」，从上游列表里点选模型名。
-- **连通性测试。** 测试探测工具调用、推理、图片、缓存并记录速度；表下列出阶段、进度条和实时输出 token 数，测试中可点“取消”；结果随配置保存。
-- **官方模型照常。** 列表只追加、不替换；官方模型的请求原样发往 Cursor。同一对话里换回官方模型，不受先前自定义模型的影响。
-- **Agent 能干活。** 读改文件、运行命令、搜索、调用本轮对话的 MCP 和子代理；改动先看 diff，接受后才写入。用量条与官方模型同一套。
-- **长任务能接着跑。** 模型可以在本机留一条后台命令，命令结束自动接着回答；也可以在某行输出出现时被叫醒。
-- **停得清楚。** 点停止显示「已停止」；上游拒绝或报错会说明原因，已完成的步骤和检查点保留。热更新或重启后，已答完的对话能正常恢复。
-- **走你的代理。** 接管 Cursor、Grok、Codex、反重力，填一个地址即可；也可以只让官方地址走代理（含反重力），其余直连。接管反重力时，它的 WSL 模式也会走代理，不改系统或 WSL 设置。每个自定义模型单独决定是否走代理。接管后仍有个别直连时，TUN 模式或严格模式只覆盖官方地址（TUN 也可覆盖反重力及其 WSL 流量），不动其它程序。
-- **更新和退出。** 一键更新，Cursor 和 Grok 不用重启，只安装签名有效的版本。退出或意外结束都会还原 Cursor 的代理设置；Windows 上点关闭只收进通知区域。
 
 ## 安装
 
@@ -62,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.6.5`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.7.0`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -107,25 +138,25 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 
 ## 使用
 
-1. 运行 cursor-inner。它会关掉正在运行的 Cursor，并打开配置页。顶栏的“启动 Cursor”“启动 Grok”“启动 Codex”“启动反重力”再打开它们，不退出 cursor-inner。
-2. 在“模型”里填写显示名、模型名、接口地址和密钥；同一家供应商有多个模型时，点“新建分组”，填分组名称和共享的地址、类型、密钥，再往组里添加模型。不确定模型名时点「探测模型」从上游列表里选。点“测试”验证，表下会显示阶段、进度和实时 token 数。编辑时密钥留空表示不改。
-3. 重新打开 Cursor，新开一个对话，在模型列表里选刚添加的模型。Cursor 已经开着时，窗口聚焦约每 5 分钟才拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点“刷新模型列表”（Refresh model list），或执行 Reload Window。
-4. 用完点“退出”。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选“退出”才结束。Cursor 的设置会还原。
-
-   退出前会问一次“退出 cursor-inner？”，并列出会一并关闭的程序；勾“不再询问”以后直接退出。只关 cursor-inner 自己接管的进程，你自己另开的不动。下次打开时，配置页顶部可以一键“恢复”上次关掉的程序，照常走代理；点“忽略”不再提示。
+1. 运行 cursor-inner，自动打开本机配置页。顶栏的“启动 Cursor”“启动 Codex”“启动 Grok”“启动反重力”可直接以当前代理接管设置启动对应软件，不退出 cursor-inner。
+2. 若只想让 Codex、反重力或 Grok 走代理，在**网络**里填出站代理地址并开启对应接管即可（默认只让官方地址走代理，不必开系统 TUN）。
+3. 若需要切换账号，切到**账号**页，在 **Cursor** 或**反重力**子标签里添加、导入并切换账号。
+4. 若要在 Cursor 里使用自定义模型，在**模型**页填写接口或“新建分组”，不确定模型名时点“探测模型”，再用“测试”验证工具、推理、图片与缓存能力后在 Cursor 对话列表选中。Cursor 已经开着时，窗口聚焦约每 5 分钟拉一次模型列表；想马上看到，在 Cursor 设置 → Models 点“刷新模型列表”（Refresh model list），或执行 Reload Window。
+5. 用完点“退出”。Windows 上点窗口关闭按钮只会收到通知区域，右键图标选“退出”才结束，Cursor 原有代理设置会自动还原。退出前会问一次并列出一并关闭的接管程序（勾“不再询问”以后直接退出），你自己另开的窗口不动；下次打开可在顶部一键“恢复”或“忽略”。
 
 > [!IMPORTANT]
-> 选 **Auto** 时 Cursor 只用官方模型。要用自定义模型，必须在列表里手动选。
+> 在 Cursor 里选 **Auto** 时只使用官方模型。要用自定义模型，必须在模型列表里手动选中它。
 
-配置页四个标签：**模型**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#network`、`#general`、`#update` 可以直接打开。
+配置页五个标签：**模型**、**账号**、**网络**、**通用**、**更新**。网址末尾加上 `#models`、`#accounts`、`#network`、`#general`、`#update` 可以直接打开对应页。
 
-- **模型**：仅支持 Cursor。添加、探测模型和测试；列表里的密钥带“密钥”标签，点击复制；“复制”把配置连同密钥带进添加表单，密钥默认隐藏。分组在列表里按节显示，点组头折叠或展开，折叠后只剩摘要；组头可以直接给组添加模型、编辑或删除分组。组内模型的接口列标着“跟随分组”，与分组不同的字段标“自定义”，悬停可看是哪几个。组里存了多套套餐时，组头出现套餐下拉，切换后组内模型立即使用新套餐的地址、类型和密钥；在分组编辑里的“套餐”区点“添加套餐”增加一套，每套填套餐名称、类型、地址和密钥，编辑时密钥留空表示不改。表单顶部的分组下拉可以选已有分组、独立模型或新建分组；选组后地址、类型、密钥留空即跟随分组。未单独配置的字段使用分组的设置；改动后即成为这个模型的自定义值。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型都可以留空；读入的图片会先缩小，一次请求超过上限时从最旧的工具图片起省略，最新几张保留。备用模型填其它已添加模型的名称，逗号分隔，在还没输出文字时用于鉴权失败或限流。上下文窗口和最大输出旁的“?”打开一张小帮助卡。打开推理后，Cursor 的思考档列表按模型能力生成。
-- **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、接管反重力、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。“仅官方”包括反重力以及 Google、google.dev、withgoogle.com 等相关地址。接管反重力时，WSL 模式也会走代理，不改系统或 WSL 设置。TUN 模式同样可以覆盖反重力（含 WSL）的官方流量。cursor-inner 比代理软件先启动时，状态栏显示“等待代理…”，就绪后自动接上，官方流量不会直连。
-- **更新**：按钮是“检查更新”和“更新”。只安装签名有效的版本，更新时 Grok 和 Cursor 不用重启；新版本没通过检查会回到当前版本。
-- **通用**：出图、开机启动。Windows 上还有**后台运行**和**通知**。要让 Agent 生成图片，在“出图”里填 OpenAI 兼容接口。
+- **模型**：仅支持 Cursor。添加、探测模型和测试；列表里的密钥带“密钥”标签，点击复制；“复制”把配置连同密钥带进添加表单，密钥默认隐藏。分组在列表里按节显示，点组头折叠或展开；组头可以直接添加模型、编辑、删除或用套餐下拉切换“按量付费 / Token Plan”（编辑组里的“套餐”点“添加套餐”维护，编辑时密钥留空表示不改）。表单选组后接口地址、类型、密钥留空即跟随分组；未单独配置的字段使用分组的设置，改动后即成为该模型自定义值（开关旁可点复位）。上下文窗口、最大输出、图片张数上限、图片总量上限（MB）、推理、Fast、缓存键和备用模型均可留空；图片先缩小再发出，超限时按最旧工具图优先省略；备用模型填其它已添加模型名称（逗号分隔）供鉴权失败或限流兜底。上下文窗口和最大输出旁的“?”打开短帮助卡。
+- **账号**：在 **Cursor** 与 **反重力** 两个子标签之间切换，并按最近使用的软件自动把对应子标签排到最前。列表为空时显示“还没有保存的账号。”。上方操作栏提供“添加”“粘贴”“导入当前”“刷新全部”“导出”；点“粘贴”展开输入抽屉并支持“导入”与“导入 JSON”（Cursor 支持 JWT、Cookie、`user_xxx::eyJ...`、JSON 与多行凭据；反重力支持 `1//` refresh token、JSON 与多行导入）；点“添加”发起浏览器授权，提示“在浏览器里完成授权。这个链接也可以复制。”并可点“复制”或“取消”。每行展示订阅档位与剩余配额，可点“切换”“刷新”“删除”；切换会关闭正在运行的对应软件、写好凭据（包括反重力的 WSL 回退文件及系统凭据库）后按当前接管设置重新打开。导出备份只保存在本机。
+- **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、接管反重力、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。“仅官方”包括 Cursor、OpenAI、Grok、x.ai、反重力以及 Google、google.dev、withgoogle.com 等相关地址。接管反重力时，WSL 模式也会走代理，不改系统或 WSL 设置。TUN 模式同样可按需覆盖反重力（含 WSL）的官方流量。cursor-inner 比代理软件先启动时，状态栏显示“等待代理…”，就绪后自动接上，官方流量不会直连。
+- **通用**：出图、开机启动；Windows 上还有**后台运行**和**通知**。填好 OpenAI 兼容出图接口即可在 Agent 里调用 GenerateImage。
+- **更新**：支持“检查更新”与“更新”。只安装签名有效的版本，热交接期间正在运行的 Cursor 与 Grok 不用重启；验签或健康检查不通过会自动保留当前版本。
 
 <details>
-<summary><b>命令行</b></summary>
+<summary><b>命令行参数</b></summary>
 
 | 参数 | 作用 |
 | --- | --- |
@@ -141,36 +172,39 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/flow-zh-dark.svg">
-    <img src="docs/images/flow-zh-light.svg" alt="Cursor 经本机代理 cursor-inner 分流：自定义模型发往你的接口，官方模型原样发往 Cursor；Grok 等走你的代理，其他主机原样隧道" width="100%">
+    <img src="docs/images/flow-zh-light.svg" alt="cursor-inner 分流示意图：Cursor 经本机代理按模型路由；Codex、反重力（含 WSL）与 Grok 按进程走你的代理，其它主机直连" width="100%">
   </picture>
 </p>
 
-Cursor 里读代理设置的流量先到本机：自定义模型由本机调用你的接口，官方模型原样转发，其余主机原样隧道、不解密。Grok、Codex、反重力走你配置的代理。配置页只接受本机访问。
+Cursor 里读代理设置的流量先经过本机 `127.0.0.1`：选中自定义模型时由本机直接请求你的接口，选中官方模型时原样转发，其它主机原样隧道、不解密。Codex、反重力（含 WSL）与 Grok 则通过进程级代理参数与回环桥接走你配置的出站代理，无需系统 TUN；开启“仅官方”时非官方流量直接直连。配置页与本机代理均只接受本机访问。
 
 ## 已知限制
 
-- 网页搜索合并 Bing、DuckDuckGo 和百度。百度有时只返回验证页，这时只有另外两家的结果。
-- 用自定义模型时，输入框里的 `@` 不会弹出文件菜单。把文件拖进对话，或用 Add to Chat。
-- 有的接口不返回缓存命中数，窗口里就看不到缓存命中率。
+- 网页搜索合并 Bing、DuckDuckGo 和百度；百度有时仅返回验证页，这时保留另外两家结果。
+- 用自定义模型时，输入框里的 `@` 不会弹出文件菜单；把文件拖进对话，或使用 Add to Chat。
+- 有的上游接口不返回缓存命中数，界面就看不到缓存命中统计。
+- 反重力账号的登录与刷新依赖本机已安装的反重力客户端；未安装时请先安装客户端。
 
 ## 常见问题
 
 <details>
 <summary><b>选了 Auto，为什么没用到我的模型？</b></summary>
 
-Auto 只在官方模型里选。要使用自定义模型，在模型列表里手动选中它。
+Auto 只在官方模型里选。要使用自定义模型，请在模型列表里手动选中它。
 
 </details>
 
 <details>
 <summary><b>自定义模型能改文件、跑命令吗？</b></summary>
 
-支持工具调用的模型可以。Agent 里能读文件、搜索、修改和删除、编辑笔记本、运行命令、调用本轮对话里的 MCP，以及启动子代理。修改先显示 diff，接受后才写入。点停止会中止还没结束的工具。提交说明、聊天标题和 Tab 补全仍由 Cursor 完成。
+支持工具调用的模型可以。Agent 里能读文件、搜索、修改和删除、编辑笔记本、运行命令、调用本轮对话里的 MCP，以及启动子代理。修改先显示 diff，接受后才写入；点停止会请求中止还没结束的工具；提交说明、聊天标题和 Tab 补全仍由 Cursor 官方处理。
+
+工具等待期间会按执行心跳确认活跃状态；若失去联系或工具流提前结束，会暂停本轮并保留已派发执行以等待恢复，不自动重跑可能有副作用的操作。
 
 </details>
 
 <details>
-<summary><b>密钥存在哪里？</b></summary>
+<summary><b>API 密钥和账号凭据存在哪里？</b></summary>
 
 | 平台 | 数据目录 |
 | --- | --- |
@@ -178,21 +212,21 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 | macOS | `~/Library/Application Support/cursor-inner/` |
 | Linux | `~/.config/cursor-inner/`（或 `$XDG_CONFIG_HOME/cursor-inner/`） |
 
-`config.json` 里是开关、代理和自定义模型。**API 密钥以明文保存**，文件只有当前用户可读。自定义模型的对话在 `conversations/`。配置页和本机代理只监听 `127.0.0.1`。
+`config.json` 保存开关、代理和自定义模型配置，**API 密钥以明文保存**；`cursor-accounts.json` 与 `antigravity-accounts.json` 保存双端账号凭据。文件权限均为仅当前用户可读，配置页和本机代理只监听 `127.0.0.1`。
 
 </details>
 
 <details>
 <summary><b>cursor-inner 意外退出，Cursor 会连不上网吗？</b></summary>
 
-不会。主进程崩溃或被强制结束后，会把你原来的代理设置写回，并关闭 Cursor。重新打开 Cursor 即可。
+不会。主进程退出或被结束时，会把你原来的代理设置写回并关闭接管的 Cursor，重新打开即可恢复直连或原有代理。
 
 </details>
 
 <details>
 <summary><b>Cursor 升级后还能用吗？</b></summary>
 
-官方模型不受影响，自定义模型也由本机回答。若遇到自定义模型回合卡住或恢复失败，更新到本版并重启一次 Cursor。
+官方模型不受影响，自定义模型也由本机回答。若遇协议调整导致回合异常或恢复失败，更新到最新版本并重启一次 Cursor 即可。
 
 </details>
 
@@ -200,7 +234,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 <summary><b>怎么卸载？</b></summary>
 
 1. 开过开机启动的话，先在配置页关掉，再点“退出”。
-2. 删除根证书：
+2. 删除本机根证书：
 
    | 平台 | 命令 |
    | --- | --- |
@@ -211,7 +245,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
    | Fedora / RHEL | `sudo rm /etc/pki/ca-trust/source/anchors/cursor-inner.pem && sudo update-ca-trust` |
    | Arch 等 | `sudo trust anchor --remove ~/.config/cursor-inner/ca/ca.crt` |
 
-3. 删除数据目录和程序。用安装脚本装的，还要删除开始菜单里的 `cursor-inner.lnk`（Windows），或 `~/.local/share/applications/cursor-inner.desktop`（Linux）。
+3. 删除数据目录与程序本体。通过安装脚本安装的，还需删掉开始菜单的 `cursor-inner.lnk`（Windows）或 `~/.local/share/applications/cursor-inner.desktop`（Linux）。
 
 </details>
 
@@ -223,7 +257,7 @@ Auto 只在官方模型里选。要使用自定义模型，在模型列表里手
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.6.5 ./build.sh linux
+VERSION=v0.7.0 ./build.sh linux
 ```
 
 ## 致谢

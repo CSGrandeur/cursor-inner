@@ -375,6 +375,7 @@ func (s *Session) checkpoint(send Emit, conversation, system string, messages []
 	if err := s.history.SaveState(conversation, built.State); err != nil {
 		return err
 	}
+	s.markExecApplied(messages)
 	s.baseState = built.State
 	return send(&cursorpb.AgentServerMessage{Message: &cursorpb.AgentServerMessage_ConversationCheckpointUpdate{ConversationCheckpointUpdate: built.State}})
 }

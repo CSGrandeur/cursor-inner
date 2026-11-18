@@ -74,8 +74,8 @@ func TestOriginalExecStreamReachesIssuingSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if terminalCards != 1 || len(old.inbox) != 0 {
-		t.Fatalf("cards=%d old inbox=%d", terminalCards, len(old.inbox))
+	if terminalCards != 1 || old.queuedExecs() != 0 {
+		t.Fatalf("cards=%d old inbox=%d", terminalCards, old.queuedExecs())
 	}
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
@@ -107,8 +107,8 @@ func TestOriginalIOAliasDoesNotAdoptOrGuess(t *testing.T) {
 	if err != nil || !hub.Owns("transport-alias") {
 		t.Fatal("transport alias not retained", err)
 	}
-	if len(target.inbox) != 1 || len(source.inbox) != 3 {
-		t.Fatalf("target=%d source=%d", len(target.inbox), len(source.inbox))
+	if target.queuedExecs() != 1 || source.queuedExecs() != 3 {
+		t.Fatalf("target=%d source=%d", target.queuedExecs(), source.queuedExecs())
 	}
 	if hub.slots["target"].session != target || hub.slots["transport-alias"] != nil {
 		t.Fatal("I/O rebound a slot")

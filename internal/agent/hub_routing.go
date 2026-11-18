@@ -31,6 +31,11 @@ func (h *Hub) applyOriginalLocked(id, original string, msg *cursorpb.AgentClient
 			source = alias.session
 		}
 	}
+	if source == nil && msg.GetRunRequest() == nil {
+		if f := h.finished[original]; f != nil {
+			source = f.session
+		}
+	}
 	if run := msg.GetRunRequest(); run != nil {
 		// A new user turn is not a replay of the old run, even with an original header.
 		if current == nil && (target == nil || !target.decided) && run.GetAction().GetUserMessageAction() == nil {
@@ -74,6 +79,29 @@ func (h *Hub) applyOriginalLocked(id, original string, msg *cursorpb.AgentClient
 	if target != nil && target.decided && current == nil {
 		return Route{RequestID: id}, nil, false
 	}
+	if control := msg.GetExecClientControlMessage(); control != nil {
+		owner := current
+		if owner == nil || !owner.ownsControl(control) {
+			owner = nil
+			if source != nil && source.ownsControl(control) {
+				owner = source
+			}
+		}
+		if owner == nil {
+			if f := h.finished[original]; f != nil && f.session.ownsControl(control) {
+				owner = f.session
+			}
+		}
+		if owner != nil {
+			owner.deliverControl(control)
+		}
+		targetInstance := uint64(0)
+		if owner != nil {
+			targetInstance = owner.runInstance
+		}
+		slog.Debug("exec control routed", "run_instance", targetInstance, "request", id, "original", original, "id", controlID(control), "delivered", owner != nil)
+		return Route{RequestID: id, Local: current != nil || source != nil || owner != nil}, current, false
+	}
 	if exec := msg.GetExecClientMessage(); exec != nil {
 		owner := current
 		if owner == nil || !owner.ownsExec(exec) {
@@ -91,7 +119,11 @@ func (h *Hub) applyOriginalLocked(id, original string, msg *cursorpb.AgentClient
 			}
 			owner.deliver(exec)
 		}
-		slog.Debug("exec routed", "request", id, "original", original, "session", sessionID, "id", exec.GetId(), "exec", exec.GetExecId(), "delivered", owner != nil)
+		targetInstance := uint64(0)
+		if owner != nil {
+			targetInstance = owner.runInstance
+		}
+		slog.Debug("exec routed", "run_instance", targetInstance, "request", id, "original", original, "session", sessionID, "id", exec.GetId(), "exec", exec.GetExecId(), "delivered", owner != nil)
 		return Route{RequestID: id, Local: local}, current, false
 	}
 	// Heartbeats carry no execution input and must not change any binding.
@@ -131,9 +163,6 @@ func (h *Hub) applyOriginalLocked(id, original string, msg *cursorpb.AgentClient
 }
 
 func (s *Session) ownsExec(msg *cursorpb.ExecClientMessage) bool {
-	if s.Finished() {
-		return false
-	}
 	value, ok := s.execs.Load(msg.GetId())
 	return ok && (msg.GetExecId() == "" || value.(string) == msg.GetExecId())
 }

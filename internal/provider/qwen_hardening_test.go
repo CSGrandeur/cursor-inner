@@ -24,6 +24,7 @@ func TestQwenVariantLimits(t *testing.T) {
 		{"qwen4-max-preview", 1000000, 393216},
 		{"openai/qwen4-max-preview", 1000000, 393216},
 		{"qwen4-max-preview-2026-11-11", 1000000, 393216},
+		{"qwen-latest-series-invite-202610-m4", 1000000, 65536},
 		{"qwen-plus-latest", 1000000, 32768},
 		{"qwq-32b", 131072, 32768},
 		{"qwen2.5-coder:32b", 262144, 32768},
@@ -115,6 +116,66 @@ func TestOpenAIBodyQwenFields(t *testing.T) {
 	}
 	if _, ok := ds["parallel_tool_calls"]; ok {
 		t.Error("non-qwen must not send parallel_tool_calls")
+	}
+}
+
+func TestOpenAIBodyQwenTieredEffortOff(t *testing.T) {
+	// 分级 effort 家族默认思考，省略字段等于开着，关闭必须显式发 none。
+	for _, name := range []string{"qwen4-max", "qwen3.8-max", "qwen-latest-series-invite-202610-m4"} {
+		off := qwenBody(t, config.Model{Model: name, Type: "openai-chat"}, false)
+		if off["reasoning_effort"] != "none" {
+			t.Errorf("%s reasoning off: reasoning_effort=%v want none", name, off["reasoning_effort"])
+		}
+		if _, ok := off["enable_thinking"]; ok {
+			t.Errorf("%s must not send enable_thinking", name)
+		}
+		if _, ok := off["thinking_budget"]; ok {
+			t.Errorf("%s must not send thinking_budget when off", name)
+		}
+	}
+	on := qwenBody(t, config.Model{Model: "qwen4-max", Type: "openai-chat", Reasoning: true, Effort: "high"}, false)
+	if on["reasoning_effort"] != "high" {
+		t.Errorf("qwen4 on effort=%v want high", on["reasoning_effort"])
+	}
+	if _, ok := on["enable_thinking"]; ok {
+		t.Error("qwen4 must not send enable_thinking alongside reasoning_effort")
+	}
+	if _, ok := on["thinking_budget"]; ok {
+		t.Error("qwen4 must not send thinking_budget")
+	}
+	// qwen3 混合思考仍走 enable_thinking，不受影响。
+	q3 := qwenBody(t, config.Model{Model: "qwen3-32b", Type: "openai-chat"}, false)
+	if q3["enable_thinking"] != false {
+		t.Errorf("qwen3 off still uses enable_thinking, got %v", q3["enable_thinking"])
+	}
+	if _, ok := q3["reasoning_effort"]; ok {
+		t.Error("qwen3 must not get reasoning_effort none")
+	}
+}
+
+func TestResponsesBodyQwenTieredEffortOff(t *testing.T) {
+	off, err := responsesBody(config.Model{Type: "openai-responses", Model: "qwen4-max"},
+		chatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(off, &body); err != nil {
+		t.Fatal(err)
+	}
+	reasoning, _ := body["reasoning"].(map[string]any)
+	if reasoning == nil || reasoning["effort"] != "none" {
+		t.Fatalf("qwen4 responses off: reasoning=%v want effort none", body["reasoning"])
+	}
+	// 非该家族关思考时不加 reasoning。
+	other, _ := responsesBody(config.Model{Type: "openai-responses", Model: "deepseek-chat"},
+		chatRequest{Messages: []Message{{Role: "user", Content: "hi"}}})
+	body = nil
+	if err := json.Unmarshal(other, &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["reasoning"]; ok {
+		t.Errorf("other family must not get a reasoning block, got %v", body["reasoning"])
 	}
 }
 

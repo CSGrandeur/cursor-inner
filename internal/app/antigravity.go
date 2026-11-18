@@ -61,7 +61,7 @@ func (a *App) antigravityProxy(cfg config.File) (proxyURL string, keep bool) {
 // 代理写在启动参数和 HTTPS_PROXY 里（覆盖 Electron 与 Go OAuth），正在运行的进程读不到，
 // 所以状态不对时会关掉并按当前选择重新打开。没在运行不拉起。不改系统 PAC/hosts。
 func (a *App) SyncAntigravity() {
-	if a.frozen.Load() {
+	if a.frozen.Load() || a.antiSwitching.Load() {
 		return
 	}
 	cfg := a.store.Get()
@@ -115,6 +115,8 @@ func (a *App) OpenAntigravity() error {
 	}
 	if err != nil {
 		slog.Warn("启动 Antigravity 失败", "error", err.Error())
+		return err
 	}
-	return err
+	a.NoteAppUsed("antigravity")
+	return nil
 }

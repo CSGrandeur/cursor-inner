@@ -78,6 +78,9 @@ func Apply(proxyURL string) error {
 	needRestart := grokbot.ShouldRestart(cmds(procs), proxyURL)
 	logCheckState(true, proxyURL != "", needRestart)
 	if !needRestart {
+		if proxyURL != "" {
+			defaultWSLGuard.ObserveManaged()
+		}
 		return nil
 	}
 	if proxyURL == "" {
@@ -89,6 +92,9 @@ func Apply(proxyURL string) error {
 	}
 	if err := stopAll(); err != nil {
 		return err
+	}
+	if distro, ok := defaultWSLGuard.RestoreIfWiped(); ok {
+		slog.Info("已恢复被未接管启动清空的 Antigravity WSL 状态", "distro", distro, logx.FileOnly)
 	}
 	if err := startAnti(exe, proxyURL); err != nil {
 		slog.Warn("没能重新打开 Antigravity：" + err.Error())

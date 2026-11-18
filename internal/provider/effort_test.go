@@ -10,11 +10,11 @@ import (
 
 func TestEffortPolicyQwen4OfficialSet(t *testing.T) {
 	levels, def := EffortPolicy(config.Model{Model: "qwen4-max-preview"})
-	if strings.Join(levels, ",") != "low,medium,xhigh" || def != "xhigh" {
+	if strings.Join(levels, ",") != "low,medium,high,xhigh" || def != "xhigh" {
 		t.Fatalf("qwen4-max-preview levels=%v def=%s", levels, def)
 	}
 	levels, def = EffortPolicy(config.Model{Model: "openrouter/qwen4-plus:free"})
-	if strings.Join(levels, ",") != "low,medium,xhigh" || def != "xhigh" {
+	if strings.Join(levels, ",") != "low,medium,high,xhigh" || def != "xhigh" {
 		t.Fatalf("qwen4 family levels=%v def=%s", levels, def)
 	}
 }
@@ -44,7 +44,7 @@ func TestEffortPolicyConfigOverrideAndOldJSON(t *testing.T) {
 		t.Fatalf("old json must omit new fields: %+v", m)
 	}
 	levels, def := EffortPolicy(m)
-	if strings.Join(levels, ",") != "low,medium,xhigh" || def != "xhigh" {
+	if strings.Join(levels, ",") != "low,medium,high,xhigh" || def != "xhigh" {
 		t.Fatalf("old json still gets family policy: %v %s", levels, def)
 	}
 	custom := config.Model{Model: "qwen4-max-preview", EffortLevels: []string{"low", "xhigh"}, DefaultEffort: "low"}
@@ -65,8 +65,9 @@ func TestResolveEffortStaleHighMaxForQwen4(t *testing.T) {
 	if got := ResolveEffort(m, "xhigh"); got != "xhigh" {
 		t.Fatal(got)
 	}
-	if got := ResolveEffort(m, "high"); got != "xhigh" {
-		t.Fatalf("stale high must not be sent, want default xhigh, got %q", got)
+	// high 现在在 qwen4 的档位里（实测 qwen4-max 接受），原样透传而不是抬成 xhigh。
+	if got := ResolveEffort(m, "high"); got != "high" {
+		t.Fatalf("high is accepted by qwen4, want pass-through, got %q", got)
 	}
 	if got := ResolveEffort(m, "max"); got != "xhigh" {
 		t.Fatalf("stale max must not be sent, want default xhigh, got %q", got)

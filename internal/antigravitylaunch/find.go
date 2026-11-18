@@ -3,6 +3,7 @@ package antigravitylaunch
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"cursor-inner/internal/i18n"
@@ -79,4 +80,131 @@ func exeFromUninstall(displayName, installLocation, displayIcon string) string {
 func isFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// ResourcesDirs 返回本机 Antigravity 的 resources 目录候选（按优先级去重，仅保留真实存在的目录）。
+func ResourcesDirs(hintExe string) []string {
+	var rawDirs []string
+	addExe := func(exe string) {
+		exe = cleanInstallPath(exe)
+		if exe == "" {
+			return
+		}
+		rawDirs = append(rawDirs, resourcesDirsForExe(exe)...)
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil && resolved != "" && resolved != exe {
+			rawDirs = append(rawDirs, resourcesDirsForExe(resolved)...)
+		}
+	}
+	addExe(hintExe)
+	if detected := installedExe(); detected != "" {
+		addExe(detected)
+	}
+	rawDirs = append(rawDirs, standardResourcesDirs()...)
+	return uniqueExistingDirs(rawDirs)
+}
+
+func resourcesDirsForExe(exe string) []string {
+	exe = cleanInstallPath(exe)
+	if exe == "" {
+		return nil
+	}
+	dir := exe
+	var out []string
+	if isDir(exe) {
+		if strings.HasSuffix(strings.ToLower(exe), ".app") {
+			out = append(out, filepath.Join(exe, "Contents", "Resources"))
+		}
+	} else {
+		dir = filepath.Dir(exe)
+	}
+	out = append(out,
+		filepath.Join(dir, "resources"),
+		filepath.Join(dir, "Resources"),
+		filepath.Join(dir, "..", "Resources"),
+		filepath.Join(dir, "..", "resources"),
+		filepath.Join(dir, "..", "..", "Resources"),
+		filepath.Join(dir, "..", "..", "resources"),
+	)
+	up2 := filepath.Clean(filepath.Join(dir, "..", ".."))
+	if strings.EqualFold(filepath.Base(up2), "resources") {
+		out = append(out, up2)
+	}
+	return out
+}
+
+func standardResourcesDirs() []string {
+	home, _ := os.UserHomeDir()
+	switch runtime.GOOS {
+	case "darwin":
+		dirs := []string{"/Applications/Antigravity.app/Contents/Resources"}
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, "Applications", "Antigravity.app", "Contents", "Resources"))
+		}
+		return dirs
+	case "linux":
+		dirs := []string{
+			"/opt/Antigravity/resources",
+			"/opt/antigravity/resources",
+			"/usr/share/antigravity/resources",
+			"/usr/lib/antigravity/resources",
+		}
+		if home != "" {
+			dirs = append(dirs, filepath.Join(home, ".local", "share", "antigravity", "resources"))
+		}
+		return dirs
+	case "windows":
+		var dirs []string
+		local := os.Getenv("LOCALAPPDATA")
+		if local == "" && home != "" {
+			local = filepath.Join(home, "AppData", "Local")
+		}
+		if local != "" {
+			dirs = append(dirs,
+				filepath.Join(local, "Programs", "antigravity", "resources"),
+				filepath.Join(local, "Programs", "Antigravity", "resources"),
+			)
+		}
+		for _, pf := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)")} {
+			if pf == "" {
+				continue
+			}
+			dirs = append(dirs,
+				filepath.Join(pf, "antigravity", "resources"),
+				filepath.Join(pf, "Antigravity", "resources"),
+				filepath.Join(pf, "Google", "Antigravity", "resources"),
+			)
+		}
+		return dirs
+	}
+	return nil
+}
+
+func uniqueExistingDirs(candidates []string) []string {
+	seen := make(map[string]bool, len(candidates))
+	var out []string
+	for _, c := range candidates {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		clean := filepath.Clean(c)
+		key := clean
+		if runtime.GOOS == "windows" {
+			key = strings.ToLower(clean)
+		}
+		if seen[key] {
+			continue
+		}
+		if !isDir(clean) {
+			continue
+		}
+		seen[key] = true
+		out = append(out, clean)
+	}
+	return out
 }

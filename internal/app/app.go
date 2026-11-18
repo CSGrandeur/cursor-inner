@@ -12,8 +12,10 @@ import (
 
 	"cursor-inner/internal/i18n"
 
+	"cursor-inner/internal/antiaccount"
 	"cursor-inner/internal/autostart"
 	"cursor-inner/internal/config"
+	"cursor-inner/internal/cursoraccount"
 	"cursor-inner/internal/cursorlaunch"
 	"cursor-inner/internal/dialer"
 	"cursor-inner/internal/grokbot"
@@ -31,27 +33,37 @@ type starter interface {
 }
 
 type App struct {
-	store       *config.Store
-	life        *takeover.Service
-	boot        starter
-	exe         string
-	mu          sync.Mutex
-	listen      string
-	bootErr     i18n.Text
-	quit        func()
-	shutdown    sync.Once
-	bridge      grokbot.Bridge
-	codexBridge grokbot.Bridge
-	antiBridge  grokbot.Bridge
-	tun         *tunnel.Manager
-	upd         *selfupdate.Updater
-	frozen      atomic.Bool
-	isolated    atomic.Bool
-	trackOnce   sync.Once
-	track       *takeover.Tracker
-	pwOnce      sync.Once
-	pw          *proxywait.Waiter
-	updPending  atomic.Bool // 自动检查更新等代理就绪后再做
+	store         *config.Store
+	life          *takeover.Service
+	boot          starter
+	exe           string
+	mu            sync.Mutex
+	listen        string
+	bootErr       i18n.Text
+	quit          func()
+	shutdown      sync.Once
+	bridge        grokbot.Bridge
+	codexBridge   grokbot.Bridge
+	antiBridge    grokbot.Bridge
+	tun           *tunnel.Manager
+	upd           *selfupdate.Updater
+	antiOnce      sync.Once
+	antiMgr       *antiaccount.Manager
+	antiErr       i18n.Text
+	antiLogin     atomic.Pointer[antiLoginState]
+	antiSwitching atomic.Bool
+	cursorOnce    sync.Once
+	cursorMgr     *cursoraccount.Manager
+	cursorErr     i18n.Text
+	cursorLogin   atomic.Pointer[antiLoginState]
+	recentAppsFields
+	frozen     atomic.Bool
+	isolated   atomic.Bool
+	trackOnce  sync.Once
+	track      *takeover.Tracker
+	pwOnce     sync.Once
+	pw         *proxywait.Waiter
+	updPending atomic.Bool // 自动检查更新等代理就绪后再做
 
 	trayApply func(config.Desktop) // 托盘挂上后才有，见 SetTray
 }
@@ -150,7 +162,11 @@ func (a *App) DisableTakeover() error {
 }
 
 func (a *App) OpenCursor() error {
-	return cursorlaunch.Start()
+	err := cursorlaunch.Start()
+	if err == nil {
+		a.NoteAppUsed("cursor")
+	}
+	return err
 }
 
 // Shutdown 还原 Cursor，并关掉接管的 Grok Bot / Codex（见 closeManaged）。
@@ -255,6 +271,15 @@ func (a *App) State() (web.View, error) {
 	}
 	if view.Models == nil {
 		view.Models = []web.ModelView{}
+	}
+	view.AccountOrder = a.AccountOrder()
+	view.CursorAccounts = a.CursorAccountList()
+	if !a.cursorErr.IsZero() {
+		view.CursorAccountError = a.cursorErr
+	}
+	view.AntiAccounts = a.AntiAccountList()
+	if !a.antiErr.IsZero() {
+		view.AntiAccountError = a.antiErr
 	}
 	if view.CA == "" {
 		view.CA = "missing"

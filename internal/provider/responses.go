@@ -72,6 +72,11 @@ func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
 		body.Reasoning = &struct {
 			Effort string `json:"effort,omitempty"`
 		}{Effort: effort}
+	} else if qwenTieredEffortOff(m) {
+		// 分级 effort 家族默认思考，省略 reasoning 等于开着；关思考要显式发 none。
+		body.Reasoning = &struct {
+			Effort string `json:"effort,omitempty"`
+		}{Effort: "none"}
 	}
 	if req.System != "" {
 		body.Input = append(body.Input, item{Type: "message", Role: "system", Content: []part{{Type: "input_text", Text: req.System}}})

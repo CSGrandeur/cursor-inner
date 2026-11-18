@@ -88,24 +88,36 @@ func TestResponsesChatProbeEffortOverridesUser(t *testing.T) {
 	}
 }
 
-func TestResponsesChatStaleHighMaxUseDefault(t *testing.T) {
-	for _, stale := range []string{"high", "max"} {
-		t.Run(stale, func(t *testing.T) {
-			var seen []byte
-			srv := serve(t, responsesTextOK(), &seen)
-			m := config.Model{
-				Type: "openai-responses", BaseURL: srv.URL + "/v1", APIKey: "k",
-				Model: "qwen4-max-preview", Reasoning: true, Effort: stale,
-			}
-			chatCapture(t, m, context.Background(), &seen)
-			got, ok := sentReasoningEffort(seen)
-			if !ok || got != "xhigh" {
-				t.Fatalf("stale %s must not be sent, want default xhigh, got %q present=%v body=%s", stale, got, ok, seen)
-			}
-			if strings.Contains(string(seen), `"effort":"high"`) || strings.Contains(string(seen), `"effort":"max"`) {
-				t.Fatalf("unsupported value leaked: %s", seen)
-			}
-		})
+func TestResponsesChatStaleMaxUsesDefault(t *testing.T) {
+	// max 仍不在 qwen4 的档位表里，要换成默认档 xhigh。
+	var seen []byte
+	srv := serve(t, responsesTextOK(), &seen)
+	m := config.Model{
+		Type: "openai-responses", BaseURL: srv.URL + "/v1", APIKey: "k",
+		Model: "qwen4-max-preview", Reasoning: true, Effort: "max",
+	}
+	chatCapture(t, m, context.Background(), &seen)
+	got, ok := sentReasoningEffort(seen)
+	if !ok || got != "xhigh" {
+		t.Fatalf("stale max must not be sent, want default xhigh, got %q present=%v body=%s", got, ok, seen)
+	}
+	if strings.Contains(string(seen), `"effort":"max"`) {
+		t.Fatalf("unsupported value leaked: %s", seen)
+	}
+}
+
+func TestResponsesChatKeepsQwen4High(t *testing.T) {
+	// high 已在 qwen4 档位表里（实测接口接受），要原样透传。
+	var seen []byte
+	srv := serve(t, responsesTextOK(), &seen)
+	m := config.Model{
+		Type: "openai-responses", BaseURL: srv.URL + "/v1", APIKey: "k",
+		Model: "qwen4-max-preview", Reasoning: true, Effort: "high",
+	}
+	chatCapture(t, m, context.Background(), &seen)
+	got, ok := sentReasoningEffort(seen)
+	if !ok || got != "high" {
+		t.Fatalf("qwen4 high is supported, want pass-through, got %q present=%v body=%s", got, ok, seen)
 	}
 }
 
@@ -127,7 +139,7 @@ func TestResponsesChatOtherProviderKeepsGenericEffort(t *testing.T) {
 	}
 }
 
-func TestChatCompletionsQwen4SanitizesStaleHigh(t *testing.T) {
+func TestChatCompletionsQwen4KeepsHigh(t *testing.T) {
 	var seen []byte
 	srv := serve(t, sse(`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`), &seen)
 	m := config.Model{
@@ -137,11 +149,26 @@ func TestChatCompletionsQwen4SanitizesStaleHigh(t *testing.T) {
 	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "hi"}}, nil, func(string) error { return nil }, nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(seen), `"reasoning_effort":"xhigh"`) {
-		t.Fatalf("qwen4 chat completions stale high should become xhigh: %s", seen)
+	if !strings.Contains(string(seen), `"reasoning_effort":"high"`) {
+		t.Fatalf("qwen4 accepts high, want pass-through: %s", seen)
 	}
-	if strings.Contains(string(seen), `"reasoning_effort":"high"`) {
-		t.Fatalf("unsupported high leaked: %s", seen)
+}
+
+func TestChatCompletionsQwen4StaleMaxUsesDefault(t *testing.T) {
+	var seen []byte
+	srv := serve(t, sse(`{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`), &seen)
+	m := config.Model{
+		Type: "openai-chat", BaseURL: srv.URL + "/v1", APIKey: "k",
+		Model: "qwen4-max-preview", Reasoning: true, Effort: "max",
+	}
+	if _, err := Chat(context.Background(), m, dialer.Direct(), "", []Message{{Role: "user", Content: "hi"}}, nil, func(string) error { return nil }, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(seen), `"reasoning_effort":"xhigh"`) {
+		t.Fatalf("stale max should become xhigh: %s", seen)
+	}
+	if strings.Contains(string(seen), `"reasoning_effort":"max"`) {
+		t.Fatalf("unsupported max leaked: %s", seen)
 	}
 }
 

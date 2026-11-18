@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-18
+
+### Added
+
+- A dedicated **Accounts** tab manages saved accounts for both **Cursor** and **Antigravity**, with subtabs automatically sorted so whichever IDE you used most recently appears first. Each supports browser sign-in, pasted tokens/cookies or batch JSON import, importing the currently active IDE session, local backup export, subscription tier and quota display, and one-click switching (closing the running IDE, writing credentials—including Windows WSL setups and builds without `state.vscdb`—and reopening it under active takeover settings).
+
+### Changed
+
+- Rewrote the Chinese and English READMEs with updated architecture diagrams and dual-view screenshots to highlight all three core pillars equally: per-process proxy takeover without a system TUN (for Codex, Antigravity including WSL, Cursor, and Grok), Cursor and Antigravity multi-account switching, and custom model routing inside Cursor.
+- Tiered-reasoning Qwen models now include the `high` effort level, send an explicit disable setting when reasoning is turned off, and default `qwen-latest-series-*` context limits to 1M tokens when left blank.
+
+### Fixed
+
+- Active editor tools no longer time out while their execution heartbeats continue. Interrupted or disconnected tool calls retain ordered results for recovery instead of silently losing them or rerunning an unconfirmed action.
+- Non-default Cursor install locations on Windows are remembered from running instances and resolved via Windows app registration so launching and account-switch restarts find Cursor reliably.
+- Outbound proxy bridge connections keep active byte counters and progress tracking responsive across long-lived streams without logging closed-stream noise early.
+
 ## [0.6.5] - 2026-11-17
 
 ### Fixed
@@ -670,7 +687,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.5...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.5...v0.7.0
 [0.6.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.2...v0.6.3

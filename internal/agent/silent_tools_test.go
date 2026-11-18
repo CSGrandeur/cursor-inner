@@ -11,7 +11,7 @@ import (
 	"cursor-inner/internal/dialer"
 )
 
-// 客户端放弃请求后不再回应任何工具，会话应在连续两次超时后结束这一轮，而不是一直白等。
+// An unconfirmed execution pauses before another model action can duplicate it.
 func TestSilentEditorEndsTheTurn(t *testing.T) {
 	prev := toolWaitLimit
 	toolWaitLimit = 150 * time.Millisecond
@@ -72,10 +72,10 @@ func TestSilentEditorEndsTheTurn(t *testing.T) {
 			}
 			fm.mu.Lock()
 			defer fm.mu.Unlock()
-			if len(fm.requests) != 2 {
-				t.Fatalf("model requests=%d, want 2", len(fm.requests))
+			if len(fm.requests) != 1 {
+				t.Fatalf("model requests=%d, want 1", len(fm.requests))
 			}
-			if !ended || !strings.Contains(text.String(), "did not respond") {
+			if !ended || !strings.Contains(text.String(), "no confirmed terminal result") {
 				t.Fatalf("ended=%v text=%q", ended, text.String())
 			}
 			return
@@ -85,7 +85,7 @@ func TestSilentEditorEndsTheTurn(t *testing.T) {
 	}
 }
 
-// 并行工具一批全部超时也算一次没回应，连续两批后结束这一轮。
+// Parallel inactivity also pauses without issuing another batch.
 func TestSilentEditorEndsTheTurnForParallelTools(t *testing.T) {
 	prev := toolWaitLimit
 	toolWaitLimit = 150 * time.Millisecond
@@ -150,10 +150,10 @@ func TestSilentEditorEndsTheTurnForParallelTools(t *testing.T) {
 			}
 			fm.mu.Lock()
 			defer fm.mu.Unlock()
-			if len(fm.requests) != 2 {
-				t.Fatalf("model requests=%d, want 2", len(fm.requests))
+			if len(fm.requests) != 1 {
+				t.Fatalf("model requests=%d, want 1", len(fm.requests))
 			}
-			if !ended || !strings.Contains(text.String(), "did not respond") {
+			if !ended || !strings.Contains(text.String(), "no confirmed terminal result") {
 				t.Fatalf("ended=%v text=%q", ended, text.String())
 			}
 			return

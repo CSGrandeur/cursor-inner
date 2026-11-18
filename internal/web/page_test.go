@@ -18,12 +18,12 @@ func pageSource(t *testing.T) string {
 // 配置页按标签分组：每个设置项必须落在约定的标签里，标签名与 URL hash（托盘直达 #update）一致。
 func TestPageTabsGroupSettings(t *testing.T) {
 	src := pageSource(t)
-	for _, tab := range []string{"models", "network", "update", "general"} {
+	for _, tab := range []string{"models", "accounts", "network", "update", "general"} {
 		if !strings.Contains(src, `id="tab-`+tab+`" data-tab="`+tab+`" aria-controls="pane-`+tab+`"`) {
 			t.Fatalf("tab %s missing or not wired to its pane", tab)
 		}
 	}
-	if !strings.Contains(src, `const TABS = ["models", "network", "general", "update"];`) {
+	if !strings.Contains(src, `const TABS = ["models", "accounts", "network", "general", "update"];`) {
 		t.Fatal("tab list in script out of sync with the markup")
 	}
 	if strings.Index(src, `id="tab-update"`) < strings.Index(src, `id="tab-general"`) {
@@ -41,8 +41,8 @@ func TestPageTabsGroupSettings(t *testing.T) {
 		t.Fatal("Open Antigravity needs the official app icon")
 	}
 	panes := regexp.MustCompile(`<div class="pane" role="tabpanel" id="pane-([a-z]+)"`).FindAllStringSubmatchIndex(src, -1)
-	if len(panes) != 4 {
-		t.Fatalf("want 4 panes, got %d", len(panes))
+	if len(panes) != 5 {
+		t.Fatalf("want 5 panes, got %d", len(panes))
 	}
 	paneOf := func(id string) string {
 		at := strings.Index(src, `id="`+id+`"`)
@@ -61,10 +61,11 @@ func TestPageTabsGroupSettings(t *testing.T) {
 		return name
 	}
 	want := map[string][]string{
-		"models":  {"model-lists", "group-tools", "group-form", "model-form", "draft-test"},
-		"network": {"takeover-cursor", "takeover-grok", "takeover-codex", "takeover-antigravity", "tun-on", "strict-on", "proxy-address", "scope"},
-		"update":  {"update-row", "update-check", "up-steps", "up-fill"},
-		"general": {"image-url", "autostart", "background", "notify"},
+		"models":   {"model-lists", "group-tools", "group-form", "model-form", "draft-test"},
+		"accounts": {"anti-accounts", "account-subtabs", "subtab-cursor", "subtab-antigravity", "anti-refresh-all", "anti-token-eye", "anti-copy-url"},
+		"network":  {"takeover-cursor", "takeover-grok", "takeover-codex", "takeover-antigravity", "tun-on", "strict-on", "proxy-address", "scope"},
+		"update":   {"update-row", "update-check", "up-steps", "up-fill"},
+		"general":  {"image-url", "autostart", "background", "notify"},
 	}
 	for tab, ids := range want {
 		for _, id := range ids {

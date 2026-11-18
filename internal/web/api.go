@@ -77,6 +77,13 @@ type View struct {
 	Desktop        DesktopView     `json:"desktop"`
 	Groups         []GroupView     `json:"groups"`
 	Models         []ModelView     `json:"models"`
+	// AccountOrder 按最近一次使用时间降序排列账号子标签（"cursor" / "antigravity"）。
+	AccountOrder []string `json:"account_order,omitempty"`
+	// CursorAccounts 与 AntiAccounts 是两款 IDE 的账号列表；不支持的一侧为 null，空数组保留 []。
+	CursorAccounts     []AntiAccountView `json:"cursor_accounts"`
+	CursorAccountError i18n.Text         `json:"cursor_account_error,omitzero"`
+	AntiAccounts       []AntiAccountView `json:"anti_accounts"`
+	AntiAccountError   i18n.Text         `json:"anti_account_error,omitzero"`
 }
 
 type ImageView struct {
@@ -107,6 +114,75 @@ type DesktopView struct {
 type TunnelView struct {
 	Status int       `json:"status"`
 	Detail i18n.Text `json:"detail"`
+}
+
+// AntiQuotaView 是单个模型家族的剩余配额摘要。
+type AntiQuotaView struct {
+	Label   string `json:"label"`
+	Percent int    `json:"percent"`
+	ResetAt int64  `json:"reset_at,omitempty"`
+	Window  string `json:"window,omitempty"`
+}
+
+// AntiAccountView 是反重力账号摘要（不含 token）。
+type AntiAccountView struct {
+	ID        string          `json:"id"`
+	Email     string          `json:"email"`
+	Name      string          `json:"name,omitempty"`
+	Tier      string          `json:"tier,omitempty"`
+	Quotas    []AntiQuotaView `json:"quotas,omitempty"`
+	Status    string          `json:"status,omitempty"`
+	CreatedAt int64           `json:"created_at"`
+	LastUsed  int64           `json:"last_used"`
+	Current   bool            `json:"current"`
+	Expiry    int64           `json:"expiry,omitempty"`
+}
+
+// AntiLoginState 是一次 Google 授权的进度：running（等浏览器回调）、done（成或败）。
+type AntiLoginState struct {
+	Running bool             `json:"running"`
+	Done    bool             `json:"done"`
+	Account *AntiAccountView `json:"account,omitempty"`
+	Error   i18n.Text        `json:"error,omitzero"`
+}
+
+// AntiImportResult 是批量导入里一条的结果。
+type AntiImportResult struct {
+	Email string    `json:"email,omitempty"`
+	OK    bool      `json:"ok"`
+	Error i18n.Text `json:"error,omitzero"`
+}
+
+// AntiAccountBackend 是反重力账号管理的可选后端；实现了才挂 /api/antigravity/accounts 路由。
+type AntiAccountBackend interface {
+	AntiAccountList() []AntiAccountView
+	AntiAccountLoginStart() (string, error)
+	AntiAccountLoginState() AntiLoginState
+	AntiAccountLoginCancel()
+	AntiAccountImport(ctx context.Context, refreshToken string) (AntiAccountView, error)
+	AntiAccountImportCurrent(ctx context.Context) (AntiAccountView, error)
+	AntiAccountImportJSON(ctx context.Context, raw []byte) ([]AntiImportResult, error)
+	AntiAccountExportJSON() ([]byte, error)
+	AntiAccountRemove(id string) error
+	AntiAccountRefresh(ctx context.Context, id string) (AntiAccountView, error)
+	AntiAccountRefreshAll(ctx context.Context) (okCount, failCount int, firstErr error)
+	AntiAccountSwitch(ctx context.Context, id string) error
+}
+
+// CursorAccountBackend 是 Cursor 账号管理的可选后端；实现了才挂 /api/cursor/accounts 路由。
+type CursorAccountBackend interface {
+	CursorAccountList() []AntiAccountView
+	CursorAccountLoginStart() (string, error)
+	CursorAccountLoginState() AntiLoginState
+	CursorAccountLoginCancel()
+	CursorAccountImport(ctx context.Context, rawToken string) (AntiAccountView, error)
+	CursorAccountImportCurrent(ctx context.Context) (AntiAccountView, error)
+	CursorAccountImportJSON(ctx context.Context, raw []byte) ([]AntiImportResult, error)
+	CursorAccountExportJSON() ([]byte, error)
+	CursorAccountRemove(id string) error
+	CursorAccountRefresh(ctx context.Context, id string) (AntiAccountView, error)
+	CursorAccountRefreshAll(ctx context.Context) (okCount, failCount int, firstErr error)
+	CursorAccountSwitch(ctx context.Context, id string) error
 }
 
 type Backend interface {

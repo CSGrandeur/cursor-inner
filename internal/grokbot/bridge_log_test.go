@@ -399,3 +399,83 @@ func TestPipeIgnoresPostEOFWriteAbortButPreservesUpstreamReadReset(t *testing.T)
 		t.Fatalf("expected genuine upstream RST to classify as close=reset, got:\n%s", s2)
 	}
 }
+
+func TestBridgeStatsLiveBytesAndProgress(t *testing.T) {
+	const payloadSize = 11 << 20
+	hold := make(chan struct{})
+	t.Cleanup(func() { close(hold) })
+
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			s, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(s net.Conn) {
+				defer s.Close()
+				chunk := bytes.Repeat([]byte("a"), 64<<10)
+				for rem := payloadSize; rem > 0; {
+					n := len(chunk)
+					if rem < n {
+						n = rem
+					}
+					if _, err := s.Write(chunk[:n]); err != nil {
+						return
+					}
+					rem -= n
+				}
+				<-hold
+			}(s)
+		}
+	}()
+
+	buf := captureLog(t, slog.LevelDebug)
+	var b Bridge
+	addr, err := b.Ensure("antigravity\nsocks5://127.0.0.1:1080", func(ctx context.Context, n, a string) (net.Conn, error) {
+		connlog.Set(ctx, "proxy")
+		var d net.Dialer
+		return d.DialContext(ctx, n, a)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(b.Close)
+
+	c, err := net.Dial("tcp4", strings.TrimPrefix(addr, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	target := ln.Addr().String()
+	_, _ = io.WriteString(c, "CONNECT "+target+" HTTP/1.1\r\nHost: "+target+"\r\n\r\n")
+	okHdr := make([]byte, 39)
+	if _, err := io.ReadFull(c, okHdr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.CopyN(io.Discard, c, payloadSize); err != nil {
+		t.Fatal(err)
+	}
+
+	s := waitFor(t, buf, `msg="bridge progress"`)
+	if strings.Contains(s, `msg="bridge conn"`) {
+		t.Fatalf("bridge conn must not be logged while tunnel is still open:\n%s", s)
+	}
+	for _, want := range []string{"bridge=antigravity", "target=" + target, "route=proxy/socks5", "down="} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("missing %q in progress log:\n%s", want, s)
+		}
+	}
+
+	b.reportStats()
+	statsLog := waitFor(t, buf, `msg="bridge stats"`)
+	for _, want := range []string{"bridge=antigravity", "up_bytes=0", "down_bytes=11534336"} {
+		if !strings.Contains(statsLog, want) {
+			t.Fatalf("missing %q in live bridge stats:\n%s", want, statsLog)
+		}
+	}
+}

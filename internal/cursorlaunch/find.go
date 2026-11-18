@@ -4,9 +4,37 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"cursor-inner/internal/i18n"
 )
+
+var (
+	rememberMu  sync.Mutex
+	rememberExe string
+)
+
+// RememberExe 记下最近一次确认合法的 Cursor 桌面程序路径，供关闭后再重启时优先使用。
+func RememberExe(path string) {
+	exe := cursorExecutable(path)
+	if exe == "" {
+		return
+	}
+	rememberMu.Lock()
+	rememberExe = exe
+	rememberMu.Unlock()
+}
+
+// LastRememberedExe 返回最近记住的 Cursor 可执行路径（如仍存在）。
+func LastRememberedExe() string {
+	rememberMu.Lock()
+	p := rememberExe
+	rememberMu.Unlock()
+	if p != "" && isFile(p) {
+		return p
+	}
+	return ""
+}
 
 func findCursor(candidates []string, lookup func() (string, error)) (string, error) {
 	for _, path := range candidates {

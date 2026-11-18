@@ -673,7 +673,14 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 			body.ChatTemplateKwargs = map[string]any{"enable_thinking": false}
 		}
 	}
-	body.ThinkingBudget = qwenThinkingBudget(m)
+	// 分级 effort 家族（qwen4 / qwen3.8 / qwen-latest-series）关思考要显式发 none：
+	// 它们默认思考，省略字段等于开着。
+	if qwenTieredEffortOff(m) {
+		body.ReasoningEffort = "none"
+		body.ThinkingBudget = nil
+	} else {
+		body.ThinkingBudget = qwenThinkingBudget(m)
+	}
 	if len(req.Tools) > 0 && ProfileOf(m).ParallelToolCalls {
 		yes := true
 		body.ParallelToolCalls = &yes
