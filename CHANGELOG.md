@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-20
+
+### Fixed
+
+- Restarting Grok Bot under takeover now keeps the user's `SAND_LOCAL_EXEC_ROOT` (reading a newly set user-environment value without requiring a tray restart) and, when that directory exists, starts the app with it as the working directory so local Read/Write tools are not refused as outside the allowed root.
+- After a custom-model turn that ran tools, switching to an official model in the same chat no longer fails with an internal error, and already recorded tool results are kept.
+- After switching from an official model back to a custom one, the custom endpoint no longer rejects the chat when official tool identifiers are longer than it allows. History already saved in the conversation is left unchanged.
+
 ## [0.7.0] - 2026-11-18
 
 ### Added
@@ -687,7 +695,8 @@ First public release.
 - On Windows, launching from Explorer, the Start menu or at login opens a classic console window so the taskbar shows the cursor-inner icon.
 - One-line installers: `install.sh` for macOS and Linux, `install.ps1` for Windows, both verifying SHA-256 checksums.
 
-[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/CSGrandeur/cursor-inner/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/CSGrandeur/cursor-inner/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.5...v0.7.0
 [0.6.5]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/CSGrandeur/cursor-inner/compare/v0.6.3...v0.6.4

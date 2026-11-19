@@ -2,6 +2,8 @@ package grokbot
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -244,5 +246,55 @@ func TestProxyEnvInjectsReservedInterfaceLiteralsWithoutMutatingProxyArgs(t *tes
 		if counts[forbidden] != 0 {
 			t.Fatalf("forbidden address %q leaked into NO_PROXY: %s", forbidden, noProxy)
 		}
+	}
+}
+
+func TestResolveExecRootAndStartDir(t *testing.T) {
+	rootDir := t.TempDir()
+	appDir := t.TempDir()
+	exePath := filepath.Join(appDir, "Grok Bot.exe")
+
+	got := resolveExecRoot(
+		[]string{"SAND_LOCAL_EXEC_ROOT=/stale/root"},
+		func(k string) string {
+			if k == "SAND_LOCAL_EXEC_ROOT" {
+				return "  " + rootDir + "  "
+			}
+			return ""
+		},
+	)
+	if got != rootDir {
+		t.Fatalf("resolveExecRoot user override = %q, want %q", got, rootDir)
+	}
+
+	fallback := resolveExecRoot(
+		[]string{"SAND_AGENT_PROJECT_DIR=" + rootDir},
+		func(string) string { return "" },
+	)
+	if fallback != rootDir {
+		t.Fatalf("resolveExecRoot base fallback = %q, want %q", fallback, rootDir)
+	}
+
+	isDir := func(p string) bool {
+		info, err := os.Stat(p)
+		return err == nil && info.IsDir()
+	}
+	if dir := startDir(exePath, rootDir, isDir); dir != rootDir {
+		t.Fatalf("startDir with existing root = %q, want %q", dir, rootDir)
+	}
+	if dir := startDir(exePath, filepath.Join(rootDir, "missing"), isDir); dir != appDir {
+		t.Fatalf("startDir with missing root = %q, want %q", dir, appDir)
+	}
+
+	merged := withExecRoot(
+		ProxyEnv("http://127.0.0.1:1080", []string{"sand_local_exec_root=/old", "PATH=/bin"}),
+		rootDir,
+	)
+	val, n := envValue(merged, "SAND_LOCAL_EXEC_ROOT")
+	if n != 1 || val != rootDir {
+		t.Fatalf("withExecRoot = %q (x%d), want %q", val, n, rootDir)
+	}
+	if _, oldN := envValue(merged, "sand_local_exec_root"); oldN != 0 {
+		t.Fatalf("stale lowercase sand_local_exec_root remained: %v", merged)
 	}
 }

@@ -207,7 +207,10 @@ func (p *Pending) Feed(msg *cursorpb.ExecClientMessage, ui *cursorpb.ToolCall) (
 		setShellUI(ui, result)
 		return nil, nil, text, isErr, true
 	default:
-		return nil, nil, "Cursor returned an empty shell event", true, true
+		text := "Cursor returned an empty shell event"
+		result := &cursorpb.ShellResult{Result: &cursorpb.ShellResult_SpawnError{SpawnError: &cursorpb.ShellSpawnError{Error: text}}}
+		setShellUI(ui, result)
+		return nil, nil, text, true, true
 	}
 }
 

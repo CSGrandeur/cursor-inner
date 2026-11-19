@@ -15,5 +15,6 @@ func TestCheckingGrokStartsNoProcess(t *testing.T) {
 		}
 		_, _ = whereGrok()
 		_, _ = registryGrok()
+		_ = registryUserEnv("SAND_LOCAL_EXEC_ROOT")
 	})
 }

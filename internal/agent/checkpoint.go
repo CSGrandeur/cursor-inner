@@ -358,7 +358,13 @@ func encodeTurnSteps(turn []provider.Message) ([][]byte, error) {
 				} else {
 					card = synthesized
 				}
+			} else {
+				// 执行卡可能只写下了 args（Shell 未挂上 result 的结束事件、或历史从 root 还原后只剩骨架）。
+				// 官方服务端按 ConversationStep 解析已完成的工具，缺 result 会 INTERNAL。
+				// 只补缺失的 result，不改写已有结果，也不删历史或伪造未完成的工具。
+				card = proto.Clone(card).(*cursorpb.ToolCall)
 			}
+			ensureCardResult(card, call, message.Content, message.IsError)
 			raw, err := proto.Marshal(&cursorpb.ConversationStep{Message: &cursorpb.ConversationStep_ToolCall{ToolCall: card}})
 			if err != nil {
 				return nil, err
@@ -403,7 +409,162 @@ func synthesizeCard(call provider.ToolCall, result string, isErr bool) (*cursorp
 	default:
 		return nil, fmt.Errorf("checkpoint: tool %s is not a shell command and has no card", call.Name)
 	}
+	ensureCardResult(card, call, result, isErr)
 	return card, nil
+}
+
+// ensureCardResult 给已完成的工具步骤补上官方 ConversationStep 需要的 result oneof。
+// 只在 result 缺失时写入，内容来自这条工具结果消息已有的文本和参数，不伪造未执行的工具。
+func ensureCardResult(card *cursorpb.ToolCall, call provider.ToolCall, result string, isErr bool) {
+	if card == nil {
+		return
+	}
+	if card.ToolCallId == nil && call.ID != "" {
+		id := call.ID
+		card.ToolCallId = &id
+	}
+	switch t := card.Tool.(type) {
+	case *cursorpb.ToolCall_ReadToolCall:
+		if t.ReadToolCall == nil {
+			t.ReadToolCall = &cursorpb.ReadToolCall{}
+		}
+		if t.ReadToolCall.Args == nil {
+			t.ReadToolCall.Args = &cursorpb.ReadToolArgs{Path: argString(call.Arguments, "path", "file_path", "filePath")}
+		}
+		if t.ReadToolCall.GetResult() == nil {
+			path := t.ReadToolCall.GetArgs().GetPath()
+			if isErr {
+				t.ReadToolCall.Result = &cursorpb.ReadToolResult{Result: &cursorpb.ReadToolResult_Error{Error: &cursorpb.ReadToolError{ErrorMessage: result}}}
+			} else {
+				t.ReadToolCall.Result = &cursorpb.ReadToolResult{Result: &cursorpb.ReadToolResult_Success{Success: &cursorpb.ReadToolSuccess{Path: path, Output: &cursorpb.ReadToolSuccess_Content{Content: result}}}}
+			}
+		}
+	case *cursorpb.ToolCall_EditToolCall:
+		if t.EditToolCall == nil {
+			t.EditToolCall = &cursorpb.EditToolCall{}
+		}
+		if t.EditToolCall.Args == nil {
+			path := argString(call.Arguments, "path", "file_path", "filePath", "target_notebook")
+			t.EditToolCall.Args = &cursorpb.EditArgs{Path: path}
+		}
+		if t.EditToolCall.GetResult() == nil {
+			path := t.EditToolCall.GetArgs().GetPath()
+			if isErr {
+				t.EditToolCall.Result = &cursorpb.EditResult{Result: &cursorpb.EditResult_Error{Error: &cursorpb.EditError{Path: path, Error: result}}}
+			} else {
+				t.EditToolCall.Result = &cursorpb.EditResult{Result: &cursorpb.EditResult_Success{Success: &cursorpb.EditSuccess{
+					Path:                 path,
+					AfterFullFileContent: result,
+					Message:              strPtr(resultSummary(result)),
+				}}}
+			}
+		}
+	case *cursorpb.ToolCall_ShellToolCall:
+		if t.ShellToolCall == nil {
+			t.ShellToolCall = &cursorpb.ShellToolCall{}
+		}
+		if t.ShellToolCall.Args == nil {
+			t.ShellToolCall.Args = &cursorpb.ShellArgs{Command: argString(call.Arguments, "command"), ToolCallId: call.ID}
+		}
+		if t.ShellToolCall.GetResult() == nil || t.ShellToolCall.GetResult().GetResult() == nil {
+			command := t.ShellToolCall.GetArgs().GetCommand()
+			cwd := t.ShellToolCall.GetArgs().GetWorkingDirectory()
+			if isErr {
+				t.ShellToolCall.Result = &cursorpb.ShellResult{Result: &cursorpb.ShellResult_Failure{Failure: &cursorpb.ShellFailure{
+					Command:          command,
+					WorkingDirectory: cwd,
+					Stdout:           result,
+				}}}
+			} else {
+				t.ShellToolCall.Result = &cursorpb.ShellResult{Result: &cursorpb.ShellResult_Success{Success: &cursorpb.ShellSuccess{
+					Command:          command,
+					WorkingDirectory: cwd,
+					Stdout:           result,
+				}}}
+			}
+		}
+	case *cursorpb.ToolCall_GrepToolCall:
+		if t.GrepToolCall == nil {
+			t.GrepToolCall = &cursorpb.GrepToolCall{}
+		}
+		if t.GrepToolCall.Args == nil {
+			t.GrepToolCall.Args = &cursorpb.GrepArgs{Pattern: argString(call.Arguments, "pattern"), ToolCallId: call.ID}
+		}
+		if t.GrepToolCall.GetResult() == nil || t.GrepToolCall.GetResult().GetResult() == nil {
+			if isErr {
+				t.GrepToolCall.Result = &cursorpb.GrepResult{Result: &cursorpb.GrepResult_Error{Error: &cursorpb.GrepError{Error: result}}}
+			} else {
+				t.GrepToolCall.Result = &cursorpb.GrepResult{Result: &cursorpb.GrepResult_Success{Success: &cursorpb.GrepSuccess{
+					Pattern:    t.GrepToolCall.GetArgs().GetPattern(),
+					Path:       t.GrepToolCall.GetArgs().GetPath(),
+					OutputMode: t.GrepToolCall.GetArgs().GetOutputMode(),
+				}}}
+			}
+		}
+	case *cursorpb.ToolCall_GlobToolCall:
+		if t.GlobToolCall == nil {
+			t.GlobToolCall = &cursorpb.GlobToolCall{}
+		}
+		if t.GlobToolCall.Args == nil {
+			t.GlobToolCall.Args = &cursorpb.GlobToolArgs{GlobPattern: argString(call.Arguments, "glob_pattern", "pattern")}
+		}
+		if t.GlobToolCall.GetResult() == nil || t.GlobToolCall.GetResult().GetResult() == nil {
+			if isErr {
+				t.GlobToolCall.Result = &cursorpb.GlobToolResult{Result: &cursorpb.GlobToolResult_Error{Error: &cursorpb.GlobToolError{Error: result}}}
+			} else {
+				files := splitNonEmptyLines(result)
+				t.GlobToolCall.Result = &cursorpb.GlobToolResult{Result: &cursorpb.GlobToolResult_Success{Success: &cursorpb.GlobToolSuccess{
+					Pattern:    t.GlobToolCall.GetArgs().GetGlobPattern(),
+					Path:       t.GlobToolCall.GetArgs().GetTargetDirectory(),
+					Files:      files,
+					TotalFiles: int32(len(files)),
+				}}}
+			}
+		}
+	case *cursorpb.ToolCall_DeleteToolCall:
+		if t.DeleteToolCall == nil {
+			t.DeleteToolCall = &cursorpb.DeleteToolCall{}
+		}
+		if t.DeleteToolCall.Args == nil {
+			path := argString(call.Arguments, "path", "file_path", "filePath")
+			t.DeleteToolCall.Args = &cursorpb.DeleteArgs{Path: path, ToolCallId: call.ID}
+		}
+		if t.DeleteToolCall.GetResult() == nil || t.DeleteToolCall.GetResult().GetResult() == nil {
+			path := t.DeleteToolCall.GetArgs().GetPath()
+			if isErr {
+				t.DeleteToolCall.Result = &cursorpb.DeleteResult{Result: &cursorpb.DeleteResult_Error{Error: &cursorpb.DeleteError{Path: path, Error: result}}}
+			} else {
+				t.DeleteToolCall.Result = &cursorpb.DeleteResult{Result: &cursorpb.DeleteResult_Success{Success: &cursorpb.DeleteSuccess{Path: path, DeletedFile: path}}}
+			}
+		}
+	}
+}
+
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func resultSummary(s string) string {
+	s = strings.TrimSpace(s)
+	runes := []rune(s)
+	if len(runes) <= 200 {
+		return s
+	}
+	return string(runes[:200])
+}
+
+func splitNonEmptyLines(s string) []string {
+	var out []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // mcpCard 给 MCP 工具结果合成客户端能渲染的卡；名字不像 MCP 工具时返回 nil。

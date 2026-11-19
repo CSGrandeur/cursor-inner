@@ -5,8 +5,10 @@ package grokbot
 import (
 	"log/slog"
 	"os"
-	"path/filepath"
+	"strings"
 	"sync"
+
+	"golang.org/x/sys/windows/registry"
 
 	"cursor-inner/internal/winproc"
 )
@@ -125,9 +127,11 @@ func stop() error {
 }
 
 func start(exe, proxyURL string) error {
+	base := os.Environ()
+	execRoot := resolveExecRoot(base, registryUserEnv)
 	cmd := winproc.GUI(exe, ProxyArgs(proxyURL)...)
-	cmd.Dir = filepath.Dir(exe)
-	cmd.Env = ProxyEnv(proxyURL, os.Environ())
+	cmd.Dir = startDir(exe, execRoot, isExistingDir)
+	cmd.Env = withExecRoot(ProxyEnv(proxyURL, base), execRoot)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -135,4 +139,27 @@ func start(exe, proxyURL string) error {
 		_ = cmd.Process.Release()
 	}
 	return nil
+}
+
+func registryUserEnv(name string) string {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Environment`, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	val, valType, err := k.GetStringValue(name)
+	if err != nil {
+		return ""
+	}
+	if valType == registry.EXPAND_SZ {
+		if expanded, err := registry.ExpandString(val); err == nil {
+			val = expanded
+		}
+	}
+	return strings.TrimSpace(val)
+}
+
+func isExistingDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

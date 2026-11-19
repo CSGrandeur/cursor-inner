@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.7.0`。
+安装脚本识别系统和 CPU，按 Release 里的 `SHA256SUMS.txt` 校验后装到当前用户目录，不需要管理员权限。指定版本：`CURSOR_INNER_VERSION=v0.7.1`。
 
 <details>
 <summary><b>装到了哪里</b></summary>
@@ -153,7 +153,7 @@ irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 |
 - **账号**：在 **Cursor** 与 **反重力** 两个子标签之间切换，并按最近使用的软件自动把对应子标签排到最前。列表为空时显示“还没有保存的账号。”。上方操作栏提供“添加”“粘贴”“导入当前”“刷新全部”“导出”；点“粘贴”展开输入抽屉并支持“导入”与“导入 JSON”（Cursor 支持 JWT、Cookie、`user_xxx::eyJ...`、JSON 与多行凭据；反重力支持 `1//` refresh token、JSON 与多行导入）；点“添加”发起浏览器授权，提示“在浏览器里完成授权。这个链接也可以复制。”并可点“复制”或“取消”。每行展示订阅档位与剩余配额，可点“切换”“刷新”“删除”；切换会关闭正在运行的对应软件、写好凭据（包括反重力的 WSL 回退文件及系统凭据库）后按当前接管设置重新打开。导出备份只保存在本机。
 - **网络**：代理地址、代理范围（“全局”或“仅官方”）、接管 Cursor、接管 Grok、接管 Codex、接管反重力、TUN 模式、严格模式。代理留空则直连；只写 `主机:端口` 时自动识别 socks5 或 http。“仅官方”包括 Cursor、OpenAI、Grok、x.ai、反重力以及 Google、google.dev、withgoogle.com 等相关地址。接管反重力时，WSL 模式也会走代理，不改系统或 WSL 设置。TUN 模式同样可按需覆盖反重力（含 WSL）的官方流量。cursor-inner 比代理软件先启动时，状态栏显示“等待代理…”，就绪后自动接上，官方流量不会直连。
 - **通用**：出图、开机启动；Windows 上还有**后台运行**和**通知**。填好 OpenAI 兼容出图接口即可在 Agent 里调用 GenerateImage。
-- **更新**：支持“检查更新”与“更新”。只安装签名有效的版本，热交接期间正在运行的 Cursor 与 Grok 不用重启；验签或健康检查不通过会自动保留当前版本。
+- **更新**：支持“检查更新”与“更新”。只安装签名有效的版本，热交接期间正在运行的 Cursor 与 Grok 不用重启；验签或健康检查不通过会自动保留当前版本。接管状态下重启 Grok 时会保留你设置的 `SAND_LOCAL_EXEC_ROOT`，并在该目录存在时作为工作目录启动，避免本机 Read/Write 因超出允许根目录被拒绝。
 
 <details>
 <summary><b>命令行参数</b></summary>
@@ -191,6 +191,13 @@ Cursor 里读代理设置的流量先经过本机 `127.0.0.1`：选中自定义�
 <summary><b>选了 Auto，为什么没用到我的模型？</b></summary>
 
 Auto 只在官方模型里选。要使用自定义模型，请在模型列表里手动选中它。
+
+</details>
+
+<details>
+<summary><b>同一会话里从自定义模型切到官方模型，或再切回来，还能继续吗？</b></summary>
+
+可以。自定义模型用过工具后再切到官方模型，官方模型能接着刚才的结果继续；再切回自定义模型也可以在同一会话里继续。
 
 </details>
 
@@ -257,7 +264,7 @@ Auto 只在官方模型里选。要使用自定义模型，请在模型列表里
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.7.0 ./build.sh linux
+VERSION=v0.7.1 ./build.sh linux
 ```
 
 ## 致谢

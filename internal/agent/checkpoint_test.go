@@ -321,3 +321,164 @@ func TestChangedSystemKeepsMessageRoots(t *testing.T) {
 		t.Fatal("message root changed")
 	}
 }
+
+func TestCompletedEditAndShellStepsIncludeResults(t *testing.T) {
+	messages := []provider.Message{
+		{Role: "user", Content: "edit the file"},
+		{Role: "assistant", ToolCalls: []provider.ToolCall{
+			{ID: "e1", Name: "StrReplace", Arguments: `{"path":"note.txt","old_string":"a","new_string":"b"}`},
+			{ID: "s1", Name: "Shell", Arguments: `{"command":"echo ok"}`},
+		}},
+		{Role: "tool", ToolCallID: "e1", Content: "line-1\n"},
+		{Role: "tool", ToolCallID: "s1", Content: "ok\n"},
+	}
+	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs := map[string][]byte{}
+	for _, blob := range built.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	var wrapper cursorpb.ConversationTurnStructure
+	if err := proto.Unmarshal(blobs[string(built.State.GetTurns()[0])], &wrapper); err != nil {
+		t.Fatal(err)
+	}
+	var sawEdit, sawShell bool
+	for _, id := range wrapper.GetAgentConversationTurn().GetSteps() {
+		var step cursorpb.ConversationStep
+		if err := proto.Unmarshal(blobs[string(id)], &step); err != nil {
+			t.Fatal(err)
+		}
+		call := step.GetToolCall()
+		if call == nil {
+			continue
+		}
+		if edit := call.GetEditToolCall(); edit != nil {
+			sawEdit = true
+			if edit.GetResult().GetSuccess() == nil {
+				t.Fatalf("edit step missing success result")
+			}
+			if edit.GetResult().GetSuccess().GetPath() != "note.txt" {
+				t.Fatalf("edit path %q", edit.GetResult().GetSuccess().GetPath())
+			}
+			if edit.GetResult().GetSuccess().GetAfterFullFileContent() != "line-1\n" {
+				t.Fatalf("edit after content not taken from the tool result")
+			}
+		}
+		if sh := call.GetShellToolCall(); sh != nil {
+			sawShell = true
+			if sh.GetResult().GetSuccess() == nil {
+				t.Fatalf("shell step missing success result")
+			}
+			if sh.GetArgs().GetCommand() != "echo ok" {
+				t.Fatalf("shell command %q", sh.GetArgs().GetCommand())
+			}
+			if sh.GetResult().GetSuccess().GetStdout() != "ok\n" {
+				t.Fatalf("shell stdout not taken from the tool result")
+			}
+		}
+	}
+	if !sawEdit || !sawShell {
+		t.Fatalf("missing cards edit=%v shell=%v", sawEdit, sawShell)
+	}
+}
+
+func TestResultlessLiveCardsAreBackfilled(t *testing.T) {
+	editID := "e1"
+	shellID := "s1"
+	messages := []provider.Message{
+		{Role: "user", Content: "edit then shell"},
+		{Role: "assistant", ToolCalls: []provider.ToolCall{
+			{ID: editID, Name: "Write", Arguments: `{"path":"note.txt","contents":"hello"}`},
+			{ID: shellID, Name: "Shell", Arguments: `{"command":"cat note.txt"}`},
+		}},
+		{Role: "tool", ToolCallID: editID, Content: "hello", Card: &cursorpb.ToolCall{
+			ToolCallId: &editID,
+			Tool:       &cursorpb.ToolCall_EditToolCall{EditToolCall: &cursorpb.EditToolCall{Args: &cursorpb.EditArgs{Path: "note.txt"}}},
+		}},
+		{Role: "tool", ToolCallID: shellID, Content: "hello", Card: &cursorpb.ToolCall{
+			ToolCallId: &shellID,
+			Tool:       &cursorpb.ToolCall_ShellToolCall{ShellToolCall: &cursorpb.ShellToolCall{Args: &cursorpb.ShellArgs{Command: "cat note.txt", ToolCallId: shellID}}},
+		}},
+	}
+	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if messages[2].Card.GetEditToolCall().GetResult() != nil {
+		t.Fatal("backfill must not mutate the live edit card")
+	}
+	if messages[3].Card.GetShellToolCall().GetResult() != nil {
+		t.Fatal("backfill must not mutate the live shell card")
+	}
+	blobs := map[string][]byte{}
+	for _, blob := range built.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	var wrapper cursorpb.ConversationTurnStructure
+	if err := proto.Unmarshal(blobs[string(built.State.GetTurns()[0])], &wrapper); err != nil {
+		t.Fatal(err)
+	}
+	var sawEdit, sawShell bool
+	for _, id := range wrapper.GetAgentConversationTurn().GetSteps() {
+		var step cursorpb.ConversationStep
+		if err := proto.Unmarshal(blobs[string(id)], &step); err != nil {
+			t.Fatal(err)
+		}
+		call := step.GetToolCall()
+		if call == nil {
+			continue
+		}
+		if edit := call.GetEditToolCall(); edit != nil {
+			sawEdit = true
+			if edit.GetResult().GetSuccess() == nil || edit.GetResult().GetSuccess().GetAfterFullFileContent() != "hello" {
+				t.Fatalf("resultless edit card was not backfilled")
+			}
+		}
+		if sh := call.GetShellToolCall(); sh != nil {
+			sawShell = true
+			if sh.GetResult().GetSuccess() == nil || sh.GetResult().GetSuccess().GetStdout() != "hello" {
+				t.Fatalf("resultless shell card was not backfilled")
+			}
+		}
+	}
+	if !sawEdit || !sawShell {
+		t.Fatalf("missing backfilled cards edit=%v shell=%v", sawEdit, sawShell)
+	}
+}
+
+func TestExistingToolResultsAreNotRewritten(t *testing.T) {
+	id := "e1"
+	messages := []provider.Message{
+		{Role: "user", Content: "edit"},
+		{Role: "assistant", ToolCalls: []provider.ToolCall{{ID: id, Name: "StrReplace", Arguments: `{"path":"note.txt"}`}}},
+		{Role: "tool", ToolCallID: id, Content: "ignored-later-text", Card: &cursorpb.ToolCall{
+			ToolCallId: &id,
+			Tool: &cursorpb.ToolCall_EditToolCall{EditToolCall: &cursorpb.EditToolCall{
+				Args:   &cursorpb.EditArgs{Path: "note.txt"},
+				Result: &cursorpb.EditResult{Result: &cursorpb.EditResult_Success{Success: &cursorpb.EditSuccess{Path: "note.txt", AfterFullFileContent: "kept-content"}}},
+			}},
+		}},
+	}
+	built, err := writeCheckpoint("", "req", messages, 0, 0, 0, "", 0, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobs := map[string][]byte{}
+	for _, blob := range built.Blobs {
+		blobs[string(blob.ID)] = blob.Data
+	}
+	var wrapper cursorpb.ConversationTurnStructure
+	if err := proto.Unmarshal(blobs[string(built.State.GetTurns()[0])], &wrapper); err != nil {
+		t.Fatal(err)
+	}
+	var step cursorpb.ConversationStep
+	if err := proto.Unmarshal(blobs[string(wrapper.GetAgentConversationTurn().GetSteps()[0])], &step); err != nil {
+		t.Fatal(err)
+	}
+	got := step.GetToolCall().GetEditToolCall().GetResult().GetSuccess().GetAfterFullFileContent()
+	if got != "kept-content" {
+		t.Fatalf("rewrote an existing result: %q", got)
+	}
+}

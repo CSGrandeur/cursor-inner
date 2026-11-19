@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,6 +138,42 @@ func ensureUniqueToolCallIDs(history []Message, calls []ToolCall) []ToolCall {
 		}
 		used[id] = true
 		out[i].ID = id
+	}
+	return out
+}
+
+// maxProviderToolCallID 是常见兼容端（含 DashScope / Qwen Responses）对 call_id / tool_call_id 的长度上限。
+const maxProviderToolCallID = 64
+
+// compatToolCallID 把超长的历史工具 ID 映射成不超过 64 的稳定值，供发往自定义端点时使用。
+// 不改写检查点或会话里保存的原始 ID，这样切回官方模型时仍能对上官方认识的调用 ID。
+func compatToolCallID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" || len(id) <= maxProviderToolCallID {
+		return id
+	}
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:])
+}
+
+// messagesWithCompatToolCallIDs 复制消息切片并只在副本上缩短工具 ID，避免改到调用方持有的历史。
+func messagesWithCompatToolCallIDs(messages []Message) []Message {
+	if len(messages) == 0 {
+		return messages
+	}
+	out := append([]Message(nil), messages...)
+	for i := range out {
+		if out[i].ToolCallID != "" {
+			out[i].ToolCallID = compatToolCallID(out[i].ToolCallID)
+		}
+		if len(out[i].ToolCalls) == 0 {
+			continue
+		}
+		calls := append([]ToolCall(nil), out[i].ToolCalls...)
+		for j := range calls {
+			calls[j].ID = compatToolCallID(calls[j].ID)
+		}
+		out[i].ToolCalls = calls
 	}
 	return out
 }
@@ -616,6 +654,7 @@ func anthropicEffort(effort string) string {
 }
 
 func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
+	req.Messages = messagesWithCompatToolCallIDs(req.Messages)
 	type function struct {
 		Name        string          `json:"name"`
 		Description string          `json:"description,omitempty"`
@@ -713,6 +752,7 @@ func openAIBody(m config.Model, req chatRequest) ([]byte, error) {
 }
 
 func anthropicBody(m config.Model, req chatRequest) ([]byte, error) {
+	req.Messages = messagesWithCompatToolCallIDs(req.Messages)
 	type imageSource struct {
 		Type      string `json:"type"`
 		MediaType string `json:"media_type"`

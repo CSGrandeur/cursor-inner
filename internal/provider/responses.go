@@ -12,6 +12,7 @@ import (
 // 加密推理内容与上游 item id 一起编码进 Message.ReasoningSignature，下一轮按真实 id 回放；
 // 没有真实 id 的旧历史不会编造 rs_prev，也不把密文当成 id。
 func responsesBody(m config.Model, req chatRequest) ([]byte, error) {
+	req.Messages = messagesWithCompatToolCallIDs(req.Messages)
 	type part struct {
 		Type             string `json:"type"`
 		Text             string `json:"text,omitempty"`

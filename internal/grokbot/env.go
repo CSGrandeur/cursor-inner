@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"cursor-inner/internal/official"
@@ -178,4 +179,64 @@ func interfaceIP(a net.Addr) (netip.Addr, bool) {
 		}
 	}
 	return netip.Addr{}, false
+}
+
+var localExecRootVars = []string{
+	"SAND_LOCAL_EXEC_ROOT",
+	"SAND_AGENT_PROJECT_DIR",
+}
+
+// resolveExecRoot 读取用户为 Grok Bot 本地执行守护配置的根目录。
+// 先查系统用户环境（使运行中的托盘进程无需重启即可感知新配置），再回退到当前进程环境。
+func resolveExecRoot(base []string, lookupUserEnv func(string) string) string {
+	for _, key := range localExecRootVars {
+		if lookupUserEnv != nil {
+			if v := strings.TrimSpace(lookupUserEnv(key)); v != "" {
+				return v
+			}
+		}
+		if v := strings.TrimSpace(lookupEnvEntry(base, key)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func lookupEnvEntry(entries []string, key string) string {
+	var found string
+	for _, entry := range entries {
+		name, val, ok := strings.Cut(entry, "=")
+		if ok && strings.EqualFold(name, key) {
+			found = val
+		}
+	}
+	return found
+}
+
+// withExecRoot 在启动环境中固定写入 SAND_LOCAL_EXEC_ROOT，避免常驻进程因启动较早漏传用户新设变量。
+func withExecRoot(env []string, execRoot string) []string {
+	execRoot = strings.TrimSpace(execRoot)
+	if execRoot == "" {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.EqualFold(name, "SAND_LOCAL_EXEC_ROOT") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return append(out, "SAND_LOCAL_EXEC_ROOT="+execRoot)
+}
+
+// startDir 在配置了有效的本地执行根目录时将其作为工作目录：
+// Windows 下 path.win32.resolve("/...") 会按进程当前盘符解析无盘符 POSIX 路径，
+// 工作目录与 SAND_LOCAL_EXEC_ROOT 同盘符时相对/绝对路径才能落在允许根内。
+func startDir(exe, execRoot string, isDir func(string) bool) string {
+	execRoot = strings.TrimSpace(execRoot)
+	if execRoot != "" && isDir != nil && isDir(execRoot) {
+		return execRoot
+	}
+	return filepath.Dir(exe)
 }

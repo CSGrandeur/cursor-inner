@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/instal
 irm https://raw.githubusercontent.com/CSGrandeur/cursor-inner/main/install.ps1 | iex
 ```
 
-The installer detects your OS and CPU, verifies `SHA256SUMS.txt` from the release, and installs for the current user without administrator rights. Pin a version with `CURSOR_INNER_VERSION=v0.7.0`.
+The installer detects your OS and CPU, verifies `SHA256SUMS.txt` from the release, and installs for the current user without administrator rights. Pin a version with `CURSOR_INNER_VERSION=v0.7.1`.
 
 <details>
 <summary><b>Where it is installed</b></summary>
@@ -153,7 +153,7 @@ The settings page has five tabs: **Models**, **Accounts**, **Network**, **Genera
 - **Accounts**: switches cleanly between **Cursor** and **Antigravity** subtabs, ordered automatically so whichever app was active most recently stays first. An empty list reads "No saved accounts yet.". The toolbar provides Add, Paste, Import current, Refresh all, and Export, with Import and Import JSON inside the paste drawer (Cursor accepts JWT, session cookie, `user_xxx::eyJ...`, JSON, and multi-line tokens; Antigravity accepts `1//` refresh tokens, JSON, and multi-line lists). Clicking Add opens browser authorization showing "Finish signing in in the browser. You can also copy this link." alongside Copy and Cancel. Rows show subscription tiers and quota bars with Switch, Refresh, and Remove actions; switching closes a running instance, writes credentials (including Antigravity WSL fallback files and OS keyrings), and reopens it with active takeover settings. Export files stay local.
 - **Network**: outbound proxy address, proxy scope (Global or Official only), Take over Cursor, Take over Grok, Take over Codex, Take over Antigravity, TUN mode, and Strict mode. An empty address connects directly; a bare `host:port` is auto-detected as socks5 or http. Official only includes Cursor, OpenAI, Grok, x.ai, Antigravity, and Google-related addresses (such as google.dev and withgoogle.com), and covers Antigravity's WSL mode without editing system or WSL settings. TUN mode can likewise cover official Antigravity traffic (including WSL) when needed. If cursor-inner starts before your proxy software, the status bar displays "Waiting for proxy…" and connects automatically once listening; official traffic never leaks direct while waiting.
 - **General**: image generation endpoint (OpenAI-compatible `GenerateImage`) and start at login, plus **Run in background** and **Notifications** on Windows.
-- **Update**: **Check for updates** and **Update**. Installs only signed releases; Cursor and Grok keep running across port handover and failed checks roll back automatically.
+- **Update**: **Check for updates** and **Update**. Installs only signed releases; Cursor and Grok keep running across port handover and failed checks roll back automatically. Restarting Grok under takeover keeps your `SAND_LOCAL_EXEC_ROOT` and, when that directory exists, starts Grok with it as the working directory so local Read/Write tools are not refused as outside the allowed root.
 
 <details>
 <summary><b>Command line</b></summary>
@@ -191,6 +191,13 @@ Proxy-aware Cursor traffic lands on `127.0.0.1` first: custom models call your A
 <summary><b>I selected Auto. Why isn't my model used?</b></summary>
 
 Auto chooses only among official models. Select your custom model in the list.
+
+</details>
+
+<details>
+<summary><b>Can I switch between a custom model and an official model in the same chat?</b></summary>
+
+Yes. After a custom model has used tools, you can switch to an official model in the same chat and it can continue from those results. Switching back to a custom model also continues the same conversation.
 
 </details>
 
@@ -257,7 +264,7 @@ Requires Go 1.26 or later.
 go test ./...
 ./build.sh windows
 ./build.sh darwin arm64
-VERSION=v0.7.0 ./build.sh linux
+VERSION=v0.7.1 ./build.sh linux
 ```
 
 ## Acknowledgements
